@@ -15,6 +15,8 @@ pub struct Notification {
 	pub sender: String,
 	pub preview: String,
 	pub avatar_key: String,
+	/// `(guild, voice channel)` when a direct message invites this account into a call.
+	pub call_invite: Option<(Id, Id)>,
 	/// The account owner is mentioned by ID; notification admission matches on it.
 	direct: bool,
 	/// The message came from a direct or group conversation rather than a server.
@@ -1179,6 +1181,15 @@ impl State {
 			sender,
 			preview,
 			avatar_key: message.author.avatar_key(),
+			call_invite: crate::voice_invites::parse(&message.content)
+				.filter(|(guild, call)| {
+					self.channel(message.channel)
+						.is_some_and(|channel| channel.guild.is_none())
+						&& self.channel(*call).is_some_and(|channel| {
+							channel.guild == Some(*guild)
+								&& crate::voice_invites::is_voice(channel.kind)
+						})
+				}),
 			direct,
 			conversation: self
 				.channel(message.channel)

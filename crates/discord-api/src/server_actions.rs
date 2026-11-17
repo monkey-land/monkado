@@ -8,6 +8,7 @@ impl DiscordApi {
 		user: model::Id,
 		code: &str,
 		nonce: &str,
+		call: Option<(model::Id, model::Id)>,
 	) -> Result<(model::Channel, model::Message), Failure> {
 		if user.0 == 0
 			|| !client_core::invites::valid_code(code)
@@ -17,7 +18,7 @@ impl DiscordApi {
 			return Err(Failure::Protocol);
 		}
 		let channel = self.open_dm(user, None, None).await?;
-		let content = format!("https://discord.gg/{code}");
+		let content = client_core::voice_invites::message(code, call);
 		let message = self
 			.send_message(channel.id, &content, nonce, None, None, None)
 			.await
@@ -318,7 +319,7 @@ mod tests {
 				}
 			};
 			let (result, ()) = tokio::join!(
-				api.send_server_invite(Id(8), "safe_link", "invite-nonce"),
+				api.send_server_invite(Id(8), "safe_link", "invite-nonce", None),
 				server
 			);
 			assert_eq!(result.is_ok(), expected);
@@ -327,12 +328,12 @@ mod tests {
 			}
 		}
 		assert!(
-			api.send_server_invite(Id(0), "safe_link", "x")
+			api.send_server_invite(Id(0), "safe_link", "x", None)
 				.await
 				.is_err()
 		);
 		assert!(
-			api.send_server_invite(Id(8), "../wrong", "x")
+			api.send_server_invite(Id(8), "../wrong", "x", None)
 				.await
 				.is_err()
 		);

@@ -24,6 +24,7 @@ pub mod member_search;
 pub mod message_actions;
 pub mod messaging_permissions;
 pub mod notifications;
+pub mod voice_invites;
 pub mod polls;
 pub mod preload;
 pub mod presence;
@@ -118,6 +119,8 @@ pub enum Command {
 		code: String,
 		nonce: String,
 		request: u64,
+		/// Voice channel the invite leads into; Monkado rings the friend for it.
+		call: Option<Id>,
 	},
 	/// None loads the current settings; Some saves the complete folder layout.
 	/// Load, or save `(loaded base, desired)` if Discord still has the base folders.
@@ -340,6 +343,12 @@ pub enum Command {
 		channel: Id,
 		message: Id,
 		pinned: bool,
+	},
+	/// Hides a sent message's embeds; `flags` are its last known message flags.
+	SuppressEmbeds {
+		channel: Id,
+		message: Id,
+		flags: u64,
 	},
 }
 pub struct Startup {

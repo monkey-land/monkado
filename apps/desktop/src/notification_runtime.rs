@@ -163,7 +163,23 @@ impl Runtime {
 		let outgoing = state
 			.outgoing_ring()
 			.filter(|_| live && options.allows(Sound::OutgoingRing));
+		// A server call invite rings like an incoming call until answered, declined or stale.
+		if ui
+			.voice_invite
+			.as_ref()
+			.is_some_and(|invite| invite.at.elapsed() >= ui::VOICE_INVITE_RING)
+		{
+			ui.voice_invite = None;
+		}
+		let invite = ui
+			.voice_invite
+			.as_ref()
+			.map(|invite| invite.conversation)
+			.filter(|id| {
+				audible && state.notification_allowed(*id) && options.allows(Sound::IncomingRing)
+			});
 		let ringing = incoming
+			.or(invite)
 			.map(|id| (id, Sound::IncomingRing))
 			.or_else(|| outgoing.map(|id| (id, Sound::OutgoingRing)));
 		let (alert, sound) = self.deliver(state, ui, audible, focused, ringing, Instant::now());
@@ -234,6 +250,15 @@ impl Runtime {
 		// conversations behind those use up their one ping.
 		let (mut alerted, mut sounded) = (None, None);
 		while let Some(notification) = state.take_notification() {
+			if let Some((guild, channel)) = notification.call_invite {
+				ui.voice_invite = Some(ui::VoiceInvite {
+					guild,
+					channel,
+					conversation: notification.channel,
+					sender: notification.sender.clone(),
+					at: now,
+				});
+			}
 			let current = focused && ui.viewing_latest(notification.channel);
 			let cue = if current {
 				Sound::CurrentChannel

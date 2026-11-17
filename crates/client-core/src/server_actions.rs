@@ -191,12 +191,22 @@ impl State {
 		let nonce = crate::fingerprint::nonce(epoch, self.send_sequence);
 		self.server_actions.sending = Some((guild, user, request, nonce.clone()));
 		self.server_actions.status = None;
+		let call = self
+			.server_actions
+			.invite
+			.as_ref()
+			.map(|invite| invite.1)
+			.filter(|channel| {
+				self.channel(*channel)
+					.is_some_and(|channel| crate::voice_invites::is_voice(channel.kind))
+			});
 		Some(Command::SendServerInvite {
 			guild,
 			user,
 			code,
 			nonce,
 			request,
+			call,
 		})
 	}
 	fn apply_server_invite_sent(

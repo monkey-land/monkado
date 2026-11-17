@@ -3966,12 +3966,14 @@ impl Desktop {
 					code,
 					nonce,
 					request,
+					call,
 				} => {
 					let channel = dm_demo::channel(&self.state, user).unwrap();
 					self.synthetic_id += 1;
 					let mut message = test_support::message(self.synthetic_id, channel.id);
 					message.author = self.state.user.clone().unwrap();
-					message.content = format!("https://discord.gg/{code}");
+					message.content =
+						client_core::voice_invites::message(&code, call.map(|call| (guild, call)));
 					message.nonce = Some(nonce);
 					Event::ServerAction(client_core::server_actions::Event::InviteSent {
 						guild,

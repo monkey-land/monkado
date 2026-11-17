@@ -1267,12 +1267,13 @@ impl DiscordApi {
 				code,
 				nonce,
 				request,
+				call,
 			} => Event::ServerAction(client_core::server_actions::Event::InviteSent {
 				guild,
 				user,
 				request,
 				result: self
-					.send_server_invite(user, &code, &nonce)
+					.send_server_invite(user, &code, &nonce, call.map(|call| (guild, call)))
 					.await
 					.map(Box::new),
 			}),
@@ -2058,6 +2059,26 @@ impl DiscordApi {
 					message,
 					pinned,
 					result,
+				}
+			}
+			Command::SuppressEmbeds {
+				channel,
+				message,
+				flags,
+			} => {
+				// Documented edit route; SUPPRESS_EMBEDS (1 << 2) keeps the message's other flags.
+				let body = serde_json::json!({ "flags": flags | 4 });
+				match self
+					.request(
+						Method::PATCH,
+						&format!("/channels/{channel}/messages/{message}"),
+						Some(body),
+					)
+					.await
+					.and_then(|bytes| decode::<PatchDto>(&bytes).map_err(|_| Failure::Ambiguous))
+				{
+					Ok(patch) => Event::Patch(patch.into_model()),
+					Err(f) => Event::Failure(f),
 				}
 			}
 		}

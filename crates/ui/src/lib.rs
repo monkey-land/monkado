@@ -278,6 +278,19 @@ struct ProfileImage {
 
 pub const DEFAULT_IDLE_TIMEOUT_SECS: u32 = 10 * 60;
 
+/// A friend's ringing invite into a server voice call, from a direct message.
+#[derive(Clone, Debug)]
+pub struct VoiceInvite {
+	pub guild: Id,
+	pub channel: Id,
+	/// Direct conversation the invite arrived in; it keys the ringtone and its mute rules.
+	pub conversation: Id,
+	pub sender: String,
+	pub at: std::time::Instant,
+}
+/// How long a call invite rings before it quietly expires.
+pub const VOICE_INVITE_RING: std::time::Duration = std::time::Duration::from_secs(45);
+
 #[derive(Default)]
 pub struct MessagingUi {
 	/// Interface tweaks switched on by enabled plugins.
@@ -528,6 +541,8 @@ pub struct MessagingUi {
 	pub voice_monkado_users: Vec<Id>,
 	/// When each live share in the current call started, for its elapsed-time label.
 	pub voice_live_since: Vec<(Id, std::time::Instant)>,
+	/// A ringing invite into a server voice call, answered from its top card.
+	pub voice_invite: Option<VoiceInvite>,
 	/// Session-only stream playback level; unset is 100%. Mute preserves the level.
 	voice_stream_volume: Option<u16>,
 	voice_stream_muted: bool,
@@ -5988,6 +6003,11 @@ impl MessagingUi {
 		}
 		if let Some((channel, message, pinned)) = self.timeline.pin_request.take()
 			&& let Some(command) = state.prepare_pin(channel, message, pinned)
+		{
+			commands.push(command);
+		}
+		if let Some((channel, message)) = self.timeline.remove_embeds_request.take()
+			&& let Some(command) = state.prepare_suppress_embeds(channel, message)
 		{
 			commands.push(command);
 		}

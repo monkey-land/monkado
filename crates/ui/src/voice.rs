@@ -4078,6 +4078,7 @@ impl MessagingUi {
 					.as_ref()
 					.is_none_or(|call| call.channel != *channel)
 		});
+		self.voice_invite_card(ui, state, commands);
 		if let Some(channel) = state.voice.incoming.or(existing) {
 			let incoming = state.voice.incoming == Some(channel);
 			let conversation = state.channel(channel).cloned();
@@ -4185,6 +4186,109 @@ impl MessagingUi {
 						});
 					});
 				});
+		}
+	}
+
+	/// A friend's ringing invite into a server voice channel: Join selects and joins it.
+	fn voice_invite_card(
+		&mut self,
+		ui: &mut egui::Ui,
+		state: &mut State,
+		commands: &mut Vec<Command>,
+	) {
+		let Some(invite) = self.voice_invite.clone() else {
+			return;
+		};
+		if invite.at.elapsed() >= crate::VOICE_INVITE_RING
+			|| state
+				.voice
+				.active
+				.as_ref()
+				.is_some_and(|call| call.channel == invite.channel)
+		{
+			self.voice_invite = None;
+			return;
+		}
+		ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));
+		let colors = design::palette(ui);
+		let channel_name = state
+			.channel(invite.channel)
+			.map_or_else(|| "canal de voz".to_owned(), |channel| channel.name.clone());
+		let guild_name = state
+			.guilds
+			.iter()
+			.find(|guild| guild.id == invite.guild)
+			.map_or_else(String::new, |guild| guild.name.clone());
+		let mut join = false;
+		let mut decline = false;
+		egui::Panel::top("voice-invite-incoming")
+			.show_separator_line(false)
+			.frame(
+				egui::Frame::new()
+					.fill(colors.raised)
+					.inner_margin(egui::Margin::symmetric(16, 10)),
+			)
+			.show(ui, |ui| {
+				ui.horizontal(|ui| {
+					ui.spacing_mut().item_spacing.x = 12.0;
+					design::avatar(ui, &invite.sender, 40.0);
+					ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+						ui.spacing_mut().item_spacing.x = 8.0;
+						decline = round_action(
+							ui,
+							crate::icons::Icon::HangUp,
+							colors.danger,
+							true,
+							"Recusar",
+						)
+						.clicked();
+						join = round_action(
+							ui,
+							crate::icons::Icon::Phone,
+							colors.positive,
+							true,
+							"Entrar na call",
+						)
+						.clicked();
+						ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+							ui.vertical(|ui| {
+								ui.spacing_mut().item_spacing.y = 2.0;
+								ui.add(
+									egui::Label::new(
+										design::semibold(
+											ui,
+											&format!("{} está te chamando", invite.sender),
+											15.0,
+										)
+										.color(colors.text_strong),
+									)
+									.truncate(),
+								);
+								let place = if guild_name.is_empty() {
+									format!("🔊 {channel_name}")
+								} else {
+									format!("🔊 {channel_name} · {guild_name}")
+								};
+								ui.label(RichText::new(place).size(13.0).color(colors.muted));
+							});
+						});
+					});
+				});
+			});
+		if decline {
+			self.voice_invite = None;
+		} else if join {
+			self.voice_invite = None;
+			if self
+				.request_call_audio(state, invite.channel, false, None, commands)
+				.is_ok()
+			{
+				if let Some(command) = state.select(invite.channel) {
+					commands.push(command);
+				}
+			} else {
+				state.status = "Não foi possível entrar nessa call";
+			}
 		}
 	}
 
