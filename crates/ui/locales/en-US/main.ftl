@@ -3971,6 +3971,7 @@ timeline-message-actions-mark-read-through-here = Mark read through here
 timeline-message-actions-mark-unread = Mark Unread
 # Context: message_actions
 timeline-message-actions-pin-message = Pin message
+message-remove-embeds = Remove embeds
 # Context: message_actions
 timeline-message-actions-reply = Reply
 timeline-message-actions-translate = Translate (opens browser)

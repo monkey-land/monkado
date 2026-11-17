@@ -3895,6 +3895,7 @@ timeline-message-actions-mark-read-through-here = マークはここを最後ま
 timeline-message-actions-mark-unread = 未読としてマークする
 # Context: message_actions
 timeline-message-actions-pin-message = ピンメッセージ
+message-remove-embeds = 埋め込みを削除
 # Context: message_actions
 timeline-message-actions-reply = 返信
 # Context: message_actions

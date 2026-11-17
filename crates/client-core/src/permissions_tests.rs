@@ -939,6 +939,59 @@ fn role_rest_catalog_and_self_membership_revoke_selected_history_immediately() {
 }
 
 #[test]
+fn embed_removal_needs_authorship_or_server_manage_messages_and_keeps_flags() {
+	let embedded = |id, channel, author| {
+		let mut message = message(id, channel);
+		message.author.id = author;
+		message.embeds = vec![model::Embed::default()];
+		message.flags = 1 << 12;
+		message
+	};
+	let mut state = state();
+	apply(&mut state, Event::Message(embedded(101, Id(20), Id(3))));
+	let own = state.user.as_ref().unwrap().id;
+	apply(&mut state, Event::Message(embedded(103, Id(20), own)));
+	assert!(state.can_suppress_embeds(Id(20), Id(103)));
+	// The other author's message needs Manage Messages; no embeds or already hidden never qualify.
+	assert!(!state.can_suppress_embeds(Id(20), Id(101)));
+	assert!(!state.can_suppress_embeds(Id(20), Id(100)));
+	let mut role = snapshot().guilds[0].roles.as_ref().unwrap()[0].clone();
+	role.bits |= p::MANAGE_MESSAGES;
+	permission(
+		&mut state,
+		PermissionEvent::Role {
+			guild: Id(10),
+			role,
+		},
+	);
+	assert!(matches!(
+		state.prepare_suppress_embeds(Id(20), Id(101)),
+		Some(Command::SuppressEmbeds {
+			channel: Id(20),
+			message: Id(101),
+			flags: 4096,
+		})
+	));
+	let mut hidden = embedded(104, Id(20), own);
+	hidden.embeds_suppressed = true;
+	apply(&mut state, Event::Message(hidden));
+	assert!(!state.can_suppress_embeds(Id(20), Id(104)));
+	// Private channels report every permission, yet only the author may remove embeds.
+	let mut private = channel(40, 1, None);
+	private.guild = None;
+	state.channels.push(private);
+	let Some(Command::History { request, .. }) = state.select(Id(40)) else {
+		panic!()
+	};
+	history(&mut state, Id(40), request, 100);
+	apply(&mut state, Event::Message(embedded(101, Id(40), Id(3))));
+	apply(&mut state, Event::Message(embedded(102, Id(40), own)));
+	assert_eq!(state.permission(Id(40), p::MANAGE_MESSAGES), Some(true));
+	assert!(!state.can_suppress_embeds(Id(40), Id(101)));
+	assert!(state.can_suppress_embeds(Id(40), Id(102)));
+}
+
+#[test]
 fn message_deletion_uses_manage_messages_without_granting_edit_or_requiring_send() {
 	{
 		let mut state = state();

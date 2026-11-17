@@ -3897,6 +3897,7 @@ timeline-message-actions-mark-read-through-here = Mark leyó hasta aquí
 timeline-message-actions-mark-unread = Marcar como no leído
 # Context: message_actions
 timeline-message-actions-pin-message = Fijar mensaje
+message-remove-embeds = Eliminar insertados
 # Context: message_actions
 timeline-message-actions-reply = Responder
 # Context: message_actions

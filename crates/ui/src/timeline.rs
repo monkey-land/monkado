@@ -109,6 +109,8 @@ pub struct TimelineView {
 	pub(super) quick_reaction_used: Option<&'static str>,
 	/// Requested pin change: channel, message, pinned.
 	pub(super) pin_request: Option<(Id, Id, bool)>,
+	/// Requested embed removal: channel, message.
+	pub(super) remove_embeds_request: Option<(Id, Id)>,
 	/// Requested new thread: parent channel and the message that starts it.
 	pub(super) thread_request: Option<(Id, Id)>,
 	/// Starter message of the first visible thread card whose latest message is unknown.
@@ -1813,6 +1815,7 @@ fn message_actions(
 	editing: (&mut Option<(Id, Id, String)>, &mut bool),
 	deleting: &mut Option<(Id, Id)>,
 	pin: (bool, bool, &mut Option<(Id, Id, bool)>),
+	remove_embeds: (bool, &mut Option<(Id, Id)>),
 	thread: (bool, &mut Option<(Id, Id)>),
 	forward: (bool, &mut Option<Id>),
 	view_reactions: Option<(
@@ -1964,6 +1967,14 @@ fn message_actions(
 			.clicked()
 		{
 			*pin_request = Some((message.channel, message.id, !pinned));
+			ui.close();
+		}
+		if remove_embeds.0
+			&& ui
+				.button(crate::i18n::translate("message-remove-embeds"))
+				.clicked()
+		{
+			*remove_embeds.1 = Some((message.channel, message.id));
 			ui.close();
 		}
 		if own || can_delete {
@@ -4089,6 +4100,12 @@ impl TimelineView {
 													state,
 													crate::design::MessageCardSurface::Conversation,
 													self.hide_media_links,
+													state
+														.can_suppress_embeds(
+															message.channel,
+															message.id,
+														)
+														.then_some(&mut self.remove_embeds_request),
 												) {
 													self.gif_favorite = Some(gif);
 												}
@@ -4991,6 +5008,10 @@ impl TimelineView {
 									can_pin,
 									state.is_pinned(message.channel, id),
 									&mut self.pin_request,
+								),
+								(
+									state.can_suppress_embeds(message.channel, id),
+									&mut self.remove_embeds_request,
 								),
 								(
 									state.can_create_thread(message.channel)
@@ -6795,6 +6816,7 @@ mod tests {
 							(&mut editing, &mut edit_started),
 							&mut deleting,
 							(false, false, &mut None),
+							(false, &mut None),
 							(own, &mut thread_request),
 							(false, &mut None),
 							None,
@@ -10622,6 +10644,7 @@ mod tests {
 					},
 					crate::design::MessageCardSurface::Conversation,
 					false,
+					None,
 				);
 				assert!(
 					ui.min_rect().height() > 120.0,

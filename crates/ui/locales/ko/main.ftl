@@ -3926,6 +3926,7 @@ timeline-message-actions-mark-read-through-here = 여기까지 읽음으로 표�
 timeline-message-actions-mark-unread = 읽지 않음으로 표시
 # Context: message_actions
 timeline-message-actions-pin-message = 메시지 고정
+message-remove-embeds = 임베드 제거
 # Context: message_actions
 timeline-message-actions-reply = 답장
 timeline-message-actions-translate = 번역(브라우저에서 열기)

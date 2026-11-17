@@ -4257,7 +4257,7 @@ impl MessagingUi {
 									egui::Label::new(
 										design::semibold(
 											ui,
-											&format!("{} está te chamando", invite.sender),
+											format!("{} está te chamando", invite.sender),
 											15.0,
 										)
 										.color(colors.text_strong),

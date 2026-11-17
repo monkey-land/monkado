@@ -3928,6 +3928,7 @@ timeline-message-actions-mark-read-through-here = Označit jako přečtené až 
 timeline-message-actions-mark-unread = Označit jako nepřečtené
 # Context: message_actions
 timeline-message-actions-pin-message = Připnout zprávu
+message-remove-embeds = Odebrat vložený obsah
 # Context: message_actions
 timeline-message-actions-reply = Odpovědět
 # Context: message_actions

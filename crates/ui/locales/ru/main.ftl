@@ -3900,6 +3900,7 @@ timeline-message-actions-mark-read-through-here = Марк, прочитай з�
 timeline-message-actions-mark-unread = Отметить как непрочитанное
 # Context: message_actions
 timeline-message-actions-pin-message = Закрепить сообщение
+message-remove-embeds = Удалить встраивания
 # Context: message_actions
 timeline-message-actions-reply = Отвечать
 # Context: message_actions

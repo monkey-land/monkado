@@ -3930,6 +3930,7 @@ timeline-message-actions-mark-read-through-here = 標至此處為已讀
 timeline-message-actions-mark-unread = 標為未讀
 # Context: message_actions
 timeline-message-actions-pin-message = 釘選訊息
+message-remove-embeds = 移除嵌入內容
 # Context: message_actions
 timeline-message-actions-reply = 回覆
 # Context: message_actions

@@ -559,6 +559,8 @@ pub fn show(
 	state: &client_core::State,
 	card_surface: crate::design::MessageCardSurface,
 	hide_media_links: bool,
+	// Set when the reader may remove this message's embeds; receives the chosen message.
+	mut remove: Option<&mut Option<(model::Id, model::Id)>>,
 ) -> Option<Gif> {
 	if message.embeds_suppressed {
 		return None;
@@ -585,7 +587,7 @@ pub fn show(
 			cache,
 			!hide_media_links || !standalone_media_links(message),
 		);
-		ui.push_id(("embed", index), |ui| {
+		let drawn = ui.push_id(("embed", index), |ui| {
 			if count > 1 && inline_image(embed).is_some() {
 				gallery(ui, group, images, message.id, download, demo);
 				if let Some(url) = &source_url {
@@ -937,9 +939,39 @@ pub fn show(
 			);
 			ui.add_space(6.0);
 		});
+		if let Some(remove) = remove.as_deref_mut() {
+			remove_button(ui, drawn.response.rect, message, remove);
+		}
 		index += count;
 	}
 	favorite_action
+}
+/// Discord's hover "×" on an embed, painted over its top-right corner without taking layout.
+fn remove_button(
+	ui: &mut egui::Ui,
+	rect: egui::Rect,
+	message: &Message,
+	remove: &mut Option<(model::Id, model::Id)>,
+) {
+	const SIZE: f32 = 20.0;
+	if !ui.rect_contains_pointer(rect) {
+		return;
+	}
+	let corner = egui::Rect::from_min_size(
+		egui::pos2(rect.right() - SIZE - 4.0, rect.top() + 4.0),
+		egui::Vec2::splat(SIZE),
+	);
+	let mut overlay = ui.new_child(egui::UiBuilder::new().max_rect(corner));
+	if crate::icons::button(
+		&mut overlay,
+		crate::icons::Icon::Close,
+		SIZE,
+		"message-remove-embeds",
+	)
+	.clicked()
+	{
+		*remove = Some((message.channel, message.id));
+	}
 }
 pub fn estimated_height(embeds: &[Embed]) -> f32 {
 	let mut height = 0.0;
@@ -1052,6 +1084,7 @@ mod tests {
 					&client_core::State::default(),
 					crate::design::MessageCardSurface::Conversation,
 					false,
+					None,
 				);
 			})
 			.drop_without_applying_deltas();
@@ -1202,6 +1235,7 @@ mod tests {
 								&client_core::State::default(),
 								crate::design::MessageCardSurface::Conversation,
 								false,
+								None,
 							);
 						},
 					)
@@ -1293,6 +1327,7 @@ mod tests {
 									&client_core::State::default(),
 									crate::design::MessageCardSurface::Conversation,
 									hide_media_links,
+									None,
 								)
 								.is_none()
 							);

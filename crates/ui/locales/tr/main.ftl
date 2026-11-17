@@ -3895,6 +3895,7 @@ timeline-message-actions-mark-read-through-here = Burayı sonuna kadar oku
 timeline-message-actions-mark-unread = Okunmadı Olarak İşaretle
 # Context: message_actions
 timeline-message-actions-pin-message = Mesajı sabitle
+message-remove-embeds = Yerleştirmeleri kaldır
 # Context: message_actions
 timeline-message-actions-reply = Cevap vermek
 # Context: message_actions
