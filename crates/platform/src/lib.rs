@@ -1,0 +1,717 @@
+//! Credential persistence and temporary owner-operated login/verification surfaces.
+#[cfg(target_os = "macos")]
+pub mod app_menu;
+pub mod audio;
+pub mod badge;
+pub mod captcha;
+pub mod compositor;
+pub mod game_activity;
+pub mod gsync;
+pub mod heic;
+pub mod hotkeys;
+pub mod idle;
+mod login_keyring;
+pub mod memory;
+pub mod notifications;
+pub mod plaintext_login;
+pub mod pointer;
+pub mod processes;
+pub mod proxy_credentials;
+pub mod save;
+pub mod single_instance;
+pub mod startup;
+pub mod system_theme;
+pub mod tray;
+pub mod video;
+#[cfg(target_os = "macos")]
+pub mod window;
+pub mod window_effects;
+use client_core::auth::{Failure, SessionSecret};
+pub use pointer::cursor_position;
+#[cfg(not(target_os = "linux"))]
+use std::{
+	sync::{
+		Arc,
+		mpsc::{self, Receiver},
+	},
+	time::{Duration, Instant},
+};
+#[cfg(not(target_os = "linux"))]
+use wry::{WebView, WebViewBuilder};
+#[cfg(target_os = "linux")]
+mod login_linux;
+#[cfg(target_os = "linux")]
+pub use login_linux::LoginView;
+
+/// Logical height of the native header the desktop app draws above the login webview.
+pub const LOGIN_HEADER_HEIGHT: f32 = 56.0;
+const SERVICE: &str = "cz.viceverse.serein";
+#[cfg(not(feature = "development-data"))]
+const ACCOUNT: &str = "discord-session";
+#[cfg(feature = "development-data")]
+const ACCOUNT: &str = "discord-session.development";
+
+/// Whether this process may start another one at all. A security product that refuses the shell
+/// for an unknown binary usually refuses process creation too, and the difference is what a report
+/// needs; `Err` carries the operating system's code. The probe writes nothing and opens no window.
+pub fn spawn_probe() -> Result<(), i64> {
+	#[cfg(target_os = "windows")]
+	{
+		const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+		use std::os::windows::process::CommandExt;
+		std::process::Command::new("cmd.exe")
+			.args(["/c", "exit"])
+			.creation_flags(CREATE_NO_WINDOW)
+			.status()
+			.map(drop)
+			.map_err(|error| i64::from(error.raw_os_error().unwrap_or(-1)))
+	}
+	#[cfg(not(target_os = "windows"))]
+	{
+		Ok(())
+	}
+}
+
+/// Opens a folder in the owner's file manager. The caller passes a path it already owns, so this
+/// crosses no service or privilege boundary. `Err` carries the platform's failure code, which the
+/// caller records instead of leaving a button that appears to do nothing.
+pub fn open_folder(path: &std::path::Path) -> Result<(), i64> {
+	#[cfg(target_os = "windows")]
+	{
+		open_with_shell(path)
+	}
+	#[cfg(not(target_os = "windows"))]
+	{
+		#[cfg(target_os = "macos")]
+		const OPENER: &str = "open";
+		#[cfg(all(unix, not(target_os = "macos")))]
+		const OPENER: &str = "xdg-open";
+		let mut child = std::process::Command::new(OPENER)
+			.arg(path)
+			.spawn()
+			.map_err(|error| i64::from(error.raw_os_error().unwrap_or(-1)))?;
+		// The opener exits on its own; reaping it keeps finished children from piling up.
+		std::thread::spawn(move || {
+			let _ = child.wait();
+		});
+		Ok(())
+	}
+}
+
+/// Windows cannot simply start `explorer.exe` (a fresh one fails to initialize its DLLs,
+/// 0xc0000142) and a machine policy can refuse this process the shell entirely
+/// (SE_ERR_ACCESSDENIED), so two quiet routes are tried before the caller hands the path over.
+/// `ShellExecuteW` is deliberately absent: on a machine that refuses it, it puts a system dialog
+/// on screen instead of failing quietly.
+#[cfg(target_os = "windows")]
+fn open_with_shell(path: &std::path::Path) -> Result<(), i64> {
+	// The running shell browses the folder through COM; this never starts explorer.exe.
+	let selected = select_in_shell(path);
+	if selected.is_ok() {
+		return Ok(());
+	}
+	// A trusted command interpreter asks the shell on our behalf.
+	if start_via_cmd(path).is_ok() {
+		return Ok(());
+	}
+	// The first code names the policy that refused us, so it is the one worth reporting.
+	selected
+}
+
+/// Initializes an apartment for the shell calls. A render thread usually has none and the shell
+/// then reports SE_ERR_ACCESSDENIED. An existing different apartment is fine: the thread keeps
+/// whichever apartment it already had, so nothing is uninitialized here.
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+fn prepare_shell() {
+	use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
+	// SAFETY: no memory or handles are passed; the call only sets the thread's apartment.
+	unsafe {
+		let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+	}
+}
+
+/// A NUL-terminated absolute path the shell calls can read, or `None` for an unrepresentable one.
+#[cfg(target_os = "windows")]
+fn wide_path(path: &std::path::Path) -> Option<Vec<u16>> {
+	use std::os::windows::ffi::OsStrExt;
+	let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+	let mut wide: Vec<u16> = absolute.as_os_str().encode_wide().collect();
+	if wide.contains(&0) {
+		return None;
+	}
+	wide.push(0);
+	Some(wide)
+}
+
+/// Asks the running shell to browse the folder: no new process, and the shell that already owns
+/// the desktop is the one that answers.
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+fn select_in_shell(path: &std::path::Path) -> Result<(), i64> {
+	use windows::Win32::UI::Shell::{ILCreateFromPathW, ILFree, SHOpenFolderAndSelectItems};
+	use windows::core::PCWSTR;
+
+	prepare_shell();
+	let wide = wide_path(path).ok_or(-1)?;
+	// SAFETY: `wide` is NUL-terminated and outlives both calls; the item list comes from the
+	// shell's own allocator and is released with ILFree, and no extra items are passed.
+	unsafe {
+		let list = ILCreateFromPathW(PCWSTR(wide.as_ptr()));
+		if list.is_null() {
+			return Err(-1);
+		}
+		let result = SHOpenFolderAndSelectItems(list, None, 0);
+		ILFree(Some(list));
+		result.map_err(|error| i64::from(error.code().0))
+	}
+}
+
+/// Last resort: `start` runs inside a trusted command interpreter, which the shell is more likely
+/// to accept than this process.
+#[cfg(target_os = "windows")]
+fn start_via_cmd(path: &std::path::Path) -> Result<(), i64> {
+	const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+	use std::os::windows::process::CommandExt;
+	let status = std::process::Command::new("cmd.exe")
+		.args(["/c", "start", "", &path.display().to_string()])
+		.creation_flags(CREATE_NO_WINDOW)
+		.status();
+	match status {
+		Ok(status) if status.success() => Ok(()),
+		Ok(status) => Err(i64::from(status.code().unwrap_or(-1))),
+		Err(error) => Err(i64::from(error.raw_os_error().unwrap_or(-1))),
+	}
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CredentialError {
+	/// No OS credential store exists (e.g. Linux without a Secret Service provider).
+	NoStore,
+	Unavailable,
+	Invalid,
+	TimedOut,
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn ensure_gtk_application_id() {
+	static INIT: std::sync::Once = std::sync::Once::new();
+	INIT.call_once(|| {
+		use gtk4::gio::prelude::ApplicationExt;
+		let app = gtk4::gio::Application::new(Some(SERVICE), gtk4::gio::ApplicationFlags::empty());
+		if let Err(error) = app.register(gtk4::gio::Cancellable::NONE) {
+			eprintln!("Linux login/verification: GApplication registration failed: {error}");
+		}
+		std::mem::forget(app);
+	});
+}
+
+/// Check GTK's effective encoding before WebKit starts Flatpak subprocesses.
+#[cfg(target_os = "linux")]
+pub(crate) fn ensure_webkit_locale() -> Result<(), &'static str> {
+	let flatpak = std::path::Path::new("/.flatpak-info").is_file()
+		|| std::env::var_os("FLATPAK_ID").is_some();
+	if flatpak && !gtk4::glib::charset().0 {
+		return Err(
+			"Serein Flatpak login/verification requires a UTF-8 locale. Repair runtime languages and restart Serein; see Flatpak troubleshooting.",
+		);
+	}
+	Ok(())
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod flatpak_locale_tests {
+	#[test]
+	fn non_utf8_webkit_preflight_is_local_to_flatpak() {
+		const CHILD: &str = "SEREIN_TEST_WEBKIT_LOCALE_CHILD";
+		if let Some(mode) = std::env::var_os(CHILD) {
+			// Fresh processes avoid GLib's cached encoding. Only the explicitly display-backed
+			// regression initializes GTK; neither test constructs WebKit or authenticates.
+			if std::env::var_os("SEREIN_TEST_WEBKIT_INITIALIZE_GTK").is_some() {
+				gtk4::init().expect("display-backed GTK initialization");
+			}
+			assert_eq!(gtk4::glib::charset().0, mode == "utf8");
+			assert_eq!(super::ensure_webkit_locale().is_err(), mode == "flatpak");
+			assert_eq!(
+				std::env::var_os("LC_ALL").as_deref(),
+				Some(std::ffi::OsStr::new("C"))
+			);
+			return;
+		}
+		check_encoding_cases(false);
+	}
+
+	#[test]
+	#[ignore = "requires a Linux display; explicitly exercised under Xvfb in native CI"]
+	fn post_gtk_flatpak_encoding_preflight() {
+		check_encoding_cases(true);
+	}
+
+	fn check_encoding_cases(initialize_gtk: bool) {
+		const CHILD: &str = "SEREIN_TEST_WEBKIT_LOCALE_CHILD";
+		for mode in ["native", "flatpak", "utf8"] {
+			if mode == "native" && std::path::Path::new("/.flatpak-info").is_file() {
+				continue; // A real sandbox marker cannot be removed to simulate a native app.
+			}
+			let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+			child
+				.args([
+					"--exact",
+					"flatpak_locale_tests::non_utf8_webkit_preflight_is_local_to_flatpak",
+				])
+				.env(CHILD, mode)
+				.env("LC_ALL", "C")
+				.env("CHARSET", if mode == "utf8" { "UTF-8" } else { "US-ASCII" })
+				.env_remove("FLATPAK_ID")
+				.env_remove("SEREIN_TEST_WEBKIT_INITIALIZE_GTK");
+			if initialize_gtk {
+				child.env("SEREIN_TEST_WEBKIT_INITIALIZE_GTK", "1");
+			}
+			if mode != "native" {
+				child.env("FLATPAK_ID", "cz.viceverse.serein");
+			}
+			let output = child.output().unwrap();
+			assert!(
+				output.status.success(),
+				"{mode}: {}",
+				String::from_utf8_lossy(&output.stderr)
+			);
+			assert!(
+				String::from_utf8(output.stdout)
+					.unwrap()
+					.contains("running 1 test")
+			);
+		}
+	}
+}
+
+/// Where a saved login ended up.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Saved {
+	CredentialStore,
+	/// No OS credential store exists, so the login went to a private file instead.
+	Plaintext,
+}
+/// The entry restored on launch. Switching accounts rewrites it from the per-account entry.
+pub fn load_session() -> Result<Option<SessionSecret>, CredentialError> {
+	load_login(ACCOUNT)
+}
+pub fn save_session(secret: &SessionSecret) -> Result<Saved, CredentialError> {
+	save_login(ACCOUNT, secret)
+}
+pub fn forget_session() -> Result<(), CredentialError> {
+	forget_login(ACCOUNT)
+}
+/// One entry per remembered account, so the switcher never keeps a second copy in memory.
+fn account_entry(account: model::Id) -> String {
+	format!("{ACCOUNT}.{account}")
+}
+pub fn load_account_session(account: model::Id) -> Result<Option<SessionSecret>, CredentialError> {
+	load_login(&account_entry(account))
+}
+pub fn save_account_session(
+	account: model::Id,
+	secret: &SessionSecret,
+) -> Result<Saved, CredentialError> {
+	save_login(&account_entry(account), secret)
+}
+pub fn forget_account_session(account: model::Id) -> Result<(), CredentialError> {
+	forget_login(&account_entry(account))
+}
+/// A fallback file is authoritative until a confirmed OS save removes it. A marker
+/// remains after deletion to prevent an older (or late) keyring write restoring it.
+fn load_login(name: &str) -> Result<Option<SessionSecret>, CredentialError> {
+	if let Some(directory) = plaintext_login::configuration() {
+		if let Some(secret) = plaintext_login::load(&directory, name)? {
+			return Ok(Some(secret));
+		}
+		if plaintext_login::keyring_stale(&directory, name)? {
+			return Ok(None);
+		}
+	}
+	login_keyring::load(name)
+}
+/// Plain files are only a fallback for systems with no OS keyring at all. A keyring that
+/// exists but is locked or refuses the write keeps the login out of plain files.
+fn save_login(name: &str, secret: &SessionSecret) -> Result<Saved, CredentialError> {
+	save_login_with(plaintext_login::configuration(), name, secret, || {
+		login_keyring::save(name, secret)
+	})
+}
+fn save_login_with(
+	directory: Option<std::path::PathBuf>,
+	name: &str,
+	secret: &SessionSecret,
+	keyring: impl FnOnce() -> Result<(), CredentialError>,
+) -> Result<Saved, CredentialError> {
+	// Fence the entry and retire any fallback before native IO: until the keyring confirms the
+	// new token, neither an older keyring entry nor an older plain file may restore. The new
+	// token reaches a plain file only once no store is confirmed.
+	if let Some(directory) = directory.as_ref() {
+		plaintext_login::mark_stale(directory, name)?;
+		plaintext_login::forget(directory, name)?;
+	}
+	match keyring() {
+		Ok(()) => {
+			if let Some(directory) = directory {
+				plaintext_login::keyring_current(&directory, name)?;
+			}
+			Ok(Saved::CredentialStore)
+		}
+		Err(CredentialError::NoStore) => {
+			let directory = directory.ok_or(CredentialError::NoStore)?;
+			plaintext_login::save(&directory, name, secret)?;
+			Ok(Saved::Plaintext)
+		}
+		Err(error) => Err(error),
+	}
+}
+fn forget_login(name: &str) -> Result<(), CredentialError> {
+	let directory = plaintext_login::configuration();
+	// Fence even a late default-backend save before attempting native deletion. An
+	// unavailable/full native queue must never resurrect a logged-out launch entry.
+	let local = directory.as_ref().map_or(Ok(()), |directory| {
+		plaintext_login::mark_stale(directory, name)?;
+		plaintext_login::forget(directory, name)
+	});
+	let stored = login_keyring::forget(name);
+	local?;
+	// Forgotten roster slots can be released when no OS store exists. The launch
+	// marker stays until confirmed deletion, preventing wrong-account restoration.
+	if (stored.is_ok() || (stored == Err(CredentialError::NoStore) && name != ACCOUNT))
+		&& let Some(directory) = directory
+	{
+		plaintext_login::keyring_current(&directory, name)?;
+	}
+	match stored {
+		Err(CredentialError::NoStore) => Ok(()),
+		stored => stored,
+	}
+}
+
+fn entry(name: &str) -> Result<keyring_core::Entry, CredentialError> {
+	credential_store()?;
+	keyring_core::Entry::new(SERVICE, name).map_err(|error| match error {
+		keyring_core::Error::NoDefaultStore => CredentialError::NoStore,
+		_ => CredentialError::Unavailable,
+	})
+}
+#[cfg(not(target_os = "linux"))]
+fn credential_store() -> Result<(), CredentialError> {
+	keyring::Entry::store_status()
+		.as_ref()
+		.copied()
+		// macOS and Windows always have a credential store, so a failure is never its absence.
+		.map_err(|_| CredentialError::Unavailable)
+}
+/// Unlike keyring's one-shot default, a missing Secret Service is retried, so a provider that
+/// starts after Serein (or KWallet, which may need activating) is still found.
+#[cfg(target_os = "linux")]
+fn credential_store() -> Result<(), CredentialError> {
+	const RETRY: std::time::Duration = std::time::Duration::from_secs(15);
+	static LAST_FAILURE: std::sync::Mutex<Option<(std::time::Instant, CredentialError)>> =
+		std::sync::Mutex::new(None);
+	let mut last_failure = LAST_FAILURE
+		.lock()
+		.unwrap_or_else(std::sync::PoisonError::into_inner);
+	if keyring_core::get_default_store().is_some() {
+		return Ok(());
+	}
+	// Absence is rechecked even while cached: a provider that appears meanwhile must not see
+	// a save fall back to a plain file. Other failures wait out the retry interval.
+	if let Some((at, error)) = *last_failure
+		&& at.elapsed() < RETRY
+		&& (error != CredentialError::NoStore || secret_service_absence() == error)
+	{
+		return Err(error);
+	}
+	let store = zbus_secret_service_keyring_store::Store::new().or_else(|_| {
+		activate_kwallet();
+		zbus_secret_service_keyring_store::Store::new()
+	});
+	match store {
+		Ok(store) => {
+			keyring_core::set_default_store(store);
+			*last_failure = None;
+			Ok(())
+		}
+		Err(_) => {
+			let error = secret_service_absence();
+			*last_failure = Some((std::time::Instant::now(), error));
+			Err(error)
+		}
+	}
+}
+/// Saved logins fall back to plain files only for `NoStore`: confirmed absence of any Secret
+/// Service provider or KWallet daemon. A bus or store that exists but refuses, fails or cannot
+/// be asked counts as unavailable instead.
+#[cfg(target_os = "linux")]
+fn secret_service_absence() -> CredentialError {
+	use zbus::names::WellKnownName;
+	const STORES: [&str; 3] = [
+		"org.freedesktop.secrets",
+		"org.kde.kwalletd6",
+		"org.kde.kwalletd5",
+	];
+	// Resolve the session bus as zbus does; only a missing socket proves there is none.
+	if std::env::var("DBUS_SESSION_BUS_ADDRESS").is_err() {
+		let runtime = std::env::var("XDG_RUNTIME_DIR")
+			.unwrap_or_else(|_| format!("/run/user/{}", effective_uid()));
+		match std::fs::symlink_metadata(std::path::Path::new(&runtime).join("bus")) {
+			Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+				return CredentialError::NoStore;
+			}
+			Err(_) => return CredentialError::Unavailable,
+			Ok(_) => {}
+		}
+	}
+	let Ok(connection) = zbus::blocking::Connection::session() else {
+		return CredentialError::Unavailable;
+	};
+	let Ok(bus) = zbus::blocking::fdo::DBusProxy::new(&connection) else {
+		return CredentialError::Unavailable;
+	};
+	let Ok(activatable) = bus.list_activatable_names() else {
+		return CredentialError::Unavailable;
+	};
+	let present = STORES.into_iter().any(|store| {
+		activatable.iter().any(|name| name.as_str() == store)
+			|| bus
+				.name_has_owner(WellKnownName::from_static_str_unchecked(store).into())
+				.unwrap_or(true)
+	});
+	if present {
+		CredentialError::Unavailable
+	} else {
+		CredentialError::NoStore
+	}
+}
+#[cfg(target_os = "linux")]
+#[allow(unsafe_code)]
+fn effective_uid() -> u32 {
+	unsafe extern "C" {
+		fn geteuid() -> u32;
+	}
+	// SAFETY: POSIX geteuid takes no arguments and always returns the effective user ID.
+	unsafe { geteuid() }
+}
+/// KWallet serves the Secret Service API but, unlike GNOME Keyring, often is not D-Bus
+/// activatable under that name, so outside a Plasma session nothing starts it. Start the
+/// wallet daemon itself, then wait briefly for it to claim the Secret Service name.
+#[cfg(target_os = "linux")]
+fn activate_kwallet() {
+	use zbus::names::WellKnownName;
+	let Ok(connection) = zbus::blocking::Connection::session() else {
+		return;
+	};
+	let Ok(bus) = zbus::blocking::fdo::DBusProxy::new(&connection) else {
+		return;
+	};
+	let started = ["org.kde.kwalletd6", "org.kde.kwalletd5"]
+		.into_iter()
+		.any(|daemon| {
+			bus.start_service_by_name(WellKnownName::from_static_str_unchecked(daemon), 0)
+				.is_ok()
+		});
+	if !started {
+		return;
+	}
+	let secrets = WellKnownName::from_static_str_unchecked("org.freedesktop.secrets");
+	for _ in 0..20 {
+		if bus.name_has_owner(secrets.clone().into()).unwrap_or(false) {
+			return;
+		}
+		std::thread::sleep(std::time::Duration::from_millis(100));
+	}
+}
+fn load_entry(name: &str) -> Result<Option<SessionSecret>, CredentialError> {
+	match entry(name)?.get_password() {
+		Ok(value) => SessionSecret::from_owner_input(value)
+			.map(Some)
+			.map_err(|_| CredentialError::Invalid),
+		Err(keyring_core::Error::NoEntry) => Ok(None),
+		Err(_) => Err(CredentialError::Unavailable),
+	}
+}
+fn save_entry(name: &str, secret: &SessionSecret) -> Result<(), CredentialError> {
+	entry(name)?
+		.set_password(secret.expose())
+		.map_err(|_| CredentialError::Unavailable)
+}
+fn forget_entry(name: &str) -> Result<(), CredentialError> {
+	match entry(name)?.delete_credential() {
+		Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(()),
+		Err(_) => Err(CredentialError::Unavailable),
+	}
+}
+fn discord_origin(value: &str) -> bool {
+	url::Url::parse(value).is_ok_and(|url| {
+		url.scheme() == "https"
+			&& url.host_str() == Some("discord.com")
+			&& url.port_or_known_default() == Some(443)
+			&& url.username().is_empty()
+			&& url.password().is_none()
+	})
+}
+#[cfg(any(not(target_os = "linux"), test))]
+fn login_navigation(value: &str) -> bool {
+	discord_origin(value) || captcha::hcaptcha_origin(value)
+}
+/// Receives only the account token used by THIS ephemeral, owner-operated login page.
+/// No browser-profile reads, password interception, console instructions, or QR exchange implementation.
+#[cfg(not(target_os = "linux"))]
+pub struct LoginView {
+	view: WebView,
+	tokens: Receiver<SessionSecret>,
+	opened: Instant,
+}
+#[cfg(not(target_os = "linux"))]
+impl LoginView {
+	pub fn open(
+		parent: Arc<winit::window::Window>,
+		wake: impl Fn() + Send + Sync + 'static,
+	) -> Result<Self, Failure> {
+		let (send, tokens) = mpsc::sync_channel(1);
+		let mut random = [0_u8; 32];
+		getrandom::fill(&mut random).map_err(|_| Failure::Protocol)?;
+		let capability = random
+			.iter()
+			.map(|byte| format!("{byte:02x}"))
+			.collect::<String>()
+			+ ":";
+		let script =
+			include_str!("login-handoff.js").replace("__SEREIN_LOGIN_CAPABILITY__", &capability);
+		let builder = WebViewBuilder::new()
+			.with_url("https://discord.com/login")
+			.with_incognito(true)
+			.with_devtools(false)
+			.with_initialization_script_for_main_only(script, true)
+			.with_navigation_handler(|url| login_navigation(&url))
+			.with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
+			.with_download_started_handler(|_, _| false)
+			.with_ipc_handler(move |request| {
+				if !discord_origin(&request.uri().to_string()) || request.body().len() > 2113 {
+					return;
+				}
+				let body = zeroize::Zeroizing::new(request.into_body());
+				let Some(value) = body.strip_prefix(&capability) else {
+					return;
+				};
+				if let Ok(secret) = SessionSecret::from_owner_input(value.to_owned()) {
+					let _ = send.try_send(secret);
+					wake();
+				}
+			});
+		let view = builder
+			.with_bounds(bounds(&parent))
+			.build_as_child(parent.as_ref())
+			.map_err(|_| Failure::Protocol)?;
+		Ok(Self {
+			view,
+			tokens,
+			opened: Instant::now(),
+		})
+	}
+	pub fn token(&self) -> Option<SessionSecret> {
+		self.tokens.try_recv().ok()
+	}
+	pub fn expired(&self) -> bool {
+		self.opened.elapsed() > Duration::from_secs(600)
+	}
+	pub fn crashed(&self) -> bool {
+		false
+	}
+	pub fn resize(&self, parent: &winit::window::Window) {
+		let _ = self.view.set_bounds(bounds(parent));
+	}
+	pub fn pump(&self) {}
+}
+#[cfg(not(target_os = "linux"))]
+fn bounds(parent: &winit::window::Window) -> wry::Rect {
+	let size = parent.inner_size();
+	let header = (LOGIN_HEADER_HEIGHT as f64 * parent.scale_factor()).round() as u32;
+	wry::Rect {
+		position: wry::dpi::PhysicalPosition::new(0, header as i32).into(),
+		size: wry::dpi::PhysicalSize::new(size.width, size.height.saturating_sub(header)).into(),
+	}
+}
+#[cfg(test)]
+mod tests {
+	use super::*;
+	#[test]
+	fn credential_account_names_are_profile_scoped() {
+		#[cfg(feature = "development-data")]
+		assert_eq!(ACCOUNT, "discord-session.development");
+		#[cfg(not(feature = "development-data"))]
+		assert_eq!(ACCOUNT, "discord-session");
+		assert_eq!(account_entry(model::Id(7)), format!("{ACCOUNT}.7"));
+	}
+	#[test]
+	fn plain_file_fallback_is_only_for_systems_without_a_keyring() {
+		let root = tempfile::tempdir().unwrap();
+		let directory = root.path().join("login");
+		let secret = SessionSecret::from_owner_input("SYNTHETIC_SAVED_LOGIN".into()).unwrap();
+		let save = |keyring: Result<(), CredentialError>| {
+			save_login_with(Some(directory.clone()), ACCOUNT, &secret, || keyring)
+		};
+		// A keyring that exists but is locked or refuses the write never gets a plain file,
+		// and its older entry must not restore once it recovers.
+		for error in [CredentialError::Unavailable, CredentialError::TimedOut] {
+			assert_eq!(save(Err(error)), Err(error));
+			assert!(
+				plaintext_login::load(&directory, ACCOUNT)
+					.unwrap()
+					.is_none()
+			);
+			assert!(plaintext_login::keyring_stale(&directory, ACCOUNT).unwrap());
+		}
+		assert_eq!(save(Err(CredentialError::NoStore)), Ok(Saved::Plaintext));
+		assert!(
+			plaintext_login::load(&directory, ACCOUNT)
+				.unwrap()
+				.is_some()
+		);
+		// A keyring installed later but locked must not take the next token in a plain file,
+		// nor let the older fallback or keyring entry restore on launch.
+		for error in [CredentialError::Unavailable, CredentialError::TimedOut] {
+			assert_eq!(save(Err(error)), Err(error));
+			assert!(
+				plaintext_login::load(&directory, ACCOUNT)
+					.unwrap()
+					.is_none()
+			);
+			assert!(plaintext_login::keyring_stale(&directory, ACCOUNT).unwrap());
+		}
+		assert_eq!(save(Err(CredentialError::NoStore)), Ok(Saved::Plaintext));
+		// A keyring that appears later takes the login over and removes the plain copy.
+		assert_eq!(save(Ok(())), Ok(Saved::CredentialStore));
+		assert!(
+			plaintext_login::load(&directory, ACCOUNT)
+				.unwrap()
+				.is_none()
+		);
+		assert!(!plaintext_login::keyring_stale(&directory, ACCOUNT).unwrap());
+	}
+	#[test]
+	fn handoff_accepts_only_our_discord_origin() {
+		assert!(discord_origin("https://discord.com/login"));
+		for value in [
+			"http://discord.com",
+			"https://discord.com.evil.test",
+			"https://evil.test/discord.com",
+			"https://user@discord.com",
+			"https://discord.com:444",
+		] {
+			assert!(!discord_origin(value));
+		}
+		let script = include_str!("login-handoff.js");
+		assert!(!script.contains("localStorage"));
+		assert!(!script.contains("password"));
+
+		{
+			assert!(login_navigation("https://newassets.hcaptcha.com/captcha/"));
+			assert!(!login_navigation("http://hcaptcha.com/"));
+			assert!(!login_navigation("https://hcaptcha.com.evil.test/"));
+		}
+	}
+}
