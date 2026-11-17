@@ -12,7 +12,7 @@ impl Desktop {
 	pub(super) fn connect(&mut self, secret: SessionSecret, save: bool, ctx: &egui::Context) {
 		if self.presence_load_pending {
 			self.deferred_connect = Some((secret, save));
-			self.credential_status = "Connecting to Discord…";
+			self.credential_status = "Conectando ao Discord…";
 			return;
 		}
 		self.role_icon.cancel();
@@ -27,15 +27,15 @@ impl Desktop {
 			store.cancel_load();
 		}
 		self.credential_status = if save {
-			"Login will be saved after Discord connects"
+			"O login será salvo depois que o Discord conectar"
 		} else {
-			"Connecting with the supplied session; saved login unchanged"
+			"Conectando com a sessão fornecida; login salvo mantido"
 		};
 		self.voice.stop();
 		self.messaging.camera_test_requested = false;
 		self.messaging.camera_test_texture = None;
 		self.state
-			.disconnect_voice("Discord login session changed; start a new call");
+			.disconnect_voice("A sessão do Discord mudou; inicie uma nova chamada");
 		self.uploads.cancel();
 		self.uploads.forget_parked();
 		self.login = None;
@@ -72,7 +72,7 @@ impl Desktop {
 		self.messaging.own_presence_changed = false;
 		self.messaging.draft_restore_pending = false;
 		self.state.auth = AuthState::Authenticating;
-		self.state.status = "Connecting to Discord…";
+		self.state.status = "Conectando ao Discord…";
 		self.state.failure_detail = None;
 		let secret = Arc::new(secret);
 		self.pending_save = save.then(|| secret.clone());
@@ -135,7 +135,7 @@ impl Desktop {
 				self.cache_pending += 1;
 			} else {
 				self.cache_error = true;
-				self.cache_status = "Could not queue local account data removal";
+				self.cache_status = "Não foi possível agendar a remoção dos dados locais da conta";
 			}
 		}
 		self.messaging.clear();
@@ -147,7 +147,8 @@ impl Desktop {
 		if let Err(error) = extension_logout {
 			self.messaging.extensions.status = error;
 			self.cache_error = true;
-			self.cache_status = "Extension account data removal could not be queued";
+			self.cache_status =
+				"Não foi possível agendar a remoção dos dados de extensões da conta";
 		}
 		self.app_settings.apply(&mut self.messaging);
 		self.messaging.share_game_activity = self.game_activity.enabled;
@@ -180,12 +181,12 @@ impl Desktop {
 				));
 			}
 			self.credential_status = if self.forgetting {
-				"Removing saved login…"
+				"Removendo login salvo…"
 			} else {
-				"Credential queue unavailable; saved login may remain"
+				"Fila de credenciais indisponível; o login salvo pode continuar guardado"
 			};
 		} else if !was_demo {
-			self.credential_status = "Signed out of this account; its saved login is kept";
+			self.credential_status = "Você saiu desta conta; o login salvo foi mantido";
 		}
 		self.confirming_logout = false;
 		self.end_intent = SessionEnd::Logout;
@@ -237,9 +238,9 @@ impl Desktop {
 		});
 		self.switching = started.then_some(account);
 		self.credential_status = if started {
-			"Reading the saved login for that account…"
+			"Lendo o login salvo dessa conta…"
 		} else {
-			"Credential lookup unavailable; sign in with Discord again"
+			"Busca de credenciais indisponível; entre com o Discord de novo"
 		};
 	}
 	/// Removes one saved account: its token, roster entry and cached data.
@@ -262,10 +263,10 @@ impl Desktop {
 			));
 		}
 		if self.queue_cache_for(account, cache::Operation::Forget) {
-			self.credential_status = "Saved account removed from this device";
+			self.credential_status = "Conta salva removida deste dispositivo";
 		} else {
 			self.cache_error = true;
-			self.cache_status = "Could not queue local account data removal";
+			self.cache_status = "Não foi possível agendar a remoção dos dados locais da conta";
 		}
 	}
 	/// Keeps the switcher entry for the signed-in account current, without retrying failures.
@@ -451,8 +452,8 @@ impl Desktop {
 								self.pending_save = None;
 								self.pending_account_save = None;
 								self.state.auth = AuthState::Unauthenticated;
-								self.state.status = "Disconnected";
-								self.credential_status = "Saved-login restore cancelled";
+								self.state.status = "Desconectado";
+								self.credential_status = "Restauração do login salvo cancelada";
 							}
 						},
 					);
@@ -492,7 +493,7 @@ impl Desktop {
 							);
 							ui.add_space(8.0);
 							ui.label(
-								egui::RichText::new("Early preview")
+								egui::RichText::new("Prévia inicial")
 									.size(13.0)
 									.color(p.muted),
 							);
@@ -617,11 +618,11 @@ impl Desktop {
 			ui.add_space(12.0);
 		}
 		let label = if waiting {
-			"Waiting for Discord…"
+			"Aguardando o Discord…"
 		} else if returning {
-			"Use another account"
+			"Usar outra conta"
 		} else {
-			"Continue with Discord"
+			"Continuar com o Discord"
 		};
 		let button = ui
 			.add_enabled_ui(idle, |ui| {
@@ -636,13 +637,13 @@ impl Desktop {
 			if let Some(store) = &mut self.store {
 				store.cancel_load();
 			}
-			self.credential_status = "Sign in through Discord; saved-login lookup stopped";
+			self.credential_status = "Entre pelo Discord; busca do login salvo interrompida";
 			let wake = ctx.clone();
 			match platform::LoginView::open(self.window.clone(), move || wake.request_repaint()) {
 				Ok(login) => {
 					self.login = Some(login);
 					self.state.auth = AuthState::Authenticating;
-					self.state.status = "Waiting for Discord login";
+					self.state.status = "Aguardando login no Discord";
 				}
 				Err(error) => {
 					self.state.auth = AuthState::Failed;
@@ -761,7 +762,7 @@ impl Desktop {
 			.iter()
 			.find(|saved| saved.id == account)
 			.map(|saved| saved.label().to_owned())
-			.unwrap_or_else(|| "this account".to_owned());
+			.unwrap_or_else(|| "esta conta".to_owned());
 		let signed_in = self
 			.state
 			.user
@@ -771,14 +772,14 @@ impl Desktop {
 			"forget-account",
 			format!("Forget {label}?"),
 			if signed_in {
-				"This is the account you are signed in with: you will be logged out, and its saved login, cached history and drafts on this device are removed."
+				"Esta é a conta em que você está conectado: você será desconectado, e o login salvo, o histórico em cache e os rascunhos dela neste dispositivo serão removidos."
 			} else {
-				"Its saved login, cached history and drafts on this device are removed. The Discord account itself is untouched; you can sign in again any time."
+				"O login salvo, o histórico em cache e os rascunhos dela neste dispositivo serão removidos. A conta do Discord em si não é afetada; você pode entrar de novo quando quiser."
 			},
 		)
 		.danger()
-		.confirm_label("Forget account")
-		.cancel_label("Keep");
+		.confirm_label("Esquecer conta")
+		.cancel_label("Manter");
 		match confirm.show(ctx) {
 			Some(ui::dialog::Choice::Confirmed) => {
 				self.confirming_forget = None;
@@ -819,11 +820,11 @@ impl Desktop {
 			|| self.cache_pending > 0
 			|| self.cache_clears.pending();
 		let show = attention
-			|| busy || self.state.status != "Disconnected"
+			|| busy || self.state.status != "Desconectado"
 			|| (!self.fixture_only
-				&& self.credential_status != "Checking saved login…"
+				&& self.credential_status != "Verificando login salvo…"
 				&& !self.credential_status.is_empty());
-		if !show || (self.fixture_only && self.state.status == "Disconnected") {
+		if !show || (self.fixture_only && self.state.status == "Desconectado") {
 			return;
 		}
 		ui.add_space(16.0);
@@ -859,7 +860,7 @@ impl Desktop {
 					}
 					ui.vertical(|ui| {
 						ui.spacing_mut().item_spacing.y = 4.0;
-						if self.state.status != "Disconnected" || attention {
+						if self.state.status != "Desconectado" || attention {
 							ui.add(
 								egui::Label::new(
 									egui::RichText::new(self.state.status)
@@ -1024,9 +1025,9 @@ impl Desktop {
 				.show(ui, |ui| {
 					ui.spacing_mut().item_spacing.y = 6.0;
 					for line in [
-						"Messaging, reactions, search and read markers have offline tests. Real Discord interoperability is still unverified; attachment uploads and advanced search remain incomplete.",
-						"Messages and drafts are cached locally. Login tokens use the operating system credential store.",
-						"Unofficial clients may put your Discord account at risk.",
+						"Mensagens, reações, busca e marcadores de leitura têm testes offline. A compatibilidade real com o Discord ainda não foi verificada; envio de anexos e busca avançada continuam incompletos.",
+						"Mensagens e rascunhos ficam em cache localmente. Os tokens de login usam o armazenamento de credenciais do sistema.",
+						"Clientes não oficiais podem colocar sua conta do Discord em risco.",
 					] {
 						ui.add(
 							egui::Label::new(

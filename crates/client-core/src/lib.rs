@@ -24,7 +24,6 @@ pub mod member_search;
 pub mod message_actions;
 pub mod messaging_permissions;
 pub mod notifications;
-pub mod voice_invites;
 pub mod polls;
 pub mod preload;
 pub mod presence;
@@ -32,6 +31,7 @@ pub mod profile;
 pub mod reactions;
 pub mod read_state;
 mod replies;
+pub mod voice_invites;
 pub use replies::{HistoryNavigation, LinkResolution, ParkedReplies, Reply, ReplyDeletions};
 pub mod channel_list;
 pub mod group_actions;
@@ -1114,7 +1114,7 @@ impl Default for State {
 			resident: resident::Windows::default(),
 			preload: Default::default(),
 			freshness: Freshness::Stale,
-			status: "Disconnected",
+			status: "Desconectado",
 			failure_detail: None,
 			drafts: BTreeMap::new(),
 			pending: vec![],
@@ -2012,7 +2012,7 @@ impl State {
 					.chars()
 					.any(|c| c.is_control() || matches!(c, '/' | '\\' | ':'))
 		}) {
-			self.status = "Attachment filename is invalid or too long";
+			self.status = "O nome do arquivo anexado é inválido ou longo demais";
 			return None;
 		}
 		let content = if let Some(content) = explicit_content {

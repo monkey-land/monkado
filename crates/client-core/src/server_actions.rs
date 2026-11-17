@@ -250,7 +250,7 @@ impl State {
 		match result {
 			Ok((channel, message)) => {
 				self.server_actions.sent.insert(user, InviteStatus::Sent);
-				self.server_actions.status = Some((guild, "Invite sent"));
+				self.server_actions.status = Some((guild, "Convite enviado"));
 				// Feed acknowledgements through normal bounded channel/message reconciliation.
 				if self.channel(channel.id).is_none() {
 					self.apply(crate::Envelope {
@@ -343,16 +343,16 @@ impl State {
 	}
 	pub fn leave_server_reason(&self, guild: Id) -> Option<&'static str> {
 		if self.guild(guild).is_none() {
-			return Some("Server is no longer available");
+			return Some("O servidor não está mais disponível");
 		}
 		let Some(owner) = self.permissions.guilds.get(&guild).and_then(|g| g.owner) else {
-			return Some("Server ownership is not available yet");
+			return Some("A posse do servidor ainda não está disponível");
 		};
 		let Some(user) = self.user.as_ref() else {
-			return Some("Sign in before leaving a server");
+			return Some("Entre antes de sair de um servidor");
 		};
 		if owner == user.id {
-			return Some("Transfer ownership in Discord before leaving this server");
+			return Some("Transfira a posse no Discord antes de sair deste servidor");
 		}
 		if self.pending.iter().any(|p| {
 			self.channel(p.channel)
@@ -363,7 +363,9 @@ impl State {
 			.as_ref()
 			.is_some_and(|call| call.guild == Some(guild))
 		{
-			return Some("Finish pending messages and leave the call before leaving this server");
+			return Some(
+				"Conclua as mensagens pendentes e saia da chamada antes de sair deste servidor",
+			);
 		}
 		None
 	}
@@ -382,7 +384,7 @@ impl State {
 		if !self.can_create_server_invite(guild, channel) {
 			self.server_actions.status = Some((
 				guild,
-				"You need Create Invite permission in a visible channel",
+				"Você precisa da permissão Criar convite em um canal visível",
 			));
 			return None;
 		}
@@ -411,7 +413,7 @@ impl State {
 	}
 	pub fn delete_server_reason(&self, guild: Id) -> Option<&'static str> {
 		if !self.can_delete_server(guild) {
-			return Some("Only the server owner can delete this server");
+			return Some("Apenas o dono do servidor pode excluí-lo");
 		}
 		if self.server_settings.pending
 			|| self.server_admin.pending
@@ -424,7 +426,9 @@ impl State {
 			.as_ref()
 			.is_some_and(|call| call.guild == Some(guild))
 		{
-			return Some("Finish pending changes, messages and calls before deleting this server");
+			return Some(
+				"Conclua as alterações, mensagens e chamadas pendentes antes de excluir este servidor",
+			);
 		}
 		None
 	}
@@ -442,7 +446,7 @@ impl State {
 		if !self.demo && (self.auth != AuthState::Authenticated || !self.gateway_connected) {
 			self.server_actions.status = Some((
 				action.guild(),
-				"Server actions unavailable while disconnected",
+				"Ações de servidor indisponíveis enquanto desconectado",
 			));
 			return None;
 		}
@@ -462,7 +466,7 @@ impl State {
 		if let Some((action, _, _)) = self.server_actions.pending.take() {
 			self.server_actions.status = Some((
 				action.guild(),
-				"Outcome unknown; check Discord before retrying",
+				"Resultado desconhecido; verifique o Discord antes de tentar de novo",
 			));
 		}
 	}
@@ -523,10 +527,10 @@ impl State {
 			Ok(code) => match action {
 				Action::Notifications { guild, options } => {
 					if observed || self.guild(guild).is_none() {
-						"Request completed; latest notification settings shown"
+						"Solicitação concluída; mostrando as configurações de notificação mais recentes"
 					} else {
 						self.confirm_server_notifications(guild, options)?;
-						"Notification settings saved"
+						"Configurações de notificação salvas"
 					}
 				}
 				Action::CreateInvite {
@@ -543,20 +547,20 @@ impl State {
 							Instant::now(),
 							options,
 						));
-						"Invite created"
+						"Convite criado"
 					} else {
-						"Invite created, but channel access changed; check Discord"
+						"Convite criado, mas o acesso ao canal mudou; verifique o Discord"
 					}
 				}
 				Action::Leave(guild) | Action::Delete(guild) => {
 					if observed {
-						"Request completed; latest server membership shown"
+						"Solicitação concluída; mostrando a participação mais recente no servidor"
 					} else {
 						self.remove_server(guild);
 						if matches!(action, Action::Delete(_)) {
-							"Deleted server"
+							"Servidor excluído"
 						} else {
-							"Left server"
+							"Você saiu do servidor"
 						}
 					}
 				}

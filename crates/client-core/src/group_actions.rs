@@ -109,7 +109,7 @@ impl State {
 	}
 	pub fn leave_group_reason(&self, channel: Id) -> Option<&'static str> {
 		if !self.is_group_dm(channel) {
-			return Some("Group is no longer available");
+			return Some("O grupo não está mais disponível");
 		}
 		if self.pending.iter().any(|p| p.channel == channel)
 			|| self
@@ -118,7 +118,9 @@ impl State {
 				.as_ref()
 				.is_some_and(|call| call.channel == channel)
 		{
-			return Some("Finish pending messages and leave the call before leaving this group");
+			return Some(
+				"Conclua as mensagens pendentes e saia da chamada antes de sair deste grupo",
+			);
 		}
 		None
 	}
@@ -149,13 +151,15 @@ impl State {
 		if !action.valid() {
 			self.group_actions.status = Some((
 				channel,
-				"Use a group name of 1–100 characters and a supported icon",
+				"Use um nome de grupo com 1–100 caracteres e um ícone suportado",
 			));
 			return None;
 		}
 		if !self.demo && (self.auth != AuthState::Authenticated || !self.gateway_connected) {
-			self.group_actions.status =
-				Some((channel, "Group actions unavailable while disconnected"));
+			self.group_actions.status = Some((
+				channel,
+				"Ações de grupo indisponíveis enquanto desconectado",
+			));
 			return None;
 		}
 		self.group_actions.sequence = self.group_actions.sequence.wrapping_add(1);
@@ -173,8 +177,10 @@ impl State {
 	}
 	pub(crate) fn cancel_group_action(&mut self) {
 		if let Some((channel, request, _, _, _)) = self.group_actions.pending.take() {
-			self.group_actions.status =
-				Some((channel, "Outcome unknown; check Discord before retrying"));
+			self.group_actions.status = Some((
+				channel,
+				"Resultado desconhecido; verifique o Discord antes de tentar de novo",
+			));
 			self.group_actions.completed = Some((channel, request, false));
 		}
 	}
@@ -236,7 +242,9 @@ impl State {
 				}
 				failure.label()
 			}
-			Ok(_) if observed => "Request completed; latest group settings shown",
+			Ok(_) if observed => {
+				"Solicitação concluída; mostrando as configurações mais recentes do grupo"
+			}
 			Ok(Some(patch)) => {
 				if let Some(group) = self
 					.channels
@@ -252,14 +260,14 @@ impl State {
 					};
 					self.invalidate_navigation();
 				}
-				"Group updated"
+				"Grupo atualizado"
 			}
 			Ok(None) => {
 				self.remove_channels(&std::collections::BTreeSet::from([channel]));
 				if self.selected == Some(channel) {
 					self.arrived_home();
 				}
-				"Left group"
+				"Você saiu do grupo"
 			}
 		};
 		self.group_actions.status = Some((channel, status));

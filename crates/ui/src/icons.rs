@@ -472,7 +472,10 @@ pub fn paint(painter: &egui::Painter, icon: Icon, rect: Rect, color: Color32) {
 	if icon == Icon::Monkado {
 		let _ = color;
 		let size = rect.width().min(rect.height()) * 1.6;
-		paint_logo(painter, Rect::from_center_size(rect.center(), Vec2::splat(size)));
+		paint_logo(
+			painter,
+			Rect::from_center_size(rect.center(), Vec2::splat(size)),
+		);
 		return;
 	}
 	let size = rect.width().min(rect.height());

@@ -104,8 +104,9 @@ impl State {
 		if !page.valid() {
 			self.server_admin.integrations = None;
 			self.server_admin.needs_refresh = true;
-			self.server_admin.error =
-				Some("Integration data exceeded safe bounds; reload to continue");
+			self.server_admin.error = Some(
+				"Os dados de integrações excederam os limites seguros; recarregue para continuar",
+			);
 			return;
 		}
 		self.server_admin.integrations = Some(page);

@@ -326,7 +326,7 @@ impl IntegrationsUi {
 				self.error = None;
 			} else {
 				self.error = Some(
-					"Could not update integrations. Check your permissions and connection, then reload.",
+					"Não foi possível atualizar as integrações. Verifique suas permissões e sua conexão e recarregue.",
 				);
 			}
 		}
@@ -944,13 +944,13 @@ impl IntegrationsUi {
 		let mut confirm = dialog::Confirm::new(
 			"delete-server-integration",
 			if integration {
-				"Remove integration?"
+				"Remover integração?"
 			} else {
-				"Delete webhook?"
+				"Excluir webhook?"
 			},
 			if integration {
 				format!(
-					"Removing {} also removes its bot and every webhook it owns from this server.",
+					"Remover {} também remove deste servidor o bot e todos os webhooks dele.",
 					deletion.name
 				)
 			} else {
@@ -961,7 +961,7 @@ impl IntegrationsUi {
 			},
 		)
 		.danger()
-		.confirm_label(if integration { "Remove" } else { "Delete" })
+		.confirm_label(if integration { "Remover" } else { "Excluir" })
 		.enabled(writable(state));
 		if let Some(error) = state.server_admin.error {
 			confirm = confirm.note(dialog::Level::Error, error);
@@ -1016,7 +1016,7 @@ fn webhook_identity(ui: &mut egui::Ui, state: &State, webhook: &Webhook, avatars
 			let destination = webhook
 				.channel
 				.and_then(|id| state.channel(id))
-				.map_or("Unknown channel", |c| c.name.as_str());
+				.map_or("Canal desconhecido", |c| c.name.as_str());
 			ui.add(
 				egui::Label::new(
 					RichText::new(format!("#{destination}"))

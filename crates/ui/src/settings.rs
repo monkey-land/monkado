@@ -683,7 +683,7 @@ impl MessagingUi {
 		let name = state
 			.user
 			.as_ref()
-			.map_or("Your account", |u| u.name.as_str())
+			.map_or("Sua conta", |u| u.name.as_str())
 			.to_owned();
 		egui::Frame::new()
 			.fill(colors.raised)
@@ -750,7 +750,7 @@ impl MessagingUi {
 								account_row(
 									ui,
 									"settings-account-page-email-password-and-security",
-									"Managed in Discord",
+									"Gerenciado no Discord",
 								);
 							});
 						ui.add_space(12.0);
@@ -791,9 +791,9 @@ impl MessagingUi {
 				});
 			});
 		let label = if state.demo {
-			"Exit preview"
+			"Sair da prévia"
 		} else {
-			"Log out"
+			"Sair"
 		};
 		design::group(
 			ui,

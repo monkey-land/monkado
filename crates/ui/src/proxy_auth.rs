@@ -26,25 +26,25 @@ impl Form {
 	}
 
 	pub fn show(&mut self, ui: &mut egui::Ui, endpoint: &str, manual: bool) {
-		ui.collapsing("Proxy authentication", |ui| {
-            ui.label("Credentials stay in Monkado's OS credential store and are never shared with the plugin. Apply the proxy URL before saving credentials.");
+		ui.collapsing("Autenticação do proxy", |ui| {
+            ui.label("As credenciais ficam no cofre de credenciais do sistema usado pelo Monkado e nunca são compartilhadas com o plugin. Aplique a URL do proxy antes de salvar as credenciais.");
             ui.add_enabled_ui(manual && !self.busy, |ui| {
                 if url::Url::parse(endpoint).is_ok_and(|url| url.scheme() == "http") {
                     ui.label("HTTP proxy authentication is unencrypted: anyone observing the connection to the proxy can recover these credentials. Use an HTTPS proxy for encrypted authentication.");
                 }
-                credential_input(ui, "Username", &mut self.username, false, 256);
-                credential_input(ui, "Password", &mut self.password, true, 1024);
+                credential_input(ui, "Usuário", &mut self.username, false, 256);
+                credential_input(ui, "Senha", &mut self.password, true, 1024);
                 ui.horizontal(|ui| {
-                    if ui.button("Save credentials").clicked() {
+                    if ui.button("Salvar credenciais").clicked() {
                         self.queue_save(endpoint);
                     }
-                    if ui.button("Remove saved credentials").clicked() {
+                    if ui.button("Remover credenciais salvas").clicked() {
                         self.clear_draft();
                         self.request = Some(Request { endpoint: endpoint.into(), credentials: None });
                     }
                 });
             });
-            if !manual { ui.label("Choose URL mode to configure proxy authentication."); }
+            if !manual { ui.label("Escolha o modo URL para configurar a autenticação do proxy."); }
             if !self.status.is_empty() { ui.label(&self.status); }
         });
 	}
@@ -100,7 +100,7 @@ mod tests {
 		let mut password = Zeroizing::new("synthetic-password".into());
 		let mut id = None;
 		let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
-			id = Some(credential_input(ui, "Password", &mut password, true, 1024));
+			id = Some(credential_input(ui, "Senha", &mut password, true, 1024));
 		});
 		output.textures_delta.clear();
 		password.zeroize();

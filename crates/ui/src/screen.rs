@@ -92,7 +92,7 @@ impl ScreenUi {
 			self.sources = if cfg!(target_os = "macos") {
 				vec![Source {
 					id: SourceId::SystemPicker,
-					name: "Choose with the macOS system picker".into(),
+					name: "Escolher pelo seletor do sistema do macOS".into(),
 					width: 0,
 					height: 0,
 					refresh_hz: 0,
@@ -101,14 +101,14 @@ impl ScreenUi {
 				vec![
 					Source {
 						id: SourceId::Display(1),
-						name: "Display 1 · Synthetic preview".into(),
+						name: "Tela 1 · Prévia sintética".into(),
 						width: 2560,
 						height: 1440,
 						refresh_hz: 165,
 					},
 					Source {
 						id: SourceId::Window(2),
-						name: "Project notes · Synthetic window".into(),
+						name: "Notas do projeto · Janela sintética".into(),
 						width: 1280,
 						height: 720,
 						refresh_hz: 60,
@@ -116,10 +116,10 @@ impl ScreenUi {
 				]
 			};
 			self.selected = self.sources.first().map(|source| source.id);
-			self.status = "Offline preview · no screen is captured".into();
+			self.status = "Prévia offline · nenhuma tela é capturada".into();
 		} else {
 			self.refresh_requested = true;
-			self.status = "Looking for screens and windows…".into();
+			self.status = "Procurando telas e janelas…".into();
 		}
 	}
 	fn selected_source(&self) -> Option<&Source> {
@@ -277,7 +277,7 @@ impl ScreenUi {
 					self.quality_for = None;
 					self.sources.clear();
 					self.refresh_requested = true;
-					self.status = "Looking for screens and windows…".into();
+					self.status = "Procurando telas e janelas…".into();
 				}
 			});
 		});
@@ -461,13 +461,13 @@ impl ScreenUi {
 			);
 			let kind = ui.painter().layout_no_wrap(
 				match source.id {
-					SourceId::Display(_) | SourceId::X11Desktop => "Screen".to_owned(),
-					SourceId::Window(_) => "Window".to_owned(),
+					SourceId::Display(_) | SourceId::X11Desktop => "Tela".to_owned(),
+					SourceId::Window(_) => "Janela".to_owned(),
 					SourceId::SystemPicker => {
 						crate::i18n::translate("screen-macos-system-picker-kind")
 					}
 					#[allow(unreachable_patterns)] // Portal may be absent outside Linux.
-					_ => "System permission dialog".to_owned(),
+					_ => "Diálogo de permissão do sistema".to_owned(),
 				},
 				egui::FontId::proportional(11.0),
 				colors.muted,

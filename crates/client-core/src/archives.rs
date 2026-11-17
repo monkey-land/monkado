@@ -120,7 +120,7 @@ impl State {
 				view.page = Some(page);
 				view.error = None;
 			}
-			Ok(_) => view.error = Some("Archived threads were invalid or too large"),
+			Ok(_) => view.error = Some("Os tópicos arquivados eram inválidos ou grandes demais"),
 			Err(failure) => view.error = Some(failure.label()),
 		}
 	}
@@ -150,7 +150,8 @@ impl State {
 				|| existing.parent_id != thread.parent_id
 				|| existing.kind != thread.kind
 			{
-				self.archives.as_mut()?.error = Some("Thread conflicts with current navigation");
+				self.archives.as_mut()?.error =
+					Some("O tópico entra em conflito com a navegação atual");
 				return None;
 			}
 			return Some(());
@@ -170,7 +171,7 @@ impl State {
 				+ (self.guilds.capacity() - self.guilds.len()) * size_of::<model::Guild>()
 				> model::account::MAX_BYTES
 		{
-			self.archives.as_mut()?.error = Some("Thread exceeds the navigation budget");
+			self.archives.as_mut()?.error = Some("O tópico excede o limite de navegação");
 			return None;
 		}
 		let thread = thread.clone();
@@ -179,7 +180,7 @@ impl State {
 			.try_reserve_exact(final_len.saturating_sub(self.channels.len()))
 			.is_err()
 		{
-			self.archives.as_mut()?.error = Some("Thread exceeds the navigation budget");
+			self.archives.as_mut()?.error = Some("O tópico excede o limite de navegação");
 			return None;
 		}
 		self.retire_archived_thread(None);

@@ -57,7 +57,7 @@ pub fn load(
 	runtime.spawn(async move {
 		let result = tokio::task::spawn_blocking(move || read_family(family).map(Some))
 			.await
-			.unwrap_or(Err("Font loading interrupted. Try again."));
+			.unwrap_or(Err("Carregamento da fonte interrompido. Tente novamente."));
 		let _ = send.send(result);
 		ctx.request_repaint();
 	});
@@ -68,7 +68,7 @@ fn read_family(name: String) -> Result<CustomFont, &'static str> {
 	let mut collection = collection();
 	let family = collection
 		.family_by_name(&name)
-		.ok_or("This font is no longer installed.")?;
+		.ok_or("Esta fonte não está mais instalada.")?;
 	let font = family
 		.fonts()
 		.iter()
@@ -80,15 +80,15 @@ fn read_family(name: String) -> Result<CustomFont, &'static str> {
 			)
 		})
 		.or_else(|| family.default_font())
-		.ok_or("This font has no usable style.")?;
-	let blob = font.load(None).ok_or("Could not read the font.")?;
+		.ok_or("Esta fonte não tem nenhum estilo utilizável.")?;
+	let blob = font.load(None).ok_or("Não foi possível ler a fonte.")?;
 	let bytes = ui::fonts::standalone_face(blob.as_ref(), font.index())?;
 	CustomFont::new(name, bytes)
 }
 
 #[cfg(all(debug_assertions, feature = "demo"))]
 fn read(path: &std::path::Path) -> Result<CustomFont, &'static str> {
-	let bytes = std::fs::read(path).map_err(|_| "Could not read the font.")?;
+	let bytes = std::fs::read(path).map_err(|_| "Não foi possível ler a fonte.")?;
 	CustomFont::new(
 		path.file_stem()
 			.unwrap_or_default()

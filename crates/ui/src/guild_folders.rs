@@ -587,7 +587,7 @@ impl MessagingUi {
 								if open { 0 } else { count },
 								colors.base,
 							);
-							let name = folder.name.as_deref().unwrap_or("Server folder");
+							let name = folder.name.as_deref().unwrap_or("Pasta de servidores");
 							response.widget_info(|| {
 								egui::WidgetInfo::labeled(
 									egui::Role::Button,

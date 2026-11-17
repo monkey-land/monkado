@@ -34,10 +34,10 @@ impl EmojiUpload {
 		parent: Arc<winit::window::Window>,
 	) -> Result<(), &'static str> {
 		if self.choosing.is_some() {
-			return Err("Close the previous emoji picker first");
+			return Err("Feche primeiro o seletor de emojis anterior");
 		}
 		if paths.len() > 10 {
-			return Err("Choose at most 10 emoji at a time");
+			return Err("Escolha no máximo 10 emojis por vez");
 		}
 		let dialog = paths
 			.is_empty()
@@ -54,7 +54,7 @@ impl EmojiUpload {
 			let decode_flag = flag.clone();
 			let result = tokio::task::spawn_blocking(move || {
 				if paths.len() > 10 {
-					return Err("Choose at most 10 emoji at a time");
+					return Err("Escolha no máximo 10 emojis por vez");
 				}
 				let mut prepared = Vec::new();
 				for path in paths {
@@ -67,7 +67,7 @@ impl EmojiUpload {
 			})
 			.await
 			.unwrap_or(Err(
-				"Emoji preparation interrupted; choose the images again",
+				"Preparação dos emojis interrompida; escolha as imagens de novo",
 			));
 			let _ = send.send(if flag.load(Ordering::Acquire) {
 				Ok(Vec::new())
@@ -101,7 +101,7 @@ impl EmojiUpload {
 			Ok(result) => result,
 			Err(mpsc::TryRecvError::Empty) => return None,
 			Err(mpsc::TryRecvError::Disconnected) => {
-				Err("Emoji preparation interrupted; choose the images again")
+				Err("Preparação dos emojis interrompida; escolha as imagens de novo")
 			}
 		};
 		let job = self.choosing.take()?;
@@ -117,53 +117,53 @@ impl Drop for EmojiUpload {
 fn read(path: &Path, cancelled: &AtomicBool) -> Result<Prepared, &'static str> {
 	const MAX_INPUT: u64 = 8 * 1024 * 1024;
 	if !path.is_absolute() || path.as_os_str().as_encoded_bytes().len() > 4096 {
-		return Err("Choose a local image with a supported path");
+		return Err("Escolha uma imagem local com um caminho compatível");
 	}
 	let metadata =
-		std::fs::symlink_metadata(path).map_err(|_| "Could not open the chosen emoji")?;
+		std::fs::symlink_metadata(path).map_err(|_| "Não foi possível abrir o emoji escolhido")?;
 	if !metadata.is_file()
 		|| metadata.file_type().is_symlink()
 		|| metadata.len() == 0
 		|| metadata.len() > MAX_INPUT
 	{
-		return Err("Choose regular image files up to 8 MB");
+		return Err("Escolha arquivos de imagem comuns de até 8 MB");
 	}
 	let mut bytes = Vec::with_capacity(metadata.len() as usize);
 	std::fs::File::open(path)
-		.map_err(|_| "Could not open the chosen emoji")?
+		.map_err(|_| "Não foi possível abrir o emoji escolhido")?
 		.take(MAX_INPUT + 1)
 		.read_to_end(&mut bytes)
-		.map_err(|_| "Could not read the chosen emoji")?;
+		.map_err(|_| "Não foi possível ler o emoji escolhido")?;
 	if bytes.len() as u64 > MAX_INPUT {
-		return Err("Choose images up to 8 MB");
+		return Err("Escolha imagens de até 8 MB");
 	}
 	let gif = bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a");
 	let (uri, preview) = if gif {
 		if bytes.len() > 256 * 1024 {
-			return Err("Animated emoji must be at most 256 KB");
+			return Err("Emojis animados devem ter no máximo 256 KB");
 		}
 		let mut decoder = image::codecs::gif::GifDecoder::new(Cursor::new(&bytes))
-			.map_err(|_| "Invalid GIF image")?;
+			.map_err(|_| "Imagem GIF inválida")?;
 		let mut limits = image::Limits::default();
 		limits.max_image_width = Some(4096);
 		limits.max_image_height = Some(4096);
 		limits.max_alloc = Some(64 * 1024 * 1024);
 		decoder
 			.set_limits(limits)
-			.map_err(|_| "GIF image is too large")?;
+			.map_err(|_| "A imagem GIF é grande demais")?;
 		let mut preview = None;
 		let mut total = 0usize;
 		for (index, frame) in decoder.into_frames().enumerate() {
 			if cancelled.load(Ordering::Acquire) {
-				return Err("Emoji preparation cancelled");
+				return Err("Preparação dos emojis cancelada");
 			}
 			if index >= 120 {
-				return Err("Choose a GIF with at most 120 frames");
+				return Err("Escolha um GIF com no máximo 120 quadros");
 			}
-			let frame = frame.map_err(|_| "Invalid GIF animation")?.into_buffer();
+			let frame = frame.map_err(|_| "Animação GIF inválida")?.into_buffer();
 			total = total.saturating_add(frame.as_raw().len());
 			if total > 64 * 1024 * 1024 {
-				return Err("Choose a smaller GIF animation");
+				return Err("Escolha uma animação GIF menor");
 			}
 			if preview.is_none() {
 				let pixels = image::imageops::thumbnail(&frame, 128, 128);
@@ -175,8 +175,8 @@ fn read(path: &Path, cancelled: &AtomicBool) -> Result<Prepared, &'static str> {
 		}
 		(
 			discord_protocol::server_admin::emoji_data_uri(&bytes, true)
-				.ok_or("Invalid emoji image")?,
-			preview.ok_or("GIF has no frames")?,
+				.ok_or("Imagem de emoji inválida")?,
+			preview.ok_or("O GIF não tem quadros")?,
 		)
 	} else {
 		crate::group_icon::decode_image(&bytes, 128, false)?

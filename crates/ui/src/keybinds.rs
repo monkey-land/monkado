@@ -45,32 +45,32 @@ pub(super) fn show(
 ) {
 	section(
 		ui,
-		"Navigation",
-		"Move around Monkado without reaching for the mouse.",
+		"Navegação",
+		"Navegue pelo Monkado sem precisar do mouse.",
 		NAVIGATION,
 		bindings,
 		capturing,
 	);
 	section(
 		ui,
-		"Messages",
-		"Composer shortcuts are only active while you are writing.",
+		"Mensagens",
+		"Os atalhos da caixa de mensagem só funcionam enquanto você escreve.",
 		MESSAGES,
 		bindings,
 		capturing,
 	);
 	section(
 		ui,
-		"Text Formatting",
-		"Apply or remove formatting in the composer.",
+		"Formatação de texto",
+		"Aplique ou remova formatação na caixa de mensagem.",
 		FORMATTING,
 		bindings,
 		capturing,
 	);
 	section(
 		ui,
-		"Development",
-		"Copy build and environment information for an issue report.",
+		"Desenvolvimento",
+		"Copie informações da versão e do ambiente para um relatório de problema.",
 		&[KeybindAction::CopyIssueDiagnostics],
 		bindings,
 		capturing,
@@ -113,8 +113,8 @@ fn voice_section(
 ) {
 	section(
 		ui,
-		"Voice",
-		"Control your microphone and incoming audio during a connected call.",
+		"Voz",
+		"Controle seu microfone e o áudio recebido durante uma chamada.",
 		VOICE,
 		bindings,
 		capturing,
@@ -461,7 +461,7 @@ fn conflict_visual(ui: &egui::Ui, target: CaptureTarget) -> (f32, f32, Option<St
 		blink_factor,
 		fade_alpha,
 		Some(format!(
-			"Already bound to {}.",
+			"Já atribuído a {}.",
 			notice.conflicting_action.label()
 		)),
 	)
@@ -619,7 +619,7 @@ fn shortcut_button(
 		ui.painter().text(
 			rect.center(),
 			egui::Align2::CENTER_CENTER,
-			"Press keys…",
+			"Pressione as teclas…",
 			egui::FontId::new(12.0, design::medium_family(ui.ctx())),
 			colors.text_strong,
 		);
@@ -675,7 +675,7 @@ fn shortcut_button(
 
 fn display_key(name: &str) -> String {
 	match name {
-		"" => "Unassigned".into(),
+		"" => "Não atribuído".into(),
 		"ArrowUp" => "↑".into(),
 		"ArrowDown" => "↓".into(),
 		"ArrowLeft" => "←".into(),
@@ -686,13 +686,13 @@ fn display_key(name: &str) -> String {
 		"PageDown" => "PgDn".into(),
 		"PageUp" => "PgUp".into(),
 		"Insert" => "Ins".into(),
-		"MediaPlayPause" => "Play / Pause".into(),
-		"MediaTrackNext" => "Next Track".into(),
-		"MediaTrackPrevious" => "Previous Track".into(),
-		"MediaStop" => "Media Stop".into(),
-		"AudioVolumeMute" => "Volume Mute".into(),
-		"AudioVolumeDown" => "Volume Down".into(),
-		"AudioVolumeUp" => "Volume Up".into(),
+		"MediaPlayPause" => "Reproduzir / Pausar".into(),
+		"MediaTrackNext" => "Próxima faixa".into(),
+		"MediaTrackPrevious" => "Faixa anterior".into(),
+		"MediaStop" => "Parar mídia".into(),
+		"AudioVolumeMute" => "Silenciar volume".into(),
+		"AudioVolumeDown" => "Diminuir volume".into(),
+		"AudioVolumeUp" => "Aumentar volume".into(),
 		"CapsLock" => "Caps Lock".into(),
 		"NumLock" => "Num Lock".into(),
 		"ScrollLock" => "Scroll Lock".into(),
@@ -1072,7 +1072,7 @@ mod tests {
 		let mut bindings = Keybinds::default();
 		assert_eq!(
 			chord_parts(bindings.chord(KeybindAction::PushToMute)),
-			vec!["Unassigned"]
+			vec!["Não atribuído"]
 		);
 		let ctx = egui::Context::default();
 		let mut pressed_unassigned = true;

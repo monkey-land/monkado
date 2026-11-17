@@ -49,9 +49,15 @@ mod tests {
 		assert_eq!(parse(&text), Some((Id(10), Id(20))));
 		assert_eq!(parse(&message("abc", None)), None);
 		assert_eq!(parse("https://discord.com/channels/@me/20"), None);
-		assert_eq!(parse("https://discord.com/channels/10/20/30"), Some((Id(10), Id(20))));
+		assert_eq!(
+			parse("https://discord.com/channels/10/20/30"),
+			Some((Id(10), Id(20)))
+		);
 		assert_eq!(parse("https://discord.com/channels/10/"), None);
 		assert_eq!(parse("https://discord.com/channels/0/20"), None);
-		assert_eq!(parse("https://discord.com/channels/123456789012345678901/2"), None);
+		assert_eq!(
+			parse("https://discord.com/channels/123456789012345678901/2"),
+			None
+		);
 	}
 }

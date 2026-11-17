@@ -82,7 +82,7 @@ impl LoginView {
 		parent: Arc<winit::window::Window>,
 		wake: impl Fn() + Send + Sync + 'static,
 	) -> Result<Self, Failure> {
-		gtk4::init().map_err(|_| Failure::ProtocolAt("Linux login window unavailable"))?;
+		gtk4::init().map_err(|_| Failure::ProtocolAt("Janela de login do Linux indisponível"))?;
 		crate::ensure_webkit_locale().map_err(Failure::ProtocolAt)?;
 		crate::ensure_gtk_application_id();
 		let mut random = [0_u8; 32];
@@ -199,7 +199,7 @@ impl LoginView {
 			}
 		});
 		if !manager.register_script_message_handler(HANDLER, None) {
-			return Err(Failure::ProtocolAt("Linux login bridge unavailable"));
+			return Err(Failure::ProtocolAt("Ponte de login do Linux indisponível"));
 		}
 		view.connect_decide_policy(|_, decision, kind| {
 			let allowed = match kind {
@@ -268,7 +268,7 @@ impl LoginView {
 		view.connect_print(|_, _| true);
 		view.connect_show_notification(|_, _| true);
 		let window = gtk4::Window::builder()
-			.title("Discord sign-in · Monkado")
+			.title("Entrar no Discord · Monkado")
 			.default_width(900)
 			.default_height(700)
 			.child(&view)

@@ -31,7 +31,7 @@ impl State {
 		}
 		if !self.demo && (self.auth != AuthState::Authenticated || !self.gateway_connected) {
 			self.messaging_permissions.error = Some(Failure::ProtocolAt(
-				"Connect to Discord to update messaging permissions",
+				"Conecte-se ao Discord para atualizar as permissões de mensagens",
 			));
 			return None;
 		}

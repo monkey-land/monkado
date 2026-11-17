@@ -356,7 +356,7 @@ fn result_jump_and_numeric_pager_keep_scope_and_allow_explicit_retry() {
 	.1;
 	let jump = labels
 		.iter()
-		.find(|(text, _)| text == "Jump")
+		.find(|(text, _)| text == "Ir")
 		.unwrap()
 		.1
 		.center();

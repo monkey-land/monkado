@@ -198,7 +198,7 @@ impl State {
 								.is_some_and(|contexts| !contexts.contains(&context))
 					}) {
 					self.application_commands.error =
-						Some("Application command list is invalid or exceeds its limits");
+						Some("A lista de comandos do aplicativo é inválida ou excede os limites");
 				} else {
 					self.application_commands.commands = commands;
 					self.application_commands.error = None;
@@ -219,24 +219,24 @@ impl State {
 		path: &[String],
 		values: &[(String, String)],
 	) -> Result<Command, &'static str> {
-		let channel = self.selected.ok_or("Choose a conversation first")?;
+		let channel = self.selected.ok_or("Escolha uma conversa primeiro")?;
 		if !self.can_request_application_commands(channel) || !self.interactions_allowed() {
-			return Err("Application commands are unavailable in this conversation");
+			return Err("Comandos de aplicativo não estão disponíveis nesta conversa");
 		}
 		if self.interactions.busy() || self.interactions.modal.is_some() {
-			return Err("Finish the current application interaction first");
+			return Err("Conclua a interação atual com o aplicativo primeiro");
 		}
 		let catalog = &self.application_commands;
 		if !self.application_commands_cover(channel) || catalog.loading || catalog.error.is_some() {
-			return Err("Refresh the application command list first");
+			return Err("Atualize a lista de comandos do aplicativo primeiro");
 		}
 		let command = catalog
 			.commands
 			.iter()
 			.find(|c| c.id == command_id)
-			.ok_or("This command is no longer available")?;
+			.ok_or("Este comando não está mais disponível")?;
 		if !self.can_use_application_command(channel, command) {
-			return Err("You don't have permission to use this command here");
+			return Err("Você não tem permissão para usar este comando aqui");
 		}
 		let guild = self.channel(channel).and_then(|c| c.guild);
 		let invocation = command.invocation(path, values)?;
@@ -247,14 +247,14 @@ impl State {
 			{
 				let id = value
 					.parse::<Id>()
-					.map_err(|_| "Enter a channel identifier")?;
+					.map_err(|_| "Informe um identificador de canal")?;
 				if !self.channel(id).is_some_and(|c| {
 					c.guild == guild
 						&& self.can_view(id)
 						&& (option.channel_types.is_empty()
 							|| option.channel_types.contains(&c.kind))
 				}) {
-					return Err("Choose an accessible channel of the requested type");
+					return Err("Escolha um canal acessível do tipo solicitado");
 				}
 			}
 		}
@@ -267,7 +267,7 @@ impl State {
 				invocation: Box::new(invocation),
 			},
 		)
-		.ok_or("Application interaction could not be started")
+		.ok_or("Não foi possível iniciar a interação com o aplicativo")
 	}
 }
 

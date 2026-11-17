@@ -328,7 +328,7 @@ impl MessagingUi {
 				));
 				editor.icon_error = None;
 			}
-			Ok(Some(_)) => editor.icon_error = Some("The prepared icon is too large."),
+			Ok(Some(_)) => editor.icon_error = Some("O ícone preparado é grande demais."),
 			Ok(None) => {}
 			Err(error) => editor.icon_error = Some(error),
 		}
@@ -558,17 +558,17 @@ impl Editor {
 				state.server_settings.saving || state.server_admin.saving || self.invites.busy();
 			let mut confirmation = dialog::Confirm::new(
 				"discard-server-settings",
-				"Discard unsaved changes?",
-				"Your changes to this server will be lost.",
+				"Descartar alterações não salvas?",
+				"Suas alterações neste servidor serão perdidas.",
 			)
 			.danger()
-			.confirm_label("Discard Changes")
-			.cancel_label("Keep Editing")
+			.confirm_label("Descartar alterações")
+			.cancel_label("Continuar editando")
 			.enabled(!busy);
 			if busy {
 				confirmation = confirmation.note(
 					dialog::Level::Info,
-					"Wait for the current save to finish before closing.",
+					"Aguarde o salvamento atual terminar antes de fechar.",
 				);
 			}
 			match confirmation.show(ctx) {
@@ -942,7 +942,7 @@ impl Editor {
 			edit.icon = self.icon.clone();
 			if !edit.valid() {
 				self.form_error = Some(
-					"Use a server name of 2–100 characters, a description of up to 300 characters, and valid traits without control characters.",
+					"Use um nome de servidor com 2 a 100 caracteres, uma descrição de até 300 caracteres e características válidas sem caracteres de controle.",
 				);
 				return;
 			}
@@ -952,7 +952,7 @@ impl Editor {
 				self.form_error = None;
 			} else {
 				self.form_error = Some(
-					"Could not save these changes. Check the selected channels, reconnect, or reload the server settings and try again.",
+					"Não foi possível salvar estas alterações. Verifique os canais selecionados, reconecte ou recarregue as configurações do servidor e tente novamente.",
 				);
 			}
 		}
@@ -1646,7 +1646,7 @@ fn banner_swatch(
 			Color32::WHITE,
 		);
 	}
-	let name = format!("Banner color #{color:06X}");
+	let name = format!("Cor do banner #{color:06X}");
 	response.widget_info(|| {
 		egui::WidgetInfo::selected(egui::Role::RadioButton, ui.is_enabled(), selected, &name)
 	});

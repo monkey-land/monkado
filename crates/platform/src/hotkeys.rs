@@ -5,16 +5,17 @@ use model::{KeyChord, KeybindAction, Keybinds, keybinds::is_mouse_button};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 
-const READY: &str = "Global voice keybinds are enabled.";
-const DISABLED: &str = "Global keybinds are off. Shortcuts work while Monkado is focused.";
+const READY: &str = "Os atalhos globais de voz estão ativados.";
+const DISABLED: &str =
+	"Os atalhos globais estão desativados. Os atalhos funcionam enquanto o Monkado está em foco.";
 #[cfg(target_os = "linux")]
-const WAYLAND_PENDING: &str = "Approve the global voice keybinds in your desktop's dialog.";
+const WAYLAND_PENDING: &str =
+	"Aprove os atalhos globais de voz na janela do seu ambiente de trabalho.";
 #[cfg(target_os = "linux")]
-const WAYLAND_UNAVAILABLE: &str = "Global voice keybinds were denied or the desktop GlobalShortcuts portal is unavailable; they still work while Monkado is focused.";
-const UNAVAILABLE: &str =
-	"Global voice keybinds are unavailable on this system; they work while Monkado is focused.";
-const INVALID: &str = "One or more voice bindings cannot be registered globally; they still work while Monkado is focused.";
-const MODIFIER_REQUIRED: &str = "Add Ctrl, Alt, Shift, or Command to use a voice binding globally; it still works while Monkado is focused.";
+const WAYLAND_UNAVAILABLE: &str = "Os atalhos globais de voz foram negados ou o portal GlobalShortcuts do ambiente de trabalho está indisponível; eles ainda funcionam enquanto o Monkado está em foco.";
+const UNAVAILABLE: &str = "Os atalhos globais de voz não estão disponíveis neste sistema; eles funcionam enquanto o Monkado está em foco.";
+const INVALID: &str = "Um ou mais atalhos de voz não podem ser registrados globalmente; eles ainda funcionam enquanto o Monkado está em foco.";
+const MODIFIER_REQUIRED: &str = "Adicione Ctrl, Alt, Shift ou Command para usar um atalho de voz globalmente; ele ainda funciona enquanto o Monkado está em foco.";
 
 #[cfg(target_os = "windows")]
 /// Mouse poller identities, kept out of the range `global-hotkey` assigns to real hotkeys.
@@ -646,11 +647,11 @@ fn portal_id(action: KeybindAction) -> &'static str {
 #[cfg(target_os = "linux")]
 fn portal_description(action: KeybindAction) -> &'static str {
 	match action {
-		KeybindAction::PushToTalk => "Monkado push to talk",
-		KeybindAction::PushToMute => "Monkado push to mute",
-		KeybindAction::ToggleMute => "Toggle Monkado microphone mute",
-		KeybindAction::ToggleDeafen => "Toggle Monkado deafen",
-		_ => "Monkado voice shortcut",
+		KeybindAction::PushToTalk => "Monkado: apertar para falar",
+		KeybindAction::PushToMute => "Monkado: apertar para silenciar",
+		KeybindAction::ToggleMute => "Ativar/desativar o microfone do Monkado",
+		KeybindAction::ToggleDeafen => "Ativar/desativar o ensurdecimento do Monkado",
+		_ => "Atalho de voz do Monkado",
 	}
 }
 

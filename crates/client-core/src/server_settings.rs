@@ -162,7 +162,7 @@ impl State {
 			self.server_settings.error = Some(if self.server_settings.saving {
 				Failure::Ambiguous.label()
 			} else {
-				"Server settings disconnected; reload to continue"
+				"As configurações do servidor foram desconectadas; recarregue para continuar"
 			});
 			self.server_settings.needs_refresh = self.server_settings.saving;
 			self.server_settings.saving = false;
@@ -199,8 +199,9 @@ impl State {
 			&& (writing || self.server_settings.needs_refresh);
 		if let Some(snapshot) = snapshot {
 			if snapshot.guild != event.guild || !snapshot.valid() {
-				self.server_settings.error =
-					Some("Server settings response was invalid; reload to continue");
+				self.server_settings.error = Some(
+					"A resposta das configurações do servidor era inválida; recarregue para continuar",
+				);
 				self.server_settings.needs_refresh = true;
 				return Ok(());
 			}

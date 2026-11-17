@@ -245,14 +245,14 @@ fn preview_card(
 		if presence.large_image.is_some() || presence.small_image.is_some() {
 			design::hint(
 				ui,
-				"Artwork resolves when applied. This draft preview uses placeholders.",
+				"As imagens são carregadas ao aplicar. Esta prévia usa imagens provisórias.",
 			);
 		}
 	} else {
 		design::card(ui, |ui| {
 			crate::icons::inline(ui, crate::icons::Icon::GameController, 32.0, colors.muted);
-			ui.label(egui::RichText::new("Your activity goes here").strong());
-			ui.label("Enter an application ID and activity name, then choose Preview.");
+			ui.label(egui::RichText::new("Sua atividade aparece aqui").strong());
+			ui.label("Insira um ID de aplicativo e o nome da atividade e depois gere a prévia.");
 		});
 	}
 	ui.add_space(12.0);
@@ -261,7 +261,7 @@ fn preview_card(
 			crate::dialog::notice(
 				ui,
 				crate::dialog::Level::Warning,
-				"Activity sharing is off. Enable it in Settings > Registered Games to publish your presence.",
+				"O compartilhamento de atividade está desativado. Ative-o em Configurações > Jogos registrados para publicar sua presença.",
 			);
 		} else if !activity_status.0.is_empty() {
 			design::hint(ui, activity_status.0);
@@ -270,11 +270,11 @@ fn preview_card(
 	design::hint(
 		ui,
 		if state.demo {
-			"Offline demo. Nothing is published."
+			"Demonstração offline. Nada é publicado."
 		} else if !state.gateway_connected {
-			"Offline. Your saved activity will wait for a connection."
+			"Offline. Sua atividade salva aguardará uma conexão."
 		} else {
-			"Enable activity sharing in Settings > Registered Games. Invisible hides your activity."
+			"Ative o compartilhamento de atividade em Configurações > Jogos registrados. O modo Invisível oculta sua atividade."
 		},
 	);
 }
@@ -287,11 +287,11 @@ pub(crate) fn summary(ui: &mut egui::Ui, presence: &CustomRichPresence) {
 		RichPresenceTimer::Elapsed => {
 			design::hint(
 				ui,
-				"Elapsed since starting; applying edits keeps the timer.",
+				"Tempo decorrido desde o início; aplicar edições mantém o cronômetro.",
 			);
 		}
 		RichPresenceTimer::LocalDay => {
-			design::hint(ui, "Timer starts at local midnight.");
+			design::hint(ui, "O cronômetro começa à meia-noite local.");
 		}
 		_ => {}
 	}

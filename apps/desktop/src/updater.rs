@@ -101,7 +101,7 @@ impl Updater {
 			package: None,
 			staged: None,
 			cleanup_pending: None,
-			status: "Updates have not been checked yet.".into(),
+			status: "Ainda não houve verificação de atualizações.".into(),
 			armed: false,
 			helper: None,
 			close_requested: false,
@@ -174,9 +174,9 @@ impl Updater {
 			view.ready = false;
 			view.progress = None;
 			view.status = if cfg!(debug_assertions) {
-				"Update checks are disabled in debug builds."
+				"A verificação de atualizações fica desativada em builds de depuração."
 			} else {
-				"Load update preferences or choose your update settings to enable checking."
+				"Carregue as preferências de atualização ou escolha suas configurações de atualização para ativar a verificação."
 			}
 			.into();
 			return false;
@@ -192,7 +192,7 @@ impl Updater {
 			self.discard_stage();
 			self.next_check = Instant::now();
 			self.last_check = None;
-			self.status = "Updates have not been checked on this channel yet.".into();
+			self.status = "Ainda não houve verificação de atualizações neste canal.".into();
 			view.log.clear();
 		}
 		if let Some(job) = &self.job {
@@ -215,27 +215,27 @@ impl Updater {
 							Ok(Outcome::Checked(package, log)) => {
 								self.log = Some(log);
 								self.status = package.as_ref().map_or_else(
-									|| "Monkado is up to date on this channel.".into(),
+									|| "O Monkado está atualizado neste canal.".into(),
 									|p| {
 										if install::flatpak_session() {
 											format!(
-												"Monkado {} is available. Update with `flatpak update` or your Software center.",
+												"Monkado {} está disponível. Atualize com `flatpak update` ou pela sua central de software.",
 												p.version,
 											)
 										} else if install::nix_session() {
 											format!(
-												"Monkado {} is available. Update it through Nix.",
+												"Monkado {} está disponível. Atualize pelo Nix.",
 												p.version,
 											)
 										} else if let Some(cmd) =
 											install::linux_package_manager_update_command()
 										{
 											format!(
-												"Monkado {} is available. Run `{cmd}` to update.",
+												"Monkado {} está disponível. Execute `{cmd}` para atualizar.",
 												p.version,
 											)
 										} else {
-											format!("Monkado {} is available.", p.version)
+											format!("Monkado {} está disponível.", p.version)
 										}
 									},
 								);
@@ -245,7 +245,7 @@ impl Updater {
 							Ok(Outcome::Downloaded(stage)) => {
 								self.staged = Some(stage);
 								self.status =
-									"Update downloaded and verified. Restart when you are ready."
+									"Atualização baixada e verificada. Reinicie quando quiser."
 										.into();
 							}
 							Ok(Outcome::Cleaned) => {}
@@ -254,7 +254,7 @@ impl Updater {
 								self.armed = true;
 								self.close_requested = true;
 								self.status =
-									"Update ready. Close Monkado to install and restart.".into();
+									"Atualização pronta. Feche o Monkado para instalar e reiniciar.".into();
 							}
 							Err(error) => {
 								self.auto_download = false;
@@ -266,7 +266,7 @@ impl Updater {
 				}
 				Err(mpsc::TryRecvError::Disconnected) => {
 					self.job = None;
-					self.status = "The update worker stopped. Please try again.".into();
+					self.status = "O processo de atualização parou. Tente novamente.".into();
 				}
 				Err(mpsc::TryRecvError::Empty) => {}
 			}
@@ -282,7 +282,9 @@ impl Updater {
 						install::cleanup(&stage.directory);
 					})
 					.await
-					.map_err(|_| "Could not clear old update storage.".to_owned())?;
+					.map_err(|_| {
+						"Não foi possível limpar os arquivos de atualização antigos.".to_owned()
+					})?;
 					Ok(Outcome::Cleaned)
 				});
 			} else if restart && self.staged.is_some() && !self.armed {
@@ -297,15 +299,17 @@ impl Updater {
 							helper.stop();
 						}
 						if cancel.load(Ordering::Relaxed) {
-							return Err("Update cancelled.".into());
+							return Err("Atualização cancelada.".into());
 						}
 						install::prepare_restart(&directory, &installation, version.as_deref())
 					})
 					.await
-					.map_err(|_| "Could not prepare the update restart.".to_owned())??;
+					.map_err(|_| {
+						"Não foi possível preparar o reinício da atualização.".to_owned()
+					})??;
 					Ok(Outcome::Prepared(helper))
 				});
-				self.status = "Preparing to restart…".into();
+				self.status = "Preparando para reiniciar…".into();
 			} else if supported
 				&& (download || (view.auto_update && self.auto_download))
 				&& self.package.is_some()
@@ -318,7 +322,7 @@ impl Updater {
 					.expect("a supported platform's checked package has a downloadable archive")
 					.size;
 				self.auto_download = false;
-				self.status = format!("Downloading Monkado {}…", package.version);
+				self.status = format!("Baixando o Monkado {}…", package.version);
 				self.start(runtime, ctx, total, move |cancel, progress| {
 					download_package(package, cancel, progress)
 				});
@@ -328,7 +332,7 @@ impl Updater {
 						.last_check
 						.is_some_and(|last| last.elapsed() < Duration::from_secs(60))
 				{
-					self.status = "Please wait one minute between update checks.".into();
+					self.status = "Aguarde um minuto entre as verificações de atualização.".into();
 				} else {
 					self.last_check = Some(Instant::now());
 					self.next_check = Instant::now() + CHECK_INTERVAL;
@@ -338,7 +342,7 @@ impl Updater {
 							.await
 							.map(|(package, log)| Outcome::Checked(package, log))
 					});
-					self.status = "Checking for updates…".into();
+					self.status = "Procurando atualizações…".into();
 				}
 			}
 		}
@@ -379,7 +383,7 @@ impl Updater {
 		runtime.spawn(async move {
 			let result = work(worker_cancel, worker_progress)
 				.await
-				.map_err(|error| format!("Update failed: {error}"));
+				.map_err(|error| format!("Falha na atualização: {error}"));
 			if let Err(mpsc::SendError(result)) = sender.send(result) {
 				tokio::task::spawn_blocking(move || match result {
 					Ok(Outcome::Downloaded(stage)) => install::cleanup(&stage.directory),
@@ -420,11 +424,11 @@ impl Updater {
 				&self
 					.helper
 					.as_ref()
-					.ok_or("No update helper is ready.")?
+					.ok_or("Nenhum assistente de atualização está pronto.")?
 					.marker,
 				[],
 			)
-			.map_err(|_| "Could not hand off the update to the installer.".to_owned())?;
+			.map_err(|_| "Não foi possível passar a atualização para o instalador.".to_owned())?;
 			self.staged = None; // The helper owns cleanup after this handoff.
 			self.helper = None;
 		}
@@ -470,7 +474,7 @@ fn client() -> Result<wreq::Client, String> {
 			}
 		}))
 		.build()
-		.map_err(|_| "Could not initialize secure update transport.".into())
+		.map_err(|_| "Não foi possível iniciar a conexão segura de atualização.".into())
 }
 fn trusted_url(url: &url::Url) -> bool {
 	url.scheme() == "https"
@@ -489,19 +493,23 @@ fn trusted_url(url: &url::Url) -> bool {
 }
 async fn response(client: &wreq::Client, url: &str) -> Result<wreq::Response, String> {
 	if !url::Url::parse(url).is_ok_and(|url| trusted_url(&url)) {
-		return Err("The release contains an untrusted download address.".into());
+		return Err("A versão contém um endereço de download não confiável.".into());
 	}
 	let response = client
 		.get(url)
 		.header(wreq::header::ACCEPT, "application/vnd.github+json")
 		.send()
 		.await
-		.map_err(|_| "Could not reach GitHub. Check your connection and try again.".to_owned())?;
+		.map_err(|_| {
+			"Não foi possível acessar o GitHub. Verifique sua conexão e tente novamente.".to_owned()
+		})?;
 	match response.status().as_u16() {
 		200 => Ok(response),
-		403 | 429 => Err("GitHub's update limit was reached. Try again later.".into()),
-		404 => Err("No published release is available on this channel yet.".into()),
-		_ => Err("GitHub could not provide the update. Try again later.".into()),
+		403 | 429 => {
+			Err("O limite de atualizações do GitHub foi atingido. Tente mais tarde.".into())
+		}
+		404 => Err("Ainda não há versão publicada neste canal.".into()),
+		_ => Err("O GitHub não conseguiu fornecer a atualização. Tente mais tarde.".into()),
 	}
 }
 async fn bounded_body(
@@ -515,20 +523,20 @@ async fn bounded_body(
 		.content_length()
 		.is_some_and(|length| length > limit as u64)
 	{
-		return Err("Release metadata exceeds the size limit.".into());
+		return Err("Os metadados da versão excedem o limite de tamanho.".into());
 	}
 	let mut body = Vec::new();
 	let mut response_body = std::pin::pin!(response.bytes_stream());
 	while let Some(chunk) = futures_util::StreamExt::next(&mut response_body)
 		.await
 		.transpose()
-		.map_err(|_| "The update response was interrupted.".to_owned())?
+		.map_err(|_| "A resposta da atualização foi interrompida.".to_owned())?
 	{
 		if cancel.load(Ordering::Relaxed) {
-			return Err("Update cancelled.".into());
+			return Err("Atualização cancelada.".into());
 		}
 		if chunk.len() > limit.saturating_sub(body.len()) {
-			return Err("Release metadata exceeds the size limit.".into());
+			return Err("Os metadados da versão excedem o limite de tamanho.".into());
 		}
 		body.extend_from_slice(&chunk);
 	}
@@ -659,7 +667,7 @@ fn select_release(
 	current: &semver::Version,
 ) -> Result<Option<Package>, String> {
 	if releases.len() > 100 {
-		return Err("The release list exceeds its limit.".into());
+		return Err("A lista de versões excede o limite.".into());
 	}
 	let candidate = releases
 		.into_iter()
@@ -669,14 +677,14 @@ fn select_release(
 		})
 		.max_by(|a, b| a.0.cmp(&b.0));
 	let Some((version, release)) = candidate else {
-		return Err("No published release is available on this channel yet.".into());
+		return Err("Ainda não há versão publicada neste canal.".into());
 	};
 	// Channel changes never silently downgrade an installed build.
 	if version <= *current {
 		return Ok(None);
 	}
 	if release.assets.len() > 32 {
-		return Err("The release contains too many assets.".into());
+		return Err("A versão contém arquivos demais.".into());
 	}
 	// No in-app installer for this installation: still report the newer version so the
 	// UI can show it, but there is no asset to look up or download.
@@ -690,22 +698,22 @@ fn select_release(
 	};
 	let find = |name: &str| -> Result<Asset, String> {
 		let mut found = release.assets.iter().filter(|asset| asset.name == name);
-		let asset = found
-			.next()
-			.ok_or_else(|| format!("This release has no {name} package. Try a later release."))?;
+		let asset = found.next().ok_or_else(|| {
+			format!("Esta versão não tem o pacote {name}. Tente uma versão mais recente.")
+		})?;
 		if found.next().is_some()
 			|| asset.size == 0
 			|| asset.size > MAX_DOWNLOAD
 			|| asset.browser_download_url.len() > 4096
 		{
-			return Err("The release asset metadata is invalid.".into());
+			return Err("Os metadados dos arquivos da versão são inválidos.".into());
 		}
 		let expected = format!(
 			"https://github.com/monkey-land/monkado/releases/download/{}/{name}",
 			release.tag_name
 		);
 		if asset.browser_download_url != expected {
-			return Err("The asset is not from the Monkado release repository.".into());
+			return Err("O arquivo não vem do repositório de versões do Monkado.".into());
 		}
 		Ok(asset.clone())
 	};
@@ -717,7 +725,7 @@ fn select_release(
 		.flatten()
 		.filter(|asset| asset.size <= delta::MAX_CONTROL as u64);
 	if checksums.size > 64 * 1024 {
-		return Err("The checksum list exceeds its size limit.".into());
+		return Err("A lista de checksums excede o limite de tamanho.".into());
 	}
 	Ok(Some(Package {
 		version: version.to_string(),
@@ -742,9 +750,9 @@ async fn check_release(
 	} else {
 		serde_json::from_slice::<Release>(&body).map(|r| vec![r])
 	}
-	.map_err(|_| "GitHub returned invalid release metadata.".to_owned())?;
+	.map_err(|_| "O GitHub retornou metadados de versão inválidos.".to_owned())?;
 	let current = semver::Version::parse(env!("CARGO_PKG_VERSION"))
-		.map_err(|_| "This build has an invalid version.".to_owned())?;
+		.map_err(|_| "Esta build tem uma versão inválida.".to_owned())?;
 	let log = release_log(&releases, nightly, &current);
 	select_release(releases, nightly, &current).map(|package| (package, log))
 }
@@ -781,7 +789,8 @@ fn demo_log() -> Vec<ui::updates::LogEntry> {
 	.collect()
 }
 fn checksum(body: &[u8], name: &str) -> Result<[u8; 32], String> {
-	let body = std::str::from_utf8(body).map_err(|_| "The checksum file is invalid.".to_owned())?;
+	let body =
+		std::str::from_utf8(body).map_err(|_| "O arquivo de checksums é inválido.".to_owned())?;
 	let mut result = None;
 	for line in body.lines() {
 		let mut fields = line.split_whitespace();
@@ -801,16 +810,16 @@ fn checksum(body: &[u8], name: &str) -> Result<[u8; 32], String> {
 			|| hash.len() != 64
 			|| !hash.bytes().all(|b| b.is_ascii_hexdigit())
 		{
-			return Err("The package checksum is invalid or duplicated.".into());
+			return Err("O checksum do pacote é inválido ou está duplicado.".into());
 		}
 		let mut bytes = [0; 32];
 		for (i, byte) in bytes.iter_mut().enumerate() {
 			*byte = u8::from_str_radix(&hash[i * 2..i * 2 + 2], 16)
-				.map_err(|_| "Invalid checksum.".to_owned())?;
+				.map_err(|_| "Checksum inválido.".to_owned())?;
 		}
 		result = Some(bytes);
 	}
-	result.ok_or_else(|| "The release has no checksum for this package.".into())
+	result.ok_or_else(|| "A versão não tem checksum para este pacote.".into())
 }
 async fn download_package(
 	package: Package,
@@ -821,17 +830,17 @@ async fn download_package(
 	// these when there is nothing to download, and that path never reaches this function.
 	let archive = package
 		.archive
-		.ok_or("This platform cannot install updates in-app.")?;
+		.ok_or("Esta plataforma não pode instalar atualizações pelo app.")?;
 	let checksums = package
 		.checksums
-		.ok_or("This platform cannot install updates in-app.")?;
+		.ok_or("Esta plataforma não pode instalar atualizações pelo app.")?;
 	let client = client()?;
 	let checksum_body =
 		bounded_body(&client, &checksums.browser_download_url, 64 * 1024, &cancel).await?;
 	let expected = checksum(&checksum_body, &archive.name)?;
 	let stage = tokio::task::spawn_blocking(install::create_stage)
 		.await
-		.map_err(|_| "Could not prepare update storage.".to_owned())??;
+		.map_err(|_| "Não foi possível preparar o armazenamento da atualização.".to_owned())??;
 	let directory = stage.directory.clone();
 	let result = async {
 		let reused = if let Some(control) = package.zsync.filter(|_| install::appimage_session()) {
@@ -850,14 +859,14 @@ async fn download_package(
 			false
 		};
 		if cancel.load(Ordering::Relaxed) {
-			return Err("Update cancelled.".into());
+			return Err("Atualização cancelada.".into());
 		}
 		if !reused {
 			let partial = directory.join("package.zip");
 			match tokio::fs::remove_file(&partial).await {
 				Ok(()) => {}
 				Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-				Err(_) => return Err("Could not discard the partial update.".into()),
+				Err(_) => return Err("Não foi possível descartar a atualização parcial.".into()),
 			}
 			progress.store(0, Ordering::Relaxed);
 			download_full(&client, &archive, &directory, &expected, &cancel, &progress).await?;
@@ -866,7 +875,7 @@ async fn download_package(
 		let installation = stage.installation.clone();
 		tokio::task::spawn_blocking(move || install::unpack(&path, &installation, &cancel))
 			.await
-			.map_err(|_| "Could not unpack the update.".to_owned())??;
+			.map_err(|_| "Não foi possível descompactar a atualização.".to_owned())??;
 		Ok(())
 	}
 	.await;
@@ -895,43 +904,45 @@ async fn download_full(
 		.content_length()
 		.is_some_and(|size| size != archive.size)
 	{
-		return Err("The package size does not match its release metadata.".into());
+		return Err("O tamanho do pacote não confere com os metadados da versão.".into());
 	}
 	let mut file = tokio::fs::OpenOptions::new()
 		.write(true)
 		.create_new(true)
 		.open(directory.join("package.zip"))
 		.await
-		.map_err(|_| "Could not create the update download.".to_owned())?;
+		.map_err(|_| "Não foi possível criar o download da atualização.".to_owned())?;
 	let mut hasher = Sha256::new();
 	let mut received = 0_u64;
 	let mut response_body = std::pin::pin!(response.bytes_stream());
 	while let Some(chunk) = futures_util::StreamExt::next(&mut response_body)
 		.await
 		.transpose()
-		.map_err(|_| "The update download was interrupted.".to_owned())?
+		.map_err(|_| "O download da atualização foi interrompido.".to_owned())?
 	{
 		if cancel.load(Ordering::Relaxed) {
-			return Err("Update cancelled.".into());
+			return Err("Atualização cancelada.".into());
 		}
 		received = received
 			.checked_add(chunk.len() as u64)
-			.ok_or("Update size overflow.")?;
+			.ok_or("Tamanho da atualização excedido.")?;
 		if received > archive.size || received > MAX_DOWNLOAD {
-			return Err("The downloaded package exceeds its size limit.".into());
+			return Err("O pacote baixado excede o limite de tamanho.".into());
 		}
-		file.write_all(&chunk)
-			.await
-			.map_err(|_| "Could not write the update. Check available disk space.".to_owned())?;
+		file.write_all(&chunk).await.map_err(|_| {
+			"Não foi possível gravar a atualização. Verifique o espaço livre em disco.".to_owned()
+		})?;
 		hasher.update(&chunk);
 		progress.store(received, Ordering::Relaxed);
 	}
 	if received != archive.size || hasher.finalize().as_slice() != expected.as_slice() {
-		return Err("The update checksum or length did not match. Nothing was installed.".into());
+		return Err(
+			"O checksum ou o tamanho da atualização não conferem. Nada foi instalado.".into(),
+		);
 	}
 	file.sync_all()
 		.await
-		.map_err(|_| "Could not save the update package.".to_owned())?;
+		.map_err(|_| "Não foi possível salvar o pacote de atualização.".to_owned())?;
 	drop(file);
 	Ok(())
 }

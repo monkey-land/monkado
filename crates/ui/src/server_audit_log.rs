@@ -509,18 +509,18 @@ fn summary(entry: &Entry, page: &Page, state: &State) -> String {
 fn timestamp(id: Id) -> String {
 	let seconds = ((id.0 >> 22) + 1_420_070_400_000) / 1000;
 	let Ok(utc) = time::OffsetDateTime::from_unix_timestamp(seconds as i64) else {
-		return "Unknown time".into();
+		return "Horário desconhecido".into();
 	};
 	let local = crate::local_time::local(utc);
 	let now = crate::local_time::now();
 	let date = if local.date() == now.date() {
-		"Today".into()
+		"Hoje".into()
 	} else if Some(local.date()) == now.date().previous_day() {
-		"Yesterday".into()
+		"Ontem".into()
 	} else {
 		local.date().to_string()
 	};
-	format!("{date} at {}", crate::local_time::clock(local))
+	format!("{date} às {}", crate::local_time::clock(local))
 }
 fn details(ui: &mut egui::Ui, entry: &Entry, state: &State) {
 	let colors = design::palette(ui);
@@ -557,29 +557,29 @@ fn change_text(change: &Change, state: &State) -> String {
 		&& let Patch::Value(value) = &change.new
 	{
 		match change.key.as_str() {
-			"code" => return format!("With code {value}"),
+			"code" => return format!("Com o código {value}"),
 			"channel_id" => {
 				if let Some(channel) = value.parse::<Id>().ok().and_then(|id| state.channel(id)) {
-					return format!("For channel #{}", channel.name);
+					return format!("Para o canal #{}", channel.name);
 				}
 			}
-			"max_uses" if value == "0" => return "With unlimited uses".into(),
-			"max_uses" => return format!("With a limit of {value} uses"),
-			"max_age" if value == "0" => return "Which never expires".into(),
+			"max_uses" if value == "0" => return "Com usos ilimitados".into(),
+			"max_uses" => return format!("Com limite de {value} usos"),
+			"max_age" if value == "0" => return "Que nunca expira".into(),
 			"max_age" => {
 				if let Ok(seconds) = value.parse::<u64>() {
 					return if seconds % 86400 == 0 {
-						format!("Which expires after {} days", seconds / 86400)
+						format!("Que expira após {} dias", seconds / 86400)
 					} else if seconds % 3600 == 0 {
-						format!("Which expires after {} hours", seconds / 3600)
+						format!("Que expira após {} horas", seconds / 3600)
 					} else {
-						format!("Which expires after {seconds} seconds")
+						format!("Que expira após {seconds} segundos")
 					};
 				}
 			}
 			"temporary" if value == "true" || value == "false" => {
 				return format!(
-					"With temporary membership {}",
+					"Com associação temporária {}",
 					if value == "true" { "on" } else { "off" }
 				);
 			}
@@ -589,14 +589,14 @@ fn change_text(change: &Change, state: &State) -> String {
 	let field = field_name(&change.key);
 	match (&change.old, &change.new) {
 		(Patch::Absent, Patch::Value(value)) => format!("{field}: {value}"),
-		(Patch::Value(value), Patch::Absent) => format!("Removed {field}: {value}"),
+		(Patch::Value(value), Patch::Absent) => format!("Removeu {field}: {value}"),
 		(old, new) => format!("{field}: {} → {}", patch_text(old), patch_text(new)),
 	}
 }
 fn patch_text(value: &Patch<String>) -> &str {
 	match value {
-		Patch::Absent => "Not provided",
-		Patch::Null => "None",
+		Patch::Absent => "Não informado",
+		Patch::Null => "Nenhum",
 		Patch::Value(value) => value,
 	}
 }

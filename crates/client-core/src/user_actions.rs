@@ -102,27 +102,31 @@ impl std::fmt::Debug for Action {
 impl Action {
 	pub fn completion_label(&self) -> &'static str {
 		match self {
-			Self::LoadNote(_) => "Note loaded",
-			Self::OpenDm(_) => "Direct message was not confirmed; try opening it again",
-			Self::CreateGroup { .. } => "Group message was not confirmed; try creating it again",
-			Self::Note { .. } => "Note saved",
-			Self::Nickname { .. } => "Nickname saved",
-			Self::AddFriend { .. } => "Friend request sent · waiting for service update",
-			Self::ProfileFriend { friend: true, .. } => "Friend request sent",
-			Self::ProfileFriend { friend: false, .. } => "Friend removed",
-			Self::ResolveFriend { accept: true, .. } => "Friend request accepted",
-			Self::ResolveFriend { accept: false, .. } => "Friend request removed",
-			Self::CloseDm(_) => "DM closed · messages and drafts were not deleted",
-			Self::Block { blocked: true, .. } => "User blocked",
-			Self::Block { blocked: false, .. } => "User unblocked",
-			Self::Ignore { ignored: true, .. } => "User ignored",
-			Self::Ignore { ignored: false, .. } => "User unignored",
-			Self::Mute { muted: true, .. } => {
-				"Conversation notifications muted until you turn them back on"
+			Self::LoadNote(_) => "Nota carregada",
+			Self::OpenDm(_) => "A mensagem direta não foi confirmada; tente abri-la novamente",
+			Self::CreateGroup { .. } => {
+				"A mensagem em grupo não foi confirmada; tente criá-la novamente"
 			}
-			Self::Mute { muted: false, .. } => "Conversation notifications unmuted",
-			Self::MessageRequest { accept: true, .. } => "Message request accepted",
-			Self::MessageRequest { accept: false, .. } => "Message request ignored",
+			Self::Note { .. } => "Nota salva",
+			Self::Nickname { .. } => "Apelido salvo",
+			Self::AddFriend { .. } => {
+				"Pedido de amizade enviado · aguardando atualização do serviço"
+			}
+			Self::ProfileFriend { friend: true, .. } => "Pedido de amizade enviado",
+			Self::ProfileFriend { friend: false, .. } => "Amigo removido",
+			Self::ResolveFriend { accept: true, .. } => "Pedido de amizade aceito",
+			Self::ResolveFriend { accept: false, .. } => "Pedido de amizade removido",
+			Self::CloseDm(_) => "DM closed · messages and drafts were not deleted",
+			Self::Block { blocked: true, .. } => "Usuário bloqueado",
+			Self::Block { blocked: false, .. } => "Usuário desbloqueado",
+			Self::Ignore { ignored: true, .. } => "Usuário ignorado",
+			Self::Ignore { ignored: false, .. } => "Usuário não é mais ignorado",
+			Self::Mute { muted: true, .. } => {
+				"Notificações da conversa silenciadas até você reativá-las"
+			}
+			Self::Mute { muted: false, .. } => "Notificações da conversa reativadas",
+			Self::MessageRequest { accept: true, .. } => "Solicitação de mensagem aceita",
+			Self::MessageRequest { accept: false, .. } => "Solicitação de mensagem ignorada",
 		}
 	}
 }
@@ -453,13 +457,13 @@ impl State {
 	}
 	fn set_message_request(&mut self, channel: Id, pending: bool) -> Result<(), &'static str> {
 		if channel.0 == 0 {
-			return Err("Invalid message request");
+			return Err("Solicitação de mensagem inválida");
 		}
 		if pending {
 			if !self.user_actions.message_requests.contains(&channel)
 				&& self.user_actions.message_requests.len() >= MAX_RELATIONSHIPS
 			{
-				return Err("Message requests exceed safe capacity");
+				return Err("As solicitações de mensagem excedem a capacidade segura");
 			}
 			self.user_actions.spam_directs.remove(&channel);
 			self.user_actions.message_requests.insert(channel);
@@ -471,13 +475,13 @@ impl State {
 	}
 	fn set_spam_request(&mut self, user: Id, spam: bool) -> Result<(), &'static str> {
 		if user.0 == 0 {
-			return Err("Invalid friend request");
+			return Err("Pedido de amizade inválido");
 		}
 		if spam {
 			if !self.user_actions.spam_requests.contains(&user)
 				&& self.user_actions.spam_requests.len() >= MAX_RELATIONSHIPS
 			{
-				return Err("Friend requests exceed safe capacity");
+				return Err("Os pedidos de amizade excedem a capacidade segura");
 			}
 			self.user_actions.spam_requests.insert(user);
 		} else {
@@ -487,13 +491,13 @@ impl State {
 	}
 	fn set_spam_direct(&mut self, channel: Id, spam: bool) -> Result<(), &'static str> {
 		if channel.0 == 0 {
-			return Err("Invalid message request");
+			return Err("Solicitação de mensagem inválida");
 		}
 		if spam {
 			if !self.user_actions.spam_directs.contains(&channel)
 				&& self.user_actions.spam_directs.len() >= MAX_RELATIONSHIPS
 			{
-				return Err("Message requests exceed safe capacity");
+				return Err("As solicitações de mensagem excedem a capacidade segura");
 			}
 			self.user_actions.message_requests.remove(&channel);
 			self.user_actions.spam_directs.insert(channel);
@@ -507,13 +511,15 @@ impl State {
 	}
 	pub fn add_friend(&mut self, username: &str) -> Option<Command> {
 		if username.len() > 132 {
-			self.user_actions.status = Some("Enter a Discord username of at most 32 characters.");
+			self.user_actions.status =
+				Some("Informe um nome de usuário do Discord com no máximo 32 caracteres.");
 			return None;
 		}
 		let username = username.trim().trim_start_matches('@').to_ascii_lowercase();
 		if !valid_username(&username) {
-			self.user_actions.status =
-				Some("Enter a Discord username: 2–32 letters, numbers, underscores or periods.");
+			self.user_actions.status = Some(
+				"Informe um nome de usuário do Discord: 2–32 letras, números, sublinhados ou pontos.",
+			);
 			return None;
 		}
 		if self.user_actions.last_requested.as_deref() == Some(&username)
@@ -529,7 +535,7 @@ impl State {
 				.any(|(_, n, _)| n == &username)
 		{
 			self.user_actions.status =
-				Some("Already friends or a request is pending. Check the Pending tab.");
+				Some("Vocês já são amigos ou há um pedido pendente. Confira a aba Pendentes.");
 			return None;
 		}
 		self.request_user_action(Action::AddFriend { username })
@@ -603,10 +609,10 @@ impl State {
 			self.user_actions.opened_dm = None;
 		}
 		self.user_actions.status = Some(match (direct, cancelled) {
-			(true, true) => "Verification cancelled; the conversation was not opened.",
-			(true, false) => "Verification expired; open the conversation again.",
-			(false, true) => "Verification cancelled; the friend request was not sent.",
-			(false, false) => "Verification expired; send the friend request again.",
+			(true, true) => "Verificação cancelada; a conversa não foi aberta.",
+			(true, false) => "A verificação expirou; abra a conversa novamente.",
+			(false, true) => "Verificação cancelada; o pedido de amizade não foi enviado.",
+			(false, false) => "A verificação expirou; envie o pedido de amizade novamente.",
 		});
 		self.status = self.user_actions.status.unwrap();
 	}
@@ -694,7 +700,7 @@ impl State {
 						.sum::<usize>()
 					> MAX_FRIEND_BYTES
 			{
-				return Err("Friends exceed safe capacity");
+				return Err("A lista de amigos excede a capacidade segura");
 			}
 			for (user, name) in entries {
 				if !valid_friend(&user, &name)
@@ -705,7 +711,7 @@ impl State {
 						.is_some()
 				{
 					self.user_actions.friends.clear();
-					return Err("Friends contain invalid or duplicate users");
+					return Err("A lista de amigos contém usuários inválidos ou duplicados");
 				}
 			}
 			self.user_actions.friends_known = true;
@@ -802,7 +808,7 @@ impl State {
 	/// Record a committed ignore/unignore without requiring a display profile.
 	fn store_ignored(&mut self, user: Id, ignored: bool) -> Result<(), &'static str> {
 		if user.0 == 0 {
-			return Err("Invalid restricted user update");
+			return Err("Atualização de usuário restrito inválida");
 		}
 		let actions = &mut self.user_actions;
 		if !actions.ignored.contains_key(&user) {
@@ -899,7 +905,7 @@ impl State {
 				.any(|user| self.friend(*user).is_none() || !self.dm_target_allowed(*user, true))
 		{
 			self.user_actions.status =
-				Some("Choose between two and nine friends for a group message");
+				Some("Escolha entre dois e nove amigos para uma mensagem em grupo");
 			self.status = self.user_actions.status.unwrap();
 			return None;
 		}
@@ -910,7 +916,7 @@ impl State {
 		let command = self.request_user_action(Action::CreateGroup { recipients: people })?;
 		self.user_actions.group_origin = Some((self.selected, self.request));
 		self.user_actions.created_group = None;
-		self.status = "Creating group message…";
+		self.status = "Criando mensagem em grupo…";
 		Some(command)
 	}
 	fn existing_group(&self, people: &[Id]) -> Option<Id> {
@@ -945,7 +951,7 @@ impl State {
 		let command = self.request_user_action(Action::OpenDm(user))?;
 		self.user_actions.dm_origin = Some((self.selected, self.request, friend_only));
 		self.user_actions.opened_dm = None;
-		self.status = "Opening direct message…";
+		self.status = "Abrindo mensagem direta…";
 		Some(command)
 	}
 	/// Consume one confirmed DM target without overriding navigation made during the request.
@@ -977,8 +983,9 @@ impl State {
 				.as_ref()
 				.is_some_and(|call| call.channel == channel)
 		{
-			self.user_actions.status =
-				Some("Finish pending messages and leave the call before closing this DM");
+			self.user_actions.status = Some(
+				"Conclua as mensagens pendentes e saia da chamada antes de fechar esta conversa",
+			);
 			self.status = self.user_actions.status.unwrap();
 			return None;
 		}
@@ -1019,7 +1026,7 @@ impl State {
 			return None;
 		}
 		if !self.demo && (self.auth != AuthState::Authenticated || !self.gateway_connected) {
-			self.user_actions.status = Some("User actions unavailable while disconnected");
+			self.user_actions.status = Some("Ações de usuário indisponíveis enquanto desconectado");
 			self.status = self.user_actions.status.unwrap();
 			return None;
 		}
@@ -1048,8 +1055,9 @@ impl State {
 			if matches!(action, Action::Block { .. }) {
 				self.user_actions.bump_view();
 			}
-			self.user_actions.status =
-				Some("Outcome unknown · check the official client before retrying");
+			self.user_actions.status = Some(
+				"Resultado desconhecido · verifique o cliente oficial antes de tentar de novo",
+			);
 		}
 	}
 	pub(crate) fn observe_dm_reopened(&mut self, channel: Id) {
@@ -1143,7 +1151,7 @@ impl State {
 				if self.channel(id).is_some() && self.user_actions.dm_origin.is_some() {
 					self.user_actions.opened_dm = Some((id, user));
 					self.user_actions.status = None;
-					self.status = "Direct message opened";
+					self.status = "Mensagem direta aberta";
 				}
 			}
 			Event::GroupCreated {
@@ -1199,12 +1207,12 @@ impl State {
 				if self.channel(id).is_some() && self.user_actions.group_origin.is_some() {
 					self.user_actions.created_group = Some(id);
 					self.user_actions.status = None;
-					self.status = "Group message opened";
+					self.status = "Mensagem em grupo aberta";
 				}
 			}
 			Event::NoteChanged { user, text } => {
 				if user.0 == 0 || !valid_personal_text(&text, false) {
-					return Err("Invalid note");
+					return Err("Nota inválida");
 				}
 				let mut active = self.user_note(user).is_some();
 				if let Some((target, _, observed)) = &mut self.user_actions.note_request
@@ -1246,7 +1254,7 @@ impl State {
 			}
 			Event::FriendsSince { entries, replace } => {
 				if entries.len() > MAX_RELATIONSHIPS || entries.iter().any(|(id, _)| id.0 == 0) {
-					return Err("Invalid friendship dates");
+					return Err("Datas de amizade inválidas");
 				}
 				if replace {
 					self.user_actions.friends_since.clear();
@@ -1264,7 +1272,7 @@ impl State {
 						.iter()
 						.any(|(id, text)| id.0 == 0 || !valid_personal_text(text, true))
 				{
-					return Err("Invalid friend nicknames");
+					return Err("Apelidos de amigos inválidos");
 				}
 				self.user_actions.nicknames.clear();
 				for (user, text) in entries {
@@ -1273,7 +1281,7 @@ impl State {
 			}
 			Event::Nickname { user, text } => {
 				if user.0 == 0 || !valid_personal_text(&text, true) {
-					return Err("Invalid friend nickname");
+					return Err("Apelido de amigo inválido");
 				}
 				if let Some((Action::Nickname { user: target, .. }, _, observed)) =
 					&mut self.user_actions.pending
@@ -1287,7 +1295,7 @@ impl State {
 					if !self.user_actions.nicknames.contains_key(&user)
 						&& self.user_actions.nicknames.len() >= MAX_RELATIONSHIPS
 					{
-						return Err("Nickname capacity exceeded");
+						return Err("Capacidade de apelidos excedida");
 					}
 					// At most 4000 tightly allocated 128-byte strings plus map overhead.
 					self.user_actions
@@ -1311,11 +1319,11 @@ impl State {
 								.map(|(u, n, _)| u.heap_bytes() + n.capacity() + 64)
 								.sum::<usize>() > MAX_FRIEND_BYTES
 					{
-						return Err("Friend requests exceed safe capacity");
+						return Err("Os pedidos de amizade excedem a capacidade segura");
 					}
 					for (user, name, incoming) in entries {
 						if self.user_actions.requests.contains_key(&user.id) {
-							return Err("Duplicate friend request");
+							return Err("Pedido de amizade duplicado");
 						}
 						self.apply_user_action(Event::Request {
 							user: user.id,
@@ -1332,7 +1340,7 @@ impl State {
 				profile,
 			} => {
 				if user.0 == 0 {
-					return Err("Invalid friend request");
+					return Err("Pedido de amizade inválido");
 				}
 				if let Some((
 					Action::ResolveFriend { user: target, .. }
@@ -1350,7 +1358,7 @@ impl State {
 							(
 								model::User {
 									id: user,
-									name: "Unknown user".into(),
+									name: "Usuário desconhecido".into(),
 									avatar: None,
 									discriminator: 0,
 									primary_guild: None,
@@ -1358,13 +1366,13 @@ impl State {
 									webhook: false,
 									kind: Default::default(),
 								},
-								format!("User ID: {user}"),
+								format!("ID do usuário: {user}"),
 							)
 						})
 					});
 					if let Some((record, name)) = profile {
 						if user != record.id || !valid_friend(&record, &name) {
-							return Err("Invalid friend request profile");
+							return Err("Perfil de pedido de amizade inválido");
 						}
 						let entries = &mut self.user_actions.requests;
 						let bytes = entries
@@ -1382,7 +1390,7 @@ impl State {
 								+ size_of::<(Id, model::User, String, bool)>()
 								+ 64 > MAX_FRIEND_BYTES
 						{
-							return Err("Friend requests exceed safe capacity");
+							return Err("Os pedidos de amizade excedem a capacidade segura");
 						}
 						entries.insert(user, (record, name, incoming));
 					} else if let Some(entry) = self.user_actions.requests.get_mut(&user) {
@@ -1483,7 +1491,7 @@ impl State {
 				} else if let Some((record, name)) = profile {
 					let entries = &mut self.user_actions.friends;
 					if user != record.id || !valid_friend(&record, &name) {
-						return Err("Invalid friend update");
+						return Err("Atualização de amigo inválida");
 					}
 					let old = entries.get(&user).map_or(0, |(u, n)| {
 						u.heap_bytes() + n.capacity() + size_of::<(Id, model::User, String)>() + 64
@@ -1502,7 +1510,7 @@ impl State {
 							+ size_of::<(Id, model::User, String)>()
 							+ 64 > MAX_FRIEND_BYTES
 					{
-						return Err("Friends exceed safe capacity");
+						return Err("A lista de amigos excede a capacidade segura");
 					}
 					entries.insert(user, (record, name));
 				}
@@ -1519,7 +1527,7 @@ impl State {
 								.map(|(u, n, _)| u.heap_bytes() + n.capacity() + 64)
 								.sum::<usize>() > MAX_RESTRICTED_BYTES
 					{
-						return Err("Restricted users exceed safe capacity");
+						return Err("Os usuários restritos excedem a capacidade segura");
 					}
 					for (user, name, ignored) in entries {
 						if !valid_friend(&user, &name)
@@ -1531,7 +1539,9 @@ impl State {
 						{
 							self.user_actions.restricted.clear();
 							self.user_actions.ignored.clear();
-							return Err("Restricted users contain invalid or duplicate profiles");
+							return Err(
+								"Os usuários restritos contêm perfis inválidos ou duplicados",
+							);
 						}
 					}
 					self.user_actions.ignored = self
@@ -1561,7 +1571,7 @@ impl State {
 				};
 				if let Some((record, name)) = profile {
 					if user != record.id || !valid_friend(&record, &name) {
-						return Err("Invalid restricted user update");
+						return Err("Atualização de usuário restrito inválida");
 					}
 					let entries = &mut self.user_actions.restricted;
 					let old = entries.get(&user).map_or(0, |(u, n, _)| {
@@ -1583,7 +1593,7 @@ impl State {
 							+ size_of::<(Id, model::User, String, bool)>()
 							+ 64 > MAX_RESTRICTED_BYTES
 					{
-						return Err("Restricted users exceed safe capacity");
+						return Err("Os usuários restritos excedem a capacidade segura");
 					}
 					entries.insert(user, (record, name, ignored));
 				} else if let Some(entry) = self.user_actions.restricted.get_mut(&user) {
@@ -1601,7 +1611,7 @@ impl State {
 					if entries.len() > MAX_RELATIONSHIPS
 						|| entries.capacity() * size_of::<(Id, bool)>() > MAX_RELATIONSHIP_BYTES
 					{
-						return Err("Relationships exceed safe capacity");
+						return Err("Os relacionamentos excedem a capacidade segura");
 					}
 					for (user, blocked) in entries {
 						if user.0 == 0
@@ -1612,7 +1622,9 @@ impl State {
 								.is_some()
 						{
 							self.user_actions.relationships.clear();
-							return Err("Relationships contain invalid or duplicate users");
+							return Err(
+								"Os relacionamentos contêm usuários inválidos ou duplicados",
+							);
 						}
 					}
 					self.user_actions.known = true;
@@ -1623,8 +1635,8 @@ impl State {
 					&mut self.user_actions.message_requests,
 					entries,
 					Some(&mut self.user_actions.spam_directs),
-					"Message requests exceed safe capacity",
-					"Message requests contain invalid or duplicate channels",
+					"As solicitações de mensagem excedem a capacidade segura",
+					"As solicitações de mensagem contêm canais inválidos ou duplicados",
 				)?;
 				self.user_actions.bump_view();
 			}
@@ -1636,8 +1648,8 @@ impl State {
 					&mut self.user_actions.spam_directs,
 					entries,
 					Some(&mut self.user_actions.message_requests),
-					"Message requests exceed safe capacity",
-					"Message requests contain invalid or duplicate channels",
+					"As solicitações de mensagem excedem a capacidade segura",
+					"As solicitações de mensagem contêm canais inválidos ou duplicados",
 				)?;
 			}
 			Event::MessageSpam { channel, spam } => {
@@ -1648,8 +1660,8 @@ impl State {
 					&mut self.user_actions.spam_requests,
 					entries,
 					None,
-					"Friend requests exceed safe capacity",
-					"Friend requests contain invalid or duplicate users",
+					"Os pedidos de amizade excedem a capacidade segura",
+					"Os pedidos de amizade contêm usuários inválidos ou duplicados",
 				)?;
 			}
 			Event::RequestSpam { user, spam } => {
@@ -1821,7 +1833,9 @@ impl State {
 				&& (entries.len() >= MAX_RELATIONSHIPS
 					|| (entries.len() + 1) * 32 > MAX_RELATIONSHIP_BYTES))
 		{
-			return Err("Relationships exceed safe capacity or contain an invalid user");
+			return Err(
+				"Os relacionamentos excedem a capacidade segura ou contêm um usuário inválido",
+			);
 		}
 		entries.insert(user, blocked);
 		self.read_state.activity.clear_notifications();
@@ -2505,7 +2519,7 @@ mod tests {
 			finish(&mut state, block, Err(Failure::Forbidden));
 			assert!(!state.user_action_pending());
 			assert_eq!(state.user_blocked(Id(2)), None);
-			assert_eq!(state.status, "Disconnected");
+			assert_eq!(state.status, "Desconectado");
 			assert_eq!(state.user_action_status(), None);
 			let block = state.set_user_blocked(Id(2), true).unwrap();
 			finish(&mut state, block, Ok(()));
@@ -2575,7 +2589,7 @@ mod tests {
 			finish(&mut state, unmute, Ok(()));
 			assert_eq!(state.dm_muted(Id(10)), Some(true));
 			// Completion feedback is transient UI state, never a shared menu status.
-			assert_eq!(state.status, "Disconnected");
+			assert_eq!(state.status, "Desconectado");
 			assert_eq!(state.user_action_status(), None);
 			let unmute = state.set_dm_muted(Id(10), false).unwrap();
 			state

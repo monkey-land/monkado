@@ -35,9 +35,9 @@ impl Settings {
 	}
 	pub fn status(&self) -> &'static str {
 		if self.failed {
-			"Setting could not be saved or loaded. Toggle it to retry saving."
+			"Não foi possível salvar ou carregar a configuração. Alterne-a para tentar salvar de novo."
 		} else if self.dirty || self.saving {
-			"Saving setting…"
+			"Salvando configuração…"
 		} else {
 			""
 		}

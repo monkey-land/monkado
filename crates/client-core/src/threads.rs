@@ -24,12 +24,12 @@ impl State {
 					.map_or(0, |parents| parents.capacity() * size_of::<Id>())
 				> MAX_EVENT_BYTES
 		{
-			return Err("Thread snapshot exceeds safe capacity");
+			return Err("A lista de tópicos excede a capacidade segura");
 		}
 		let parent_count = parents.as_ref().map_or(0, Vec::len);
 		let parents: Option<BTreeSet<_>> = parents.map(|ids| ids.into_iter().collect());
 		if parents.as_ref().is_some_and(|p| p.len() != parent_count) {
-			return Err("Thread snapshot has duplicate parents");
+			return Err("A lista de tópicos tem canais pai duplicados");
 		}
 		let incoming: BTreeSet<_> = threads.iter().map(|c| c.id).collect();
 		let removed_count = removed.len();
@@ -37,7 +37,7 @@ impl State {
 		if explicit.len() != removed_count
 			|| explicit.iter().any(|id| id.0 == 0 || incoming.contains(id))
 		{
-			return Err("Thread snapshot has invalid explicit removals");
+			return Err("A lista de tópicos tem remoções explícitas inválidas");
 		}
 		let transient = self.archived_thread;
 		let in_scope = |c: &Channel| {
@@ -54,7 +54,7 @@ impl State {
 			.iter()
 			.any(|id| previous.get(id).is_some_and(|old| !in_scope(old)))
 		{
-			return Err("Thread removal has invalid channel scope");
+			return Err("A remoção de tópico tem um escopo de canal inválido");
 		}
 		if threads.iter().any(|c| {
 			!in_scope(c)
@@ -67,7 +67,7 @@ impl State {
 							&& (old.parent_id != c.parent_id || old.kind != c.kind))
 				})
 		}) {
-			return Err("Thread snapshot has invalid channel scope");
+			return Err("A lista de tópicos tem um escopo de canal inválido");
 		}
 		let retained = self.channels.iter().filter(|c| !in_scope(c));
 		let retained_len = retained.clone().count() + threads.len();
@@ -79,7 +79,7 @@ impl State {
 				+ self.permissions.bytes()
 				> model::account::MAX_BYTES
 		{
-			return Err("Thread snapshot exceeds safe capacity");
+			return Err("A lista de tópicos excede a capacidade segura");
 		}
 		let mut next = Vec::with_capacity(retained_len);
 		for thread in &mut threads {

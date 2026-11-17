@@ -24,15 +24,15 @@ pub struct Sounds {
 impl Sounds {
 	pub fn status(&self) -> &'static str {
 		match self.status.load(Ordering::Acquire) {
-			1 => "Playing notification sound...",
-			2 => "Audio output unavailable. Check your system sound settings.",
+			1 => "Tocando som de notificação...",
+			2 => "Saída de áudio indisponível. Confira as configurações de som do sistema.",
 			_ => "",
 		}
 	}
 	/// The failure status alone, so a caller can prefer it over another worker's progress text.
 	pub fn error(&self) -> &'static str {
 		if self.status.load(Ordering::Acquire) == 2 {
-			"Audio output unavailable. Check your system sound settings."
+			"Saída de áudio indisponível. Confira as configurações de som do sistema."
 		} else {
 			""
 		}

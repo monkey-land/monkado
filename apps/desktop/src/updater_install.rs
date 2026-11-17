@@ -114,16 +114,16 @@ fn appimage_header(header: &[u8]) -> bool {
 
 fn verify_appimage(path: &Path) -> Result<(), String> {
 	let mut header = [0; 20];
-	let mut file = fs::File::open(path).map_err(|_| "Cannot read the AppImage.")?;
+	let mut file = fs::File::open(path).map_err(|_| "Não foi possível ler o AppImage.")?;
 	let metadata = file
 		.metadata()
-		.map_err(|_| "Cannot inspect the AppImage.")?;
+		.map_err(|_| "Não foi possível analisar o AppImage.")?;
 	if !metadata.is_file()
 		|| metadata.len() > super::MAX_DOWNLOAD
 		|| file.read_exact(&mut header).is_err()
 		|| !appimage_header(&header)
 	{
-		return Err("The update is not a supported x86-64 Type 2 AppImage.".into());
+		return Err("A atualização não é um AppImage Type 2 x86-64 compatível.".into());
 	}
 	Ok(())
 }
@@ -131,31 +131,36 @@ fn verify_appimage(path: &Path) -> Result<(), String> {
 fn installation() -> Result<PathBuf, String> {
 	let exe = std::env::current_exe()
 		.and_then(fs::canonicalize)
-		.map_err(|_| "Cannot locate the installed application.".to_owned())?;
+		.map_err(|_| "Não foi possível localizar o aplicativo instalado.".to_owned())?;
 	if nix_session() {
-		return Err("Nix installations are updated through Nix.".into());
+		return Err("Instalações via Nix são atualizadas pelo Nix.".into());
 	}
 	if cfg!(target_os = "linux") {
 		if !appimage_session() {
 			if flatpak_session() {
 				return Err(
-					"Flatpak updates are managed through its repository or `flatpak update`."
+					"Atualizações do Flatpak são feitas pelo repositório dele ou por `flatpak update`."
 						.into(),
 				);
 			}
 			return Err(
-				"Use your package manager to update Monkado, or run a release AppImage.".into(),
+				"Use seu gerenciador de pacotes para atualizar o Monkado ou execute um AppImage de versão.".into(),
 			);
 		}
-		let appdir = PathBuf::from(std::env::var_os("APPDIR").ok_or("Missing AppImage mount.")?);
+		let appdir = PathBuf::from(
+			std::env::var_os("APPDIR").ok_or("Montagem do AppImage não encontrada.")?,
+		);
 		if fs::canonicalize(appdir.join("usr/bin/monkado"))
 			.ok()
 			.as_ref() != Some(&exe)
 		{
-			return Err("Run Monkado from its AppImage to install updates.".into());
+			return Err("Execute o Monkado pelo AppImage para instalar atualizações.".into());
 		}
-		let image = PathBuf::from(std::env::var_os("APPIMAGE").ok_or("Missing AppImage path.")?);
-		let image = fs::canonicalize(image).map_err(|_| "Cannot locate the installed AppImage.")?;
+		let image = PathBuf::from(
+			std::env::var_os("APPIMAGE").ok_or("Caminho do AppImage não encontrado.")?,
+		);
+		let image = fs::canonicalize(image)
+			.map_err(|_| "Não foi possível localizar o AppImage instalado.")?;
 		verify_appimage(&image)?;
 		return Ok(image);
 	}
@@ -164,7 +169,7 @@ fn installation() -> Result<PathBuf, String> {
 	let exe = {
 		let path = exe
 			.to_str()
-			.ok_or("The installation path cannot be represented by the update helper.")?;
+			.ok_or("O assistente de atualização não consegue lidar com o caminho da instalação.")?;
 		if let Some(path) = path.strip_prefix(r"\\?\UNC\") {
 			PathBuf::from(format!(r"\\{path}"))
 		} else if let Some(path) = path.strip_prefix(r"\\?\") {
@@ -178,7 +183,7 @@ fn installation() -> Result<PathBuf, String> {
 			.parent()
 			.and_then(Path::parent)
 			.and_then(Path::parent)
-			.ok_or("Run the installed Monkado.app to install updates.")?;
+			.ok_or("Execute o Monkado.app instalado para instalar atualizações.")?;
 		if exe.file_name().is_none_or(|name| name != "monkado")
 			|| exe
 				.parent()
@@ -186,27 +191,27 @@ fn installation() -> Result<PathBuf, String> {
 				.is_none_or(|name| name != "MacOS")
 			|| app.extension().is_none_or(|extension| extension != "app")
 		{
-			return Err("Run the installed Monkado.app to install updates; source builds cannot replace themselves.".into());
+			return Err("Execute o Monkado.app instalado para instalar atualizações; builds compiladas do código-fonte não podem se substituir.".into());
 		}
 		if app.starts_with("/Volumes") || app.to_string_lossy().contains("/AppTranslocation/") {
 			return Err(
-				"Move Monkado to Applications or another writable folder before updating.".into(),
+				"Mova o Monkado para Aplicativos ou outra pasta com permissão de escrita antes de atualizar.".into(),
 			);
 		}
 		Ok(app.to_owned())
 	} else if cfg!(windows) {
 		let root = exe
 			.parent()
-			.ok_or("Cannot locate the installed application folder.")?;
+			.ok_or("Não foi possível localizar a pasta do aplicativo instalado.")?;
 		if exe.file_name().is_none_or(|name| name != "monkado.exe")
 			|| !root.join("THIRD_PARTY_NOTICES.md").is_file()
 			|| !root.join("licenses").is_dir()
 		{
-			return Err("Run Monkado from an extracted release package to install updates; source builds cannot replace themselves.".into());
+			return Err("Execute o Monkado a partir de um pacote de versão extraído para instalar atualizações; builds compiladas do código-fonte não podem se substituir.".into());
 		}
 		Ok(root.to_owned())
 	} else {
-		Err("Use your package manager to update Monkado on Linux.".into())
+		Err("Use seu gerenciador de pacotes para atualizar o Monkado no Linux.".into())
 	}
 }
 
@@ -215,13 +220,13 @@ pub(super) fn create_stage() -> Result<Staged, String> {
 	let parent = if cfg!(any(target_os = "macos", target_os = "linux")) {
 		installation
 			.parent()
-			.ok_or("Cannot locate the application folder.")?
+			.ok_or("Não foi possível localizar a pasta do aplicativo.")?
 	} else {
 		installation.as_path()
 	};
 	let lock_path = parent.join(".monkado-update.lock");
 	if fs::symlink_metadata(&lock_path).is_ok_and(|metadata| !metadata.is_file()) {
-		return Err("Unexpected update lock file.".into());
+		return Err("Arquivo de trava de atualização inesperado.".into());
 	}
 	let lock = fs::OpenOptions::new()
 		.read(true)
@@ -229,19 +234,24 @@ pub(super) fn create_stage() -> Result<Staged, String> {
 		.create(true)
 		.truncate(false)
 		.open(&lock_path)
-		.map_err(|_| "The installation folder is not writable.".to_owned())?;
-	lock.try_lock()
-		.map_err(|_| "Another Monkado instance is preparing update storage.".to_owned())?;
+		.map_err(|_| "A pasta de instalação não permite escrita.".to_owned())?;
+	lock.try_lock().map_err(|_| {
+		"Outra instância do Monkado está preparando o armazenamento da atualização.".to_owned()
+	})?;
 	// One bounded staging directory per installation; discard leftovers only after their owner exits.
 	let mut count = 0;
-	for entry in
-		fs::read_dir(parent).map_err(|_| "Cannot read the installation folder.".to_owned())?
+	for entry in fs::read_dir(parent)
+		.map_err(|_| "Não foi possível ler a pasta de instalação.".to_owned())?
 	{
 		count += 1;
 		if count > 16_384 {
-			return Err("The installation folder contains too many entries. Move Monkado into its own folder.".into());
+			return Err(
+				"A pasta de instalação tem itens demais. Mova o Monkado para uma pasta só dele."
+					.into(),
+			);
 		}
-		let entry = entry.map_err(|_| "Cannot inspect update storage.".to_owned())?;
+		let entry = entry
+			.map_err(|_| "Não foi possível analisar o armazenamento da atualização.".to_owned())?;
 		let name = entry.file_name();
 		let name = name.to_string_lossy();
 		let Some(pid) = name
@@ -253,10 +263,12 @@ pub(super) fn create_stage() -> Result<Staged, String> {
 		};
 		if !entry
 			.file_type()
-			.map_err(|_| "Cannot inspect update storage.".to_owned())?
+			.map_err(|_| "Não foi possível analisar o armazenamento da atualização.".to_owned())?
 			.is_dir()
 		{
-			return Err("An unexpected file is occupying update storage.".into());
+			return Err(
+				"Um arquivo inesperado está ocupando o armazenamento da atualização.".into(),
+			);
 		}
 		let helper_alive = fs::read_to_string(entry.path().join("helper-ready"))
 			.ok()
@@ -265,12 +277,12 @@ pub(super) fn create_stage() -> Result<Staged, String> {
 			.is_some_and(process_alive);
 		if helper_alive || (pid != std::process::id() && process_alive(pid)) {
 			return Err(
-				"Another Monkado instance is preparing an update. Close it and try again.".into(),
+				"Outra instância do Monkado está preparando uma atualização. Feche-a e tente novamente.".into(),
 			);
 		}
 		if fs::read(entry.path().join("owner")).ok().as_deref() != Some(b"monkado-updater-v1") {
 			return Err(
-				"An unrecognized directory occupies update storage; move it before trying again."
+				"Uma pasta desconhecida está ocupando o armazenamento da atualização; mova-a antes de tentar de novo."
 					.into(),
 			);
 		}
@@ -282,14 +294,14 @@ pub(super) fn create_stage() -> Result<Staged, String> {
 				|| entry.path().join("previous.AppImage").exists())
 		{
 			return Err(format!(
-				"An interrupted update needs recovery before continuing. Its backup is in {}.",
+				"Uma atualização interrompida precisa ser recuperada antes de continuar. O backup está em {}.",
 				entry.path().display()
 			));
 		}
 		cleanup(&entry.path());
 		if entry.path().exists() {
 			return Err(
-				"Cannot remove an unfinished update. Check installation folder permissions.".into(),
+				"Não foi possível remover uma atualização inacabada. Confira as permissões da pasta de instalação.".into(),
 			);
 		}
 	}
@@ -302,9 +314,10 @@ pub(super) fn create_stage() -> Result<Staged, String> {
 		use std::os::unix::fs::DirBuilderExt;
 		builder.mode(0o700);
 	}
-	builder.create(&directory).map_err(|_| "The installation folder is not writable. Move Monkado to a writable folder and try again.".to_owned())?;
-	fs::write(directory.join("owner"), b"monkado-updater-v1")
-		.map_err(|_| "Cannot mark update storage ownership.".to_owned())?;
+	builder.create(&directory).map_err(|_| "A pasta de instalação não permite escrita. Mova o Monkado para uma pasta com permissão de escrita e tente novamente.".to_owned())?;
+	fs::write(directory.join("owner"), b"monkado-updater-v1").map_err(|_| {
+		"Não foi possível marcar a posse do armazenamento da atualização.".to_owned()
+	})?;
 	Ok(Staged {
 		directory,
 		installation,
@@ -396,16 +409,16 @@ fn safe_path(name: &str) -> Result<PathBuf, String> {
 		|| name.contains('\\')
 		|| name.chars().any(|c| c.is_control())
 	{
-		return Err("The update archive contains an invalid path.".into());
+		return Err("O arquivo da atualização contém um caminho inválido.".into());
 	}
 	let path = Path::new(name);
 	for part in path.components() {
 		let Component::Normal(part) = part else {
-			return Err("The update archive contains a path outside its package.".into());
+			return Err("O arquivo da atualização contém um caminho fora do pacote.".into());
 		};
 		let part = part
 			.to_str()
-			.ok_or("The update archive contains a non-Unicode path.")?;
+			.ok_or("O arquivo da atualização contém um caminho não Unicode.")?;
 		let stem = part.split('.').next().unwrap_or("").to_ascii_uppercase();
 		if part.ends_with([' ', '.'])
 			|| part.chars().any(|c| ":<>\"|?*".contains(c))
@@ -427,7 +440,7 @@ fn safe_path(name: &str) -> Result<PathBuf, String> {
 					| "LPT6" | "LPT7"
 					| "LPT8" | "LPT9"
 			) {
-			return Err("The update archive contains an unsafe filename.".into());
+			return Err("O arquivo da atualização contém um nome de arquivo inseguro.".into());
 		}
 	}
 	Ok(path.to_owned())
@@ -435,7 +448,7 @@ fn safe_path(name: &str) -> Result<PathBuf, String> {
 
 // Bound the ZIP directory before ZipArchive allocates its entry table. Release archives fit ZIP32.
 fn preflight_zip(file: &mut (impl Read + Seek)) -> Result<u64, String> {
-	let invalid = || "The update ZIP directory is invalid or exceeds its limits.".to_owned();
+	let invalid = || "O índice do ZIP da atualização é inválido ou excede os limites.".to_owned();
 	let length = file.seek(SeekFrom::End(0)).map_err(|_| invalid())?;
 	let tail_len = length.min(65_557) as usize;
 	if tail_len < 22 {
@@ -558,7 +571,7 @@ pub(super) fn unpack(
 ) -> Result<(), String> {
 	if cfg!(target_os = "linux") {
 		if cancel.load(Ordering::Relaxed) {
-			return Err("Update cancelled.".into());
+			return Err("Atualização cancelada.".into());
 		}
 		let download = directory.join("package.zip");
 		verify_appimage(&download)?;
@@ -566,14 +579,14 @@ pub(super) fn unpack(
 		{
 			use std::os::unix::fs::PermissionsExt;
 			fs::set_permissions(&download, fs::Permissions::from_mode(0o755))
-				.map_err(|_| "Cannot make the AppImage executable.")?;
+				.map_err(|_| "Não foi possível tornar o AppImage executável.")?;
 		}
 		fs::rename(download, directory.join("package.AppImage"))
-			.map_err(|_| "Cannot stage the AppImage.")?;
+			.map_err(|_| "Não foi possível preparar o AppImage.")?;
 		return Ok(());
 	}
 	let mut archive = fs::File::open(directory.join("package.zip"))
-		.map_err(|_| "Cannot read the downloaded update.".to_owned())?;
+		.map_err(|_| "Não foi possível ler a atualização baixada.".to_owned())?;
 	let directory_start = preflight_zip(&mut archive)?;
 	let reading_metadata = Arc::new(AtomicBool::new(true));
 	let guarded = MetadataReader {
@@ -587,25 +600,27 @@ pub(super) fn unpack(
 		},
 		guarded,
 	)
-	.map_err(|_| "The update is not a valid ZIP package.".to_owned())?;
+	.map_err(|_| "A atualização não é um pacote ZIP válido.".to_owned())?;
 	reading_metadata.store(false, Ordering::Relaxed);
 	if archive.len() > MAX_FILES {
-		return Err("The update archive contains too many files.".into());
+		return Err("O arquivo da atualização contém arquivos demais.".into());
 	}
 	let destination = directory.join("package");
-	fs::create_dir(&destination).map_err(|_| "Cannot create update staging storage.".to_owned())?;
+	fs::create_dir(&destination).map_err(|_| {
+		"Não foi possível criar o armazenamento de preparação da atualização.".to_owned()
+	})?;
 	let mut paths = HashSet::new();
 	let mut total = 0_u64;
 	for index in 0..archive.len() {
 		if cancel.load(Ordering::Relaxed) {
-			return Err("Update cancelled.".into());
+			return Err("Atualização cancelada.".into());
 		}
 		let mut entry = archive
 			.by_index(index)
-			.map_err(|_| "Cannot read an update archive entry.".to_owned())?;
+			.map_err(|_| "Não foi possível ler um item do arquivo da atualização.".to_owned())?;
 		let name = entry
 			.name()
-			.map_err(|_| "The update archive has an invalid filename.".to_owned())?;
+			.map_err(|_| "O arquivo da atualização tem um nome de arquivo inválido.".to_owned())?;
 		let path = safe_path(&name)?;
 		if entry.encrypted()
 			|| entry.is_symlink()
@@ -614,17 +629,17 @@ pub(super) fn unpack(
 				.is_some_and(|mode| !matches!(mode & 0o170000, 0 | 0o100000 | 0o040000))
 		{
 			return Err(
-				"Encrypted files, links and special files are not allowed in updates.".into(),
+				"Arquivos criptografados, links e arquivos especiais não são permitidos em atualizações.".into(),
 			);
 		}
 		if !paths.insert(path.to_string_lossy().to_lowercase()) {
-			return Err("The update archive contains duplicate filenames.".into());
+			return Err("O arquivo da atualização contém nomes de arquivo duplicados.".into());
 		}
 		total = total
 			.checked_add(entry.size())
-			.ok_or("Update size overflow.")?;
+			.ok_or("Tamanho da atualização excedido.")?;
 		if total > MAX_UNPACKED {
-			return Err("The update archive exceeds its extracted size limit.".into());
+			return Err("O arquivo da atualização excede o limite de tamanho extraído.".into());
 		}
 		// ditto resource-fork metadata is not executable bundle content.
 		if path.starts_with("__MACOSX") {
@@ -634,23 +649,23 @@ pub(super) fn unpack(
 			.components()
 			.next()
 			.and_then(|p| p.as_os_str().to_str())
-			.ok_or("Invalid package path.")?;
+			.ok_or("Caminho de pacote inválido.")?;
 		if cfg!(target_os = "macos") {
 			if top != "Monkado.app" && !WINDOWS_FILES.contains(&top) {
-				return Err("The update contains unexpected package content.".into());
+				return Err("A atualização contém conteúdo inesperado no pacote.".into());
 			}
 		} else if !WINDOWS_FILES.contains(&top) {
-			return Err("The update contains unexpected package content.".into());
+			return Err("A atualização contém conteúdo inesperado no pacote.".into());
 		}
 		let target = destination.join(&path);
 		if entry.is_dir() {
 			fs::create_dir_all(&target)
-				.map_err(|_| "Cannot create update directories.".to_owned())?;
+				.map_err(|_| "Não foi possível criar as pastas da atualização.".to_owned())?;
 			continue;
 		}
 		if let Some(parent) = target.parent() {
 			fs::create_dir_all(parent)
-				.map_err(|_| "Cannot create update directories.".to_owned())?;
+				.map_err(|_| "Não foi possível criar as pastas da atualização.".to_owned())?;
 		}
 		let expected = entry.size();
 		let mode = entry.unix_mode();
@@ -658,33 +673,35 @@ pub(super) fn unpack(
 			.write(true)
 			.create_new(true)
 			.open(&target)
-			.map_err(|_| "Cannot create an update file.".to_owned())?;
+			.map_err(|_| "Não foi possível criar um arquivo da atualização.".to_owned())?;
 		let mut copied = 0_u64;
 		let mut buffer = [0_u8; 64 * 1024];
 		loop {
 			if cancel.load(Ordering::Relaxed) {
-				return Err("Update cancelled.".into());
+				return Err("Atualização cancelada.".into());
 			}
 			let read = entry
 				.read(&mut buffer)
-				.map_err(|_| "The update archive is corrupt.".to_owned())?;
+				.map_err(|_| "O arquivo da atualização está corrompido.".to_owned())?;
 			if read == 0 {
 				break;
 			}
 			copied = copied
 				.checked_add(read as u64)
-				.ok_or("Update size overflow.")?;
+				.ok_or("Tamanho da atualização excedido.")?;
 			if copied > expected {
-				return Err("An update file exceeds its declared size.".into());
+				return Err("Um arquivo da atualização excede o tamanho declarado.".into());
 			}
-			file.write_all(&buffer[..read])
-				.map_err(|_| "Cannot extract the update. Check available disk space.".to_owned())?;
+			file.write_all(&buffer[..read]).map_err(|_| {
+				"Não foi possível extrair a atualização. Confira o espaço livre em disco."
+					.to_owned()
+			})?;
 		}
 		if copied != expected {
-			return Err("An update file is incomplete.".into());
+			return Err("Um arquivo da atualização está incompleto.".into());
 		}
 		file.sync_all()
-			.map_err(|_| "Cannot save the extracted update.".to_owned())?;
+			.map_err(|_| "Não foi possível salvar a atualização extraída.".to_owned())?;
 		#[cfg(unix)]
 		{
 			use std::os::unix::fs::PermissionsExt;
@@ -696,7 +713,9 @@ pub(super) fn unpack(
 					0o644
 				}),
 			)
-			.map_err(|_| "Cannot set update file permissions.".to_owned())?;
+			.map_err(|_| {
+				"Não foi possível definir as permissões dos arquivos da atualização.".to_owned()
+			})?;
 		}
 		#[cfg(not(unix))]
 		{
@@ -708,17 +727,17 @@ pub(super) fn unpack(
 			.join("Monkado.app/Contents/MacOS/monkado")
 			.is_file()
 		{
-			return Err("The update does not contain Monkado.app.".into());
+			return Err("A atualização não contém o Monkado.app.".into());
 		}
 		verify_mac(&destination.join("Monkado.app"), installed)?;
 	} else if !destination.join("monkado.exe").is_file()
 		|| !destination.join("licenses").is_dir()
 		|| !destination.join("THIRD_PARTY_NOTICES.md").is_file()
 	{
-		return Err("The update is missing its executable or bundled notices.".into());
+		return Err("Faltam o executável ou os avisos incluídos na atualização.".into());
 	}
 	fs::remove_file(directory.join("package.zip"))
-		.map_err(|_| "Cannot clean the verified update archive.".to_owned())?;
+		.map_err(|_| "Não foi possível limpar o arquivo da atualização verificada.".to_owned())?;
 	Ok(())
 }
 fn verify_mac(candidate: &Path, installed: &Path) -> Result<(), String> {
@@ -731,35 +750,43 @@ fn verify_mac(candidate: &Path, installed: &Path) -> Result<(), String> {
 		.stdout(Stdio::null())
 		.stderr(Stdio::null())
 		.status()
-		.map_err(|_| "Cannot verify the update's code signature.".to_owned())?;
+		.map_err(|_| {
+			"Não foi possível verificar a assinatura de código da atualização.".to_owned()
+		})?;
 	if !status.success() {
-		return Err("The update's macOS signature is invalid.".into());
+		return Err("A assinatura macOS da atualização é inválida.".into());
 	}
 	fn identity(app: &Path) -> Result<(String, String), String> {
 		let output = Command::new("/usr/bin/codesign")
 			.args(["-d", "--verbose=4"])
 			.arg(app)
 			.output()
-			.map_err(|_| "Cannot inspect the application signing identity.".to_owned())?;
+			.map_err(|_| {
+				"Não foi possível analisar a identidade de assinatura do aplicativo.".to_owned()
+			})?;
 		if !output.status.success() || output.stderr.len() > 64 * 1024 {
-			return Err("Cannot inspect the application signing identity.".into());
+			return Err(
+				"Não foi possível analisar a identidade de assinatura do aplicativo.".into(),
+			);
 		}
 		let text = String::from_utf8_lossy(&output.stderr);
 		let team = text
 			.lines()
 			.find_map(|line| line.strip_prefix("TeamIdentifier="))
 			.filter(|team| team.len() == 10 && team.bytes().all(|b| b.is_ascii_alphanumeric()))
-			.ok_or("In-app installation requires a Developer ID signed release of Monkado.")?;
+			.ok_or(
+				"A instalação pelo app exige uma versão do Monkado assinada com Developer ID.",
+			)?;
 		let identifier = text
 			.lines()
 			.find_map(|line| line.strip_prefix("Identifier="))
-			.ok_or("The update has no bundle signing identifier.")?;
+			.ok_or("A atualização não tem identificador de assinatura do pacote.")?;
 		Ok((team.into(), identifier.into()))
 	}
 	let old = identity(installed)?;
 	let new = identity(candidate)?;
 	if old != new || new.1 != "land.monkey.monkado" {
-		return Err("The update was not signed by this Monkado publisher.".into());
+		return Err("A atualização não foi assinada por este publicador do Monkado.".into());
 	}
 	let status = Command::new("/usr/sbin/spctl")
 		.args(["--assess", "--type", "execute"])
@@ -767,9 +794,11 @@ fn verify_mac(candidate: &Path, installed: &Path) -> Result<(), String> {
 		.stdout(Stdio::null())
 		.stderr(Stdio::null())
 		.status()
-		.map_err(|_| "Cannot assess the update with macOS Gatekeeper.".to_owned())?;
+		.map_err(|_| {
+			"Não foi possível avaliar a atualização com o Gatekeeper do macOS.".to_owned()
+		})?;
 	if !status.success() {
-		return Err("macOS Gatekeeper did not accept the update.".into());
+		return Err("O Gatekeeper do macOS não aceitou a atualização.".into());
 	}
 	Ok(())
 }
@@ -791,13 +820,13 @@ pub(super) fn prepare_restart(
 ) -> Result<Prepared, String> {
 	let mut nonce = [0_u8; 8];
 	getrandom::fill(&mut nonce)
-		.map_err(|_| "Cannot create a unique restart handoff.".to_owned())?;
+		.map_err(|_| "Não foi possível criar a passagem única para o reinício.".to_owned())?;
 	let marker = directory.join(format!("commit-{:016x}", u64::from_ne_bytes(nonce)));
 	let ready = directory.join("helper-ready");
 	match fs::remove_file(&ready) {
 		Ok(()) => {}
 		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-		Err(_) => return Err("Cannot reset the update handoff.".into()),
+		Err(_) => return Err("Não foi possível redefinir a passagem da atualização.".into()),
 	}
 	#[cfg(target_os = "macos")]
 	let _ = version;
@@ -806,7 +835,7 @@ pub(super) fn prepare_restart(
 		verify_mac(&directory.join("package/Monkado.app"), installation)?;
 		let script = directory.join("install.sh");
 		fs::write(&script, MAC_HELPER)
-			.map_err(|_| "Cannot prepare the update helper.".to_owned())?;
+			.map_err(|_| "Não foi possível preparar o assistente de atualização.".to_owned())?;
 		Command::new("/bin/sh")
 			.arg(&script)
 			.arg(directory)
@@ -818,17 +847,18 @@ pub(super) fn prepare_restart(
 			.stdout(Stdio::null())
 			.stderr(Stdio::null())
 			.spawn()
-			.map_err(|_| "Cannot start the update helper.".to_owned())?
+			.map_err(|_| "Não foi possível iniciar o assistente de atualização.".to_owned())?
 	};
 	#[cfg(target_os = "linux")]
 	let mut child = {
 		let _ = version;
 		if self::installation()?.as_path() != installation {
-			return Err("The installed AppImage moved; restart before updating.".into());
+			return Err("O AppImage instalado foi movido; reinicie antes de atualizar.".into());
 		}
 		verify_appimage(&directory.join("package.AppImage"))?;
 		let script = directory.join("install.sh");
-		fs::write(&script, LINUX_HELPER).map_err(|_| "Cannot prepare the update helper.")?;
+		fs::write(&script, LINUX_HELPER)
+			.map_err(|_| "Não foi possível preparar o assistente de atualização.")?;
 		Command::new("/bin/sh")
 			.env_remove("LD_LIBRARY_PATH")
 			.env_remove("LD_PRELOAD")
@@ -842,13 +872,13 @@ pub(super) fn prepare_restart(
 			.stdout(Stdio::null())
 			.stderr(Stdio::null())
 			.spawn()
-			.map_err(|_| "Cannot start the update helper.")?
+			.map_err(|_| "Não foi possível iniciar o assistente de atualização.")?
 	};
 	#[cfg(windows)]
 	let mut child = {
 		let script = directory.join("install.ps1");
 		fs::write(&script, WINDOWS_HELPER)
-			.map_err(|_| "Cannot prepare the update helper.".to_owned())?;
+			.map_err(|_| "Não foi possível preparar o assistente de atualização.".to_owned())?;
 		let plan = serde_json::json!({
 			"installation": installation,
 			"parent": std::process::id(),
@@ -858,9 +888,10 @@ pub(super) fn prepare_restart(
 		});
 		fs::write(
 			directory.join("plan.json"),
-			serde_json::to_vec(&plan).map_err(|_| "Cannot encode the update plan.".to_owned())?,
+			serde_json::to_vec(&plan)
+				.map_err(|_| "Não foi possível codificar o plano de atualização.".to_owned())?,
 		)
-		.map_err(|_| "Cannot save the update plan.".to_owned())?;
+		.map_err(|_| "Não foi possível salvar o plano de atualização.".to_owned())?;
 		powershell()
 			.args([
 				"-NoProfile",
@@ -875,12 +906,12 @@ pub(super) fn prepare_restart(
 			.stdout(Stdio::null())
 			.stderr(Stdio::null())
 			.spawn()
-			.map_err(|_| "Cannot start the update helper.".to_owned())?
+			.map_err(|_| "Não foi possível iniciar o assistente de atualização.".to_owned())?
 	};
 	#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 	{
 		let _ = (installation, marker, version);
-		Err("In-app installation is unsupported on this platform.".into())
+		Err("A instalação pelo app não é suportada nesta plataforma.".into())
 	}
 	#[cfg(any(target_os = "macos", target_os = "linux", windows))]
 	{
@@ -892,7 +923,7 @@ pub(super) fn prepare_restart(
 		}
 		let _ = child.kill();
 		let _ = child.wait();
-		Err("The update helper did not start. Monkado will remain open.".into())
+		Err("O assistente de atualização não iniciou. O Monkado continuará aberto.".into())
 	}
 }
 

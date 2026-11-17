@@ -514,12 +514,12 @@ impl Connection {
                             let Some(request)=request else {break;};
                             if !*voice_availability.borrow() || upload.as_ref().is_some_and(|job|!job.0.is_finished()) {
                                 match request.command {
-                                    Command::Interaction(request)=>emit(Event::Interaction(client_core::interactions::Event::Submitted{nonce:request.nonce,result:Err(Failure::ProtocolAt("Upload unavailable; reselect the file to retry"))}))?,
-                                    Command::Send{nonce,..}=>emit(Event::SendResult{nonce,result:Err(Failure::ProtocolAt("Upload unavailable; reselect the file to retry"))})?,
-                                    Command::CreatePost{parent,request,..}=>emit(Event::PostCreated{parent,request,result:Err(Failure::ProtocolAt("Upload unavailable; reselect the file to retry"))})?,
+                                    Command::Interaction(request)=>emit(Event::Interaction(client_core::interactions::Event::Submitted{nonce:request.nonce,result:Err(Failure::ProtocolAt("Envio indisponível; selecione o arquivo de novo para tentar outra vez"))}))?,
+                                    Command::Send{nonce,..}=>emit(Event::SendResult{nonce,result:Err(Failure::ProtocolAt("Envio indisponível; selecione o arquivo de novo para tentar outra vez"))})?,
+                                    Command::CreatePost{parent,request,..}=>emit(Event::PostCreated{parent,request,result:Err(Failure::ProtocolAt("Envio indisponível; selecione o arquivo de novo para tentar outra vez"))})?,
                                     _=>{}
                                 }
-                                request.progress.send_replace(discord_api::upload::Status::Failed("Upload unavailable; reselect the file to retry"));
+                                request.progress.send_replace(discord_api::upload::Status::Failed("Envio indisponível; selecione o arquivo de novo para tentar outra vez"));
                                 continue;
                             }
                             upload_cancel=Some(request.cancel.clone());
@@ -685,9 +685,9 @@ impl Connection {
 									_=>unreachable!(),
 								};
 								let message=if !*voice_availability.borrow() {
-									Some("Voice signaling is disconnected; screen-share action was not sent")
+									Some("A sinalização de voz está desconectada; a ação de compartilhar tela não foi enviada")
 								} else if voice_send.try_send(control).is_err() {
-									Some("Screen-share action was not sent; the voice queue is full")
+									Some("A ação de compartilhar tela não foi enviada; a fila de voz está cheia")
 								} else {None};
 								if let Some(message)=message {
 									emit(Event::Voice(E::Stream{channel,request,stream_request,event:screen::Event::Failed(message)}))?;
@@ -703,9 +703,9 @@ impl Connection {
 									_=>unreachable!(),
 								};
 								let message=if !*voice_availability.borrow() {
-									Some("Voice signaling is disconnected; the stream request was not sent")
+									Some("A sinalização de voz está desconectada; o pedido da transmissão não foi enviado")
 								} else if voice_send.try_send(control).is_err() {
-									Some("Stream request was not sent; the voice queue is full")
+									Some("O pedido da transmissão não foi enviado; a fila de voz está cheia")
 								} else {None};
 								if let (Some(message),Some(streamer))=(message,streamer) {
 									emit(Event::Voice(E::Watch{channel,request,stream_request,streamer,event:screen::Event::Failed(message)}))?;
@@ -719,9 +719,9 @@ impl Connection {
                                 recipient_scope_changed.borrow_and_update();
                                 let eligible=recipient_action(channel,request,recipient,own_id(&identity.borrow()),voice_request,dm_channels.lock().map_err(|_|Failure::Protocol)?.get(&channel).map(Vec::as_slice))
                                     && recipient_call.lock().map_err(|_|Failure::Protocol)?.as_ref().is_some_and(|call|call.allows(channel,request,recipient,stop));
-                                let message=if !*voice_availability.borrow() {Some("Recipient ringing unavailable while disconnected")}
-                                    else if !eligible {Some("Recipient ringing expired; no request was sent")}
-                                    else if recipient_ringing.as_ref().is_some_and(|(_,job)|!job.0.is_finished()) {Some("Recipient ringing is already pending; wait for the result")}
+                                let message=if !*voice_availability.borrow() {Some("Não é possível tocar para o destinatário enquanto desconectado")}
+                                    else if !eligible {Some("O toque para o destinatário expirou; nenhum pedido foi enviado")}
+                                    else if recipient_ringing.as_ref().is_some_and(|(_,job)|!job.0.is_finished()) {Some("O toque para o destinatário já está pendente; aguarde o resultado")}
                                     else {None};
                                 if let Some(message)=message {emit(Event::Voice(E::RingFailed{channel,request,message}))?;continue;}
                                 drop(recipient_ringing.take());
@@ -765,19 +765,19 @@ impl Connection {
                                     continue;
                                 }
                                 if abandonment_blocks_join(pending_abandonment,control) {
-                                    emit(Event::Voice(E::Failed{channel,request,message:"Previous call is releasing locally; retry joining after it finishes"}))?;continue;
+                                    emit(Event::Voice(E::Failed{channel,request,message:"A chamada anterior ainda está sendo encerrada; tente entrar de novo quando terminar"}))?;continue;
                                 }
                                 if let Some(failure)=voice_offline_failure(*voice_availability.borrow(),channel,request) {
                                     emit(Event::Voice(failure))?;continue;
                                 }
                                 if join_taken_over(control,*takeover_receive.borrow()) {
-                                    emit(Event::Voice(E::Failed{channel,request,message:"Call attempt ended; join again to start a new attempt"}))?;continue;
+                                    emit(Event::Voice(E::Failed{channel,request,message:"A tentativa de chamada terminou; entre de novo para tentar outra vez"}))?;continue;
                                 }
                                 if matches!(control,V::Join{..}) {drop(ringing.take());drop(recipient_ringing.take());}
                                 if let V::Leave{channel,request}=control && voice_request.is_some_and(|(id,r,_)|id==channel && r==request) {drop(ringing.take());drop(recipient_ringing.take());recipient_call.lock().map_err(|_|Failure::Protocol)?.active=None;}
                                 let ring=match ring_action(control,own_id(&identity.borrow()),&mut voice_request,dm_channels.lock().map_err(|_|Failure::Protocol)?.contains_key(&channel)) {
                                     Ok(action)=>action,
-                                    Err(())=>{emit(Event::Voice(E::Failed{channel,request,message:"Call action expired; no ringing request was sent"}))?;continue;}
+                                    Err(())=>{emit(Event::Voice(E::Failed{channel,request,message:"A ação de chamada expirou; nenhum toque foi enviado"}))?;continue;}
                                 };
                                 if matches!(control,V::Join{..}) {
                                     if let Some(error)=queue_join(&voice_send,control,(channel,request),&mut voice_request) {
@@ -1019,7 +1019,7 @@ async fn run_idle_timeout_sync(
 			.set_idle_timeout(secs)
 			.await
 			.err()
-			.map(|_| "Could not save the idle timeout to Discord.");
+			.map(|_| "Não foi possível salvar o tempo de inatividade no Discord.");
 		if note.send_replace(hint) != hint {
 			wake.request_repaint();
 		}
@@ -1092,7 +1092,7 @@ async fn run_presence_sync(sync: PresenceSync) {
 					unsaved = true;
 					pending = None;
 					let _ = note.send_replace(Some(
-						"Could not save status to Discord. It stays on this device; change it again to retry.",
+						"Não foi possível salvar o status no Discord. Ele fica só neste dispositivo; altere de novo para tentar outra vez.",
 					));
 					wake.request_repaint();
 				}
@@ -1254,19 +1254,19 @@ fn emit_event(
 	let overhead = size_of::<(Envelope, OwnedSemaphorePermit)>() - size_of::<Event>();
 	if startup && bytes.saturating_add(overhead) > model::account::MAX_BYTES {
 		return Err(Failure::CapacityAt(
-			"Account startup snapshot exceeds 128 MiB; connection stopped",
+			"Os dados iniciais da conta excedem 128 MiB; conexão interrompida",
 		));
 	}
 	if !startup && bytes > MAX_EVENT_BYTES {
 		return Err(Failure::CapacityAt(
-			"Account synchronization event exceeds 4 MiB; connection stopped",
+			"Um evento de sincronização da conta excede 4 MiB; conexão interrompida",
 		));
 	}
 	// Event::bytes includes Event itself; also charge envelope padding and the owned permit.
 	let bytes = bytes + overhead;
 	let permit = if startup {
 		reliable.startup.clone().try_acquire_owned().map_err(|_| {
-			Failure::CapacityAt("Account startup snapshot is already queued; connection stopped")
+			Failure::CapacityAt("Os dados iniciais da conta já estão na fila; conexão interrompida")
 		})?
 	} else {
 		reliable
@@ -1275,7 +1275,7 @@ fn emit_event(
 			.try_acquire_many_owned(bytes as u32)
 			.map_err(|_| {
 				Failure::CapacityAt(
-					"Account synchronization queue exceeds 32 MiB; connection stopped",
+					"A fila de sincronização da conta excede 32 MiB; conexão interrompida",
 				)
 			})?
 	};
@@ -1284,7 +1284,7 @@ fn emit_event(
 		.try_send((envelope, permit))
 		.map_err(|error| match error {
 			mpsc::error::TrySendError::Full(_) => Failure::CapacityAt(
-				"Account synchronization event queue is full; connection stopped",
+				"A fila de eventos de sincronização da conta está cheia; conexão interrompida",
 			),
 			mpsc::error::TrySendError::Closed(_) => Failure::Network,
 		})?;
@@ -1825,17 +1825,17 @@ fn queue_confirmation(
 		unreachable!("only local transport confirmations use this admission path");
 	};
 	let message = if !online {
-		"Call confirmation was not sent; voice signaling is disconnected"
+		"A confirmação da chamada não foi enviada; a sinalização de voz está desconectada"
 	} else if !owner.is_some_and(|(id, attempt, _)| (id, attempt) == (channel, request)) {
-		"Call confirmation expired; no action was sent"
+		"A confirmação da chamada expirou; nenhuma ação foi enviada"
 	} else {
 		match sender.try_send(control) {
 			Ok(()) => return None,
 			Err(mpsc::error::TrySendError::Full(_)) => {
-				"Call confirmation was not sent; the voice queue is full"
+				"A confirmação da chamada não foi enviada; a fila de voz está cheia"
 			}
 			Err(mpsc::error::TrySendError::Closed(_)) => {
-				"Call confirmation was not sent; voice signaling is disconnected"
+				"A confirmação da chamada não foi enviada; a sinalização de voz está desconectada"
 			}
 		}
 	};
@@ -1855,7 +1855,7 @@ pub(crate) fn voice_offline_failure(
 	(!available).then_some(client_core::voice::Event::Failed {
 		channel,
 		request,
-		message: "Voice is disconnected; no call was started",
+		message: "A voz está desconectada; nenhuma chamada foi iniciada",
 	})
 }
 
@@ -1873,9 +1873,11 @@ fn queue_join(
 		channel: scope.0,
 		request: scope.1,
 		message: match error {
-			mpsc::error::TrySendError::Full(_) => "Call join was not sent; the voice queue is full",
+			mpsc::error::TrySendError::Full(_) => {
+				"O pedido de entrada na chamada não foi enviado; a fila de voz está cheia"
+			}
 			mpsc::error::TrySendError::Closed(_) => {
-				"Call join was not sent; voice signaling is disconnected"
+				"O pedido de entrada na chamada não foi enviado; a sinalização de voz está desconectada"
 			}
 		},
 	})
@@ -2568,7 +2570,7 @@ mod tests {
 				channel: model::Id(20),
 				request: 5,
 				revision: 2,
-				message: "Call confirmation was not sent; the voice queue is full"
+				message: "A confirmação da chamada não foi enviada; a fila de voz está cheia"
 			})
 		));
 		assert_eq!(receiver.len(), 8);
@@ -2610,7 +2612,7 @@ mod tests {
 			Some(E::SessionConfirmationFailed {
 				request: 5,
 				revision: 2,
-				message: "Call confirmation was not sent; voice signaling is disconnected",
+				message: "A confirmação da chamada não foi enviada; a sinalização de voz está desconectada",
 				..
 			})
 		));
@@ -2885,7 +2887,7 @@ mod tests {
 				&ctx
 			),
 			Err(Failure::CapacityAt(
-				"Account startup snapshot is already queued; connection stopped"
+				"Os dados iniciais da conta já estão na fila; conexão interrompida"
 			))
 		);
 		let mut later = queued_channel(25_000);
@@ -2931,7 +2933,7 @@ mod tests {
 		assert_eq!(
 			emit_event(&send, &typing, queued_channel(0), &ctx),
 			Err(Failure::CapacityAt(
-				"Account synchronization event queue is full; connection stopped"
+				"A fila de eventos de sincronização da conta está cheia; conexão interrompida"
 			))
 		);
 		assert_eq!(send.bytes.available_permits(), retained);
@@ -2965,7 +2967,7 @@ mod tests {
 		assert_eq!(
 			emit_event(&send, &typing, queued_channel(3), &ctx),
 			Err(Failure::CapacityAt(
-				"Account synchronization queue exceeds 32 MiB; connection stopped"
+				"A fila de sincronização da conta excede 32 MiB; conexão interrompida"
 			))
 		);
 		assert_eq!(events.receive.len(), 1);
@@ -2981,7 +2983,7 @@ mod tests {
 		assert_eq!(
 			emit_event(&send, &typing, oversized, &ctx),
 			Err(Failure::CapacityAt(
-				"Account synchronization event exceeds 4 MiB; connection stopped"
+				"Um evento de sincronização da conta excede 4 MiB; conexão interrompida"
 			))
 		);
 		assert_eq!(send.bytes.available_permits(), before);

@@ -47,7 +47,7 @@ const WEB_ORIGINS: [&str; 6] = [
 	"https://ptb.discordapp.com",
 	"https://canary.discordapp.com",
 ];
-const INVALID: &str = "A game sent activity that could not be read.";
+const INVALID: &str = "Um jogo enviou uma atividade que não pôde ser lida.";
 
 type Update = (usize, Option<Activity>);
 
@@ -80,7 +80,7 @@ impl Applications for Service {
 			.api
 			.rest_client()
 			.await
-			.map_err(|_| "Game application lookup is unavailable.")?;
+			.map_err(|_| "A busca do aplicativo do jogo está indisponível.")?;
 		discord_api::rpc::metadata(&client, &mut *self.cooldown.lock().await, id).await
 	}
 	async fn assets(&self, id: Id) -> Result<Vec<discord_api::rpc::Asset>, &'static str> {
@@ -88,28 +88,28 @@ impl Applications for Service {
 			.api
 			.rest_client()
 			.await
-			.map_err(|_| "Game artwork lookup is unavailable.")?;
+			.map_err(|_| "A busca das imagens do jogo está indisponível.")?;
 		discord_api::rpc::assets(&client, &mut *self.cooldown.lock().await, id).await
 	}
 	async fn external(&self, id: Id, urls: &[String]) -> Result<Vec<String>, &'static str> {
 		self.api
 			.external_assets(id, urls)
 			.await
-			.map_err(|_| "Discord could not prepare the game's artwork.")
+			.map_err(|_| "O Discord não conseguiu preparar as imagens do jogo.")
 	}
 	async fn detectable(&self) -> Result<Vec<Game>, &'static str> {
 		let client = self
 			.api
 			.rest_client()
 			.await
-			.map_err(|_| "Game detection is unavailable.")?;
+			.map_err(|_| "A detecção de jogos está indisponível.")?;
 		let bytes =
 			discord_api::detectable::download_list(&client, &mut *self.cooldown.lock().await)
 				.await?;
 		// Several megabytes of JSON must never be parsed on a runtime worker.
 		tokio::task::spawn_blocking(move || discord_api::detectable::decode(&bytes))
 			.await
-			.map_err(|_| "The detectable game list is unavailable.")?
+			.map_err(|_| "A lista de jogos detectáveis está indisponível.")?
 	}
 }
 
@@ -263,7 +263,7 @@ async fn listen<A: Applications>(
 	registered: &Registered,
 ) -> Result<(), &'static str> {
 	let mut listener = platform::game_activity::Listener::bind().map_err(
-		|_| "Game activity is unavailable. Close other Discord clients, then turn sharing off and on.",
+		|_| "A atividade de jogo está indisponível. Feche outros clientes do Discord e desative e ative o compartilhamento.",
 	)?;
 	// Browser and Electron clients speak the same RPC over localhost. Its absence is not fatal.
 	let web = bind_web().await;
@@ -291,7 +291,7 @@ async fn listen<A: Applications>(
 				tokio::time::sleep_until(next_accept_ipc).await;
 				listener.accept().await
 			}, if workers.len() < MAX_CLIENTS => {
-				let stream = accepted.map_err(|_| "Game activity stopped. Turn sharing off and on to retry.")?;
+				let stream = accepted.map_err(|_| "A atividade de jogo parou. Desative e ative o compartilhamento para tentar de novo.")?;
 				next_accept_ipc = Instant::now() + Duration::from_secs(5);
 				let slot = claim(&mut slots);
 				let (send, user, service, invites) = (send.clone(), user.clone(), service.clone(), invite_send.clone());
@@ -332,7 +332,7 @@ async fn listen<A: Applications>(
 				ctx.request_repaint();
 			},
 			Some(result) = workers.join_next(), if !workers.is_empty() => {
-				let (slot, result) = result.map_err(|_| "Game activity stopped. Turn sharing off and on to retry.")?;
+				let (slot, result) = result.map_err(|_| "A atividade de jogo parou. Desative e ative o compartilhamento para tentar de novo.")?;
 				// Drain accepted updates before retiring the slot so an old update cannot revive it.
 				while let Ok((index, value)) = receive.try_recv() {
 					values[index] = value.map(|value| (Instant::now(), value));

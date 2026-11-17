@@ -110,23 +110,25 @@ fn open_output(
 	let host = cpal::default_host();
 	let device = host
 		.default_output_device()
-		.ok_or("No audio output device")?;
+		.ok_or("Nenhum dispositivo de saída de áudio")?;
 	let supported = device
 		.default_output_config()
-		.map_err(|_| "Audio output unavailable")?;
+		.map_err(|_| "Saída de áudio indisponível")?;
 	let config = playback_config(host.id(), supported.config());
 	if !(1..=8).contains(&config.channels) || !(8000..=192000).contains(&config.sample_rate) {
-		return Err("Unsupported audio output format");
+		return Err("Formato de saída de áudio sem suporte");
 	}
 	let stream = match supported.sample_format() {
 		cpal::SampleFormat::F32 => output::<f32>(&device, &config, playback, gate, generation),
 		cpal::SampleFormat::I16 => output::<i16>(&device, &config, playback, gate, generation),
 		cpal::SampleFormat::I32 => output::<i32>(&device, &config, playback, gate, generation),
 		cpal::SampleFormat::U16 => output::<u16>(&device, &config, playback, gate, generation),
-		_ => return Err("Unsupported audio output format"),
+		_ => return Err("Formato de saída de áudio sem suporte"),
 	}
-	.map_err(|_| "Audio output unavailable")?;
-	stream.play().map_err(|_| "Could not start audio output")?;
+	.map_err(|_| "Saída de áudio indisponível")?;
+	stream
+		.play()
+		.map_err(|_| "Não foi possível iniciar a saída de áudio")?;
 	Ok(stream)
 }
 
@@ -247,7 +249,7 @@ pub(super) fn play(
 									return Err("Cancelled");
 								}
 								if gate.failed.load(Ordering::Acquire) {
-									return Err("Audio output disconnected");
+									return Err("Saída de áudio desconectada");
 								}
 								wait();
 							}
@@ -281,7 +283,7 @@ pub(super) fn play(
 			}
 			while stream.is_some() && !finished.load(Ordering::Acquire) && current() {
 				if gate.failed.load(Ordering::Acquire) {
-					return Err("Audio output disconnected");
+					return Err("Saída de áudio desconectada");
 				}
 				wait();
 			}

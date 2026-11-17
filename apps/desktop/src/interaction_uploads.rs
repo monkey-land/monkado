@@ -129,8 +129,9 @@ impl Desktop {
 			|| self.connection.is_none()
 		{
 			self.state.command_rejected(command);
-			self.state.interactions.error =
-				Some("Files were not sent; select up to 10 files totaling at most 500 MB");
+			self.state.interactions.error = Some(
+				"Os arquivos não foram enviados; selecione até 10 arquivos somando no máximo 500 MB",
+			);
 			return;
 		}
 		let (progress, receive) =

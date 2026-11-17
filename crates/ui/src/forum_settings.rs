@@ -118,9 +118,9 @@ impl ForumSettingsUi {
 					.as_ref()
 					.map(|emoji| (emoji.id, emoji.name.clone()));
 				let label = if current.is_some() {
-					"Change emoji"
+					"Alterar emoji"
 				} else {
-					"Select emoji"
+					"Selecionar emoji"
 				};
 				ui.horizontal(|ui| {
 					if let Some((id, name)) = &current {
@@ -406,9 +406,9 @@ impl ForumSettingsUi {
 					images,
 					"tag-emoji",
 					if draft.tag.emoji_id.is_some() || draft.tag.emoji_name.is_some() {
-						"Change emoji"
+						"Alterar emoji"
 					} else {
-						"Select emoji"
+						"Selecionar emoji"
 					},
 				) {
 					draft.tag.emoji_id = choice.0;

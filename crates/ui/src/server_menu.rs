@@ -763,7 +763,7 @@ mod tests {
 				if action == "Create invite" {
 					assert!(
 						text.iter()
-							.any(|(t, _)| t.starts_with("Invite friends to "))
+							.any(|(t, _)| t.starts_with("Convidar amigos para "))
 					);
 					// The title sits beside the dialog icon; body sections share one left edge.
 					let body = text
@@ -824,7 +824,7 @@ mod tests {
 					});
 					let (_, text) =
 						frame(&ctx, width, &mut menu, &mut state, vec![], &mut commands);
-					let copy = text.iter().find(|(t, _)| t == "Copy").unwrap().1;
+					let copy = text.iter().find(|(t, _)| t == "Copiar").unwrap().1;
 					assert!(
 						copy.left() >= 0.0 && copy.right() <= width,
 						"copy stays inside the viewport"

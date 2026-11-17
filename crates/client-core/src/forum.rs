@@ -487,7 +487,7 @@ impl State {
 			Ok(page) => page,
 		};
 		let Some(guild) = guild.filter(|guild| page.valid(parent, *guild)) else {
-			self.posts.error = Some("The service returned unexpected posts");
+			self.posts.error = Some("O serviço retornou publicações inesperadas");
 			return;
 		};
 		for (post, starter) in page.previews {
@@ -506,7 +506,7 @@ impl State {
 							+ post.name.capacity()
 							+ tag_bytes(&post);
 					if bytes + self.permissions.bytes() > model::account::MAX_BYTES {
-						self.posts.error = Some("Posts exceed the navigation budget");
+						self.posts.error = Some("As publicações excedem o limite de navegação");
 						self.posts.more = false;
 						return;
 					}
@@ -524,7 +524,7 @@ impl State {
 				|| bytes + post.bytes() + self.permissions.bytes() > model::account::MAX_BYTES
 				|| self.channels.try_reserve_exact(1).is_err()
 			{
-				self.posts.error = Some("Posts exceed the navigation budget");
+				self.posts.error = Some("As publicações excedem o limite de navegação");
 				self.posts.more = false;
 				return;
 			}
@@ -588,7 +588,7 @@ impl State {
 						.chars()
 						.any(|c| c.is_control() || matches!(c, '/' | '\\' | ':'))
 			}) {
-			self.posting.error = Some("Attachment filename is invalid or too long");
+			self.posting.error = Some("O nome do arquivo anexado é inválido ou longo demais");
 			return None;
 		}
 		let offered = self.forum_tags(parent);
@@ -599,11 +599,11 @@ impl State {
 						.iter()
 						.any(|tag| tag.id == *id && self.can_apply_tag(parent, tag))
 			}) {
-			self.posting.error = Some("Choose up to 5 tags this forum offers");
+			self.posting.error = Some("Escolha até 5 tags oferecidas por este fórum");
 			return None;
 		}
 		if tags.is_empty() && self.forum_requires_tag(parent) {
-			self.posting.error = Some("This forum requires at least one tag");
+			self.posting.error = Some("Este fórum exige pelo menos uma tag");
 			return None;
 		}
 		let guild = self.channel(parent)?.guild?;
@@ -649,12 +649,12 @@ impl State {
 			|| post.guild != guild
 			|| post.name.len() > 512
 		{
-			self.posting.error = Some("The service returned an unexpected post");
+			self.posting.error = Some("O serviço retornou uma publicação inesperada");
 			return;
 		}
 		if let Some(existing) = self.channels.iter_mut().find(|c| c.id == post.id) {
 			if existing.parent_id != post.parent_id || existing.guild != post.guild {
-				self.posting.error = Some("Post conflicts with current navigation");
+				self.posting.error = Some("A publicação entra em conflito com a navegação atual");
 				return;
 			}
 			existing.message_count = post.message_count.or(existing.message_count);
@@ -665,7 +665,7 @@ impl State {
 				|| bytes + post.bytes() + self.permissions.bytes() > model::account::MAX_BYTES
 				|| self.channels.try_reserve_exact(1).is_err()
 			{
-				self.posting.error = Some("Post exceeds the navigation budget");
+				self.posting.error = Some("A publicação excede o limite de navegação");
 				return;
 			}
 			self.channels.push(post.clone());
@@ -884,7 +884,7 @@ mod tests {
 		assert!(state.channel(Id(21)) == Some(&original));
 		assert_eq!(
 			state.posts.error,
-			Some("Posts exceed the navigation budget")
+			Some("As publicações excedem o limite de navegação")
 		);
 		assert!(!state.posts.more && !state.posts.loading);
 		assert!(state.navigation_bytes() + state.permissions.bytes() <= model::account::MAX_BYTES);
@@ -940,7 +940,7 @@ mod tests {
 			state.apply_forum_posts(Id(20), request, Ok(foreign));
 			assert_eq!(
 				state.posts.error,
-				Some("The service returned unexpected posts")
+				Some("O serviço retornou publicações inesperadas")
 			);
 			assert!(state.channels.iter().all(|c| c.id != Id(31)));
 			// A failure surfaces once and only a retry clears it.

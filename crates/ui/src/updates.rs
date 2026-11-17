@@ -39,7 +39,7 @@ impl Default for Updates {
 		Self {
 			auto_update: true,
 			nightly: false,
-			status: "Updates have not been checked yet.".into(),
+			status: "Ainda não foi feita nenhuma busca por atualizações.".into(),
 			busy: false,
 			available: false,
 			ready: false,

@@ -223,7 +223,7 @@ fn candidates(state: &State, query: &str) -> Vec<Candidate> {
 				target: Target::Friend(user.id),
 				kind: Kind::Direct,
 				name: bounded(state.user_display_name(user)),
-				scope: bounded(state.friend_username(user.id).unwrap_or("Friend")),
+				scope: bounded(state.friend_username(user.id).unwrap_or("Amigo")),
 				current: false,
 				user: Some(user.clone()),
 			});

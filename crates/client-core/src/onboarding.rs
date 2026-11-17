@@ -291,7 +291,7 @@ impl State {
 		match event {
 			Event::Gates { snapshot, gates } => {
 				if gates.len() > crate::MAX_NAV {
-					return Err("Onboarding gate batch exceeds capacity");
+					return Err("O lote de etapas de integração excede a capacidade");
 				}
 				if snapshot {
 					self.onboarding.gates.clear();
@@ -309,7 +309,7 @@ impl State {
 					}
 				}
 				if self.onboarding.gates.len() > crate::MAX_NAV {
-					return Err("Onboarding gates exceed capacity");
+					return Err("As etapas de integração excedem a capacidade");
 				}
 				self.reconcile_onboarding();
 			}
@@ -348,7 +348,7 @@ impl State {
 						}
 						flow.form = Some(form);
 					}
-					Ok(_) => flow.error = Some("Server onboarding response was invalid"),
+					Ok(_) => flow.error = Some("A resposta de integração do servidor era inválida"),
 					Err(failure) => {
 						if failure.ends_session() {
 							self.fail(failure);

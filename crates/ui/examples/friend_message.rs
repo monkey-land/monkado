@@ -179,7 +179,7 @@ fn main() {
 			assert_eq!(state.selected, None);
 			assert!(state.channel(dm.id).is_none());
 			assert!(
-				state.user_action_status().is_some() || state.status != "Direct message opened"
+				state.user_action_status().is_some() || state.status != "Mensagem direta aberta"
 			);
 		} else {
 			assert_eq!(state.selected, Some(dm.id));

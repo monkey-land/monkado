@@ -753,7 +753,7 @@ impl State {
 						.is_some()
 					{
 						self.read_state.reset();
-						return Err("Duplicate channel read state");
+						return Err("Estado de leitura de canal duplicado");
 					}
 				}
 				if self.read_state.known {
@@ -843,7 +843,7 @@ impl State {
 			}
 			Event::Latest(channels) => {
 				if channels.len() > crate::MAX_NAV {
-					return Err("Channel update capacity exceeded");
+					return Err("Capacidade de atualização de canais excedida");
 				}
 				for (id, latest) in channels {
 					if let Some(index) = self.channel_index(id) {
@@ -935,10 +935,10 @@ impl State {
 								channel,
 								match failure {
 									Failure::Ambiguous => {
-										"Read status could not be confirmed · unread markers may be out of date"
+										"Não foi possível confirmar o status de leitura · os marcadores de não lidas podem estar desatualizados"
 									}
 									_ => {
-										"Read status could not sync · unread markers may be out of date"
+										"Não foi possível sincronizar o status de leitura · os marcadores de não lidas podem estar desatualizados"
 									}
 								},
 							));
@@ -1033,9 +1033,11 @@ impl State {
 						*channel,
 						match failure {
 							Failure::Ambiguous => {
-								"Read status could not be confirmed · unread markers may be out of date"
+								"Não foi possível confirmar o status de leitura · os marcadores de não lidas podem estar desatualizados"
 							}
-							_ => "Read status could not sync · unread markers may be out of date",
+							_ => {
+								"Não foi possível sincronizar o status de leitura · os marcadores de não lidas podem estar desatualizados"
+							}
 						},
 					));
 				}
@@ -1868,7 +1870,7 @@ mod navigation_tests {
 							.read_state
 							.status(Id(1))
 							.unwrap()
-							.starts_with("Read status")
+							.contains("status de leitura")
 					);
 					state
 						.apply_read_state(Event::Ack {

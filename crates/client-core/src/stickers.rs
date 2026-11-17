@@ -29,10 +29,11 @@ impl State {
 	pub(crate) fn interrupt_stickers(&mut self) {
 		if self.stickers.loading {
 			self.stickers.loading = false;
-			self.stickers.error = Some("Sticker loading interrupted; try again");
+			self.stickers.error = Some("Carregamento de figurinhas interrompido; tente novamente");
 		}
 		if self.stickers.detail_loading.take().is_some() {
-			self.stickers.detail_error = Some("Sticker loading interrupted; try again");
+			self.stickers.detail_error =
+				Some("Carregamento de figurinhas interrompido; tente novamente");
 		}
 	}
 
@@ -106,9 +107,9 @@ impl State {
 	pub fn prepare_sticker_send(&mut self, sticker: &Sticker) -> Option<Command> {
 		if !self.can_send_sticker(sticker) {
 			self.status = if self.sticker_requires_nitro(sticker) {
-				"Nitro is required to use this sticker outside its server"
+				"É preciso ter Nitro para usar esta figurinha fora do servidor dela"
 			} else {
-				"This sticker is unavailable in this conversation"
+				"Esta figurinha não está disponível nesta conversa"
 			};
 			return None;
 		}

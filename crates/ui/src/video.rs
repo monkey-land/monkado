@@ -704,7 +704,7 @@ impl VideoUi {
 				0.05,
 				true,
 				white,
-				"Video volume",
+				"Volume do vídeo",
 			);
 			controls_focused |= volume.response.has_focus();
 			if let Some(value) = volume.preview.or(volume.commit)
@@ -717,9 +717,9 @@ impl VideoUi {
 				.response
 				.on_hover_text(crate::i18n::translate("video-show-player-video-volume"));
 			let screen_label = if fullscreen {
-				"Exit fullscreen (Esc)"
+				"Sair da tela cheia (Esc)"
 			} else {
-				"Fullscreen"
+				"Tela cheia"
 			};
 			let screen_rect = slot(bar.right() - 22.0);
 			let screen = round_button(
@@ -797,7 +797,7 @@ impl VideoUi {
 							ui,
 							crate::icons::Icon::Download,
 							28.0,
-							"Download",
+							"Baixar",
 						)
 					})
 					.inner
@@ -819,7 +819,7 @@ impl VideoUi {
 						ui,
 						crate::icons::Icon::External,
 						28.0,
-						"Open original…",
+						"Abrir original…",
 					)
 					.clicked()
 				{

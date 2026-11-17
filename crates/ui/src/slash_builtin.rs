@@ -31,49 +31,49 @@ pub(super) const ALL: &[Descriptor] = &[
 	Descriptor {
 		command: Builtin::Gif,
 		name: "gif",
-		description: "Search animated GIFs.",
+		description: "Pesquise GIFs animados.",
 		usage: "/gif [search]",
 	},
 	Descriptor {
 		command: Builtin::Me,
 		name: "me",
-		description: "Display text with emphasis.",
+		description: "Exibe texto com ênfase.",
 		usage: "/me text",
 	},
 	Descriptor {
 		command: Builtin::Msg,
 		name: "msg",
-		description: "Message a user.",
+		description: "Envia uma mensagem a um usuário.",
 		usage: "/msg @user [message]",
 	},
 	Descriptor {
 		command: Builtin::Shrug,
 		name: "shrug",
-		description: "Append a shrug to your message.",
+		description: "Adiciona um dar de ombros à sua mensagem.",
 		usage: "/shrug [text]",
 	},
 	Descriptor {
 		command: Builtin::Spoiler,
 		name: "spoiler",
-		description: "Wrap text in spoiler markers.",
+		description: "Coloca o texto entre marcadores de spoiler.",
 		usage: "/spoiler text",
 	},
 	Descriptor {
 		command: Builtin::Sticker,
 		name: "sticker",
-		description: "Search your stickers.",
+		description: "Pesquise suas figurinhas.",
 		usage: "/sticker [search]",
 	},
 	Descriptor {
 		command: Builtin::Tableflip,
 		name: "tableflip",
-		description: "Append a table flip to your message.",
+		description: "Adiciona uma mesa virada à sua mensagem.",
 		usage: "/tableflip [text]",
 	},
 	Descriptor {
 		command: Builtin::Unflip,
 		name: "unflip",
-		description: "Put the table back.",
+		description: "Coloca a mesa de volta no lugar.",
 		usage: "/unflip [text]",
 	},
 ];
@@ -112,7 +112,7 @@ fn split_word(text: &str) -> (&str, &str) {
 
 impl<'a> Invocation<'a> {
 	pub fn action(self) -> Result<Action<'a>, &'static str> {
-		const TOO_LONG: &str = "The slash command result exceeds the message length limit.";
+		const TOO_LONG: &str = "O resultado do comando excede o limite de tamanho da mensagem.";
 		if self.arguments.len() > client_core::MAX_CONTENT * 4
 			|| self.arguments.chars().count() > client_core::MAX_CONTENT
 		{
@@ -121,19 +121,19 @@ impl<'a> Invocation<'a> {
 		let text = self.arguments;
 		let content = match self.command {
 			Builtin::Gif | Builtin::Sticker if text.chars().count() > 64 => {
-				return Err("Use up to 64 characters in a GIF or sticker search.");
+				return Err("Use até 64 caracteres na busca de GIF ou figurinha.");
 			}
 			Builtin::Gif => return Ok(Action::Gifs(text)),
 			Builtin::Sticker => return Ok(Action::Stickers(text)),
 			Builtin::Msg => {
 				let (recipient, text) = split_word(text);
 				if recipient.is_empty() {
-					return Err("Choose a recipient: /msg @user [message]");
+					return Err("Escolha um destinatário: /msg @usuário [mensagem]");
 				}
 				return Ok(Action::Message { recipient, text });
 			}
 			Builtin::Me | Builtin::Spoiler if text.trim().is_empty() => {
-				return Err("Add some text after the slash command.");
+				return Err("Adicione algum texto após o comando.");
 			}
 			Builtin::Me => format!("*{text}*"),
 			Builtin::Spoiler => format!("||{text}||"),
@@ -210,12 +210,14 @@ fn recipient(state: &State, channel: Id, query: &str) -> Result<Id, &'static str
 		);
 		if matches {
 			if found.is_some_and(|id| id != user.id) {
-				return Err("Several users match. Use a user mention or ID with /msg.");
+				return Err(
+					"Vários usuários correspondem. Use uma menção ou ID de usuário com /msg.",
+				);
 			}
 			found = Some(user.id);
 		}
 	}
-	found.ok_or("User not found. Use a known user's mention, ID, or exact username with /msg.")
+	found.ok_or("Usuário não encontrado. Use a menção, o ID ou o nome de usuário exato de um usuário conhecido com /msg.")
 }
 
 impl crate::MessagingUi {
@@ -236,7 +238,7 @@ impl crate::MessagingUi {
 		let source = source.clone();
 		let invocation = parse(&source).expect("recognized builtin");
 		if !invocation.command.available(state, channel) {
-			state.status = "You don't have permission to use this command in this channel.";
+			state.status = "Você não tem permissão para usar este comando neste canal.";
 			return true;
 		}
 		let action = match invocation.action() {
@@ -247,7 +249,7 @@ impl crate::MessagingUi {
 			}
 		};
 		if state.selected != Some(channel) || self.editing.is_some() || self.upload_busy {
-			state.status = "Finish editing or uploading before using a slash command.";
+			state.status = "Termine de editar ou enviar antes de usar um comando de barra.";
 			return true;
 		}
 		match action {
@@ -257,7 +259,7 @@ impl crate::MessagingUi {
 					> MAX_DRAFT_BYTES
 				{
 					state.status =
-						"Slash command exceeds the session input budget. Your draft was kept.";
+						"O comando excede o limite de entrada da sessão. Seu rascunho foi mantido.";
 					return true;
 				}
 				let original = state.drafts.insert(channel, content).expect("source draft");
@@ -285,11 +287,11 @@ impl crate::MessagingUi {
 				text,
 			} => {
 				if self.attachment.is_some() || !self.attachment_files.is_empty() {
-					state.status = "Send or remove the selected attachments before using /msg.";
+					state.status = "Envie ou remova os anexos selecionados antes de usar /msg.";
 					return true;
 				}
 				if self.slash_direct.is_some() {
-					state.status = "Wait for the previous direct message to open.";
+					state.status = "Aguarde a mensagem direta anterior abrir.";
 					return true;
 				}
 				let user = match recipient(state, channel, query) {
@@ -301,7 +303,8 @@ impl crate::MessagingUi {
 				};
 				let text = text.to_owned();
 				if state.draft_bytes() + source.capacity() + text.capacity() > MAX_DRAFT_BYTES {
-					state.status = "Clear some draft space before using /msg. Your draft was kept.";
+					state.status =
+						"Libere espaço de rascunho antes de usar /msg. Seu rascunho foi mantido.";
 					return true;
 				}
 				let pending = PendingMessage {
@@ -323,7 +326,8 @@ impl crate::MessagingUi {
 						self.stage_slash_direct(state, pending, target);
 					}
 				} else if state.friend(user).is_none() {
-					state.status = "Open a DM with this user first, or choose a friend with /msg.";
+					state.status =
+						"Abra uma DM com este usuário primeiro ou escolha um amigo com /msg.";
 				} else if let Some(command) = state.open_friend_dm(user) {
 					self.slash_direct = Some(pending);
 					commands.push(command);
@@ -368,7 +372,7 @@ impl crate::MessagingUi {
 				.is_some_and(|text| !text.is_empty())
 		{
 			return Err(
-				"This DM already has a draft. Your /msg text was kept in the original conversation.",
+				"Esta DM já tem um rascunho. Seu texto do /msg foi mantido na conversa original.",
 			);
 		}
 		if !pending.text.is_empty()
@@ -376,7 +380,9 @@ impl crate::MessagingUi {
 			&& state.drafts.len() >= 64
 			&& self.draft_restore_pending
 		{
-			return Err("Draft budget full. Clear an existing draft before using /msg.");
+			return Err(
+				"Limite de rascunhos atingido. Apague um rascunho existente antes de usar /msg.",
+			);
 		}
 		let source_bytes = state
 			.drafts
@@ -385,7 +391,7 @@ impl crate::MessagingUi {
 		if state.draft_bytes().saturating_sub(source_bytes) + pending.text.capacity()
 			> MAX_DRAFT_BYTES
 		{
-			return Err("Clear some draft space before using /msg. Your draft was kept.");
+			return Err("Libere espaço de rascunho antes de usar /msg. Seu rascunho foi mantido.");
 		}
 		Ok(())
 	}
@@ -397,7 +403,7 @@ impl crate::MessagingUi {
 			self.draft_changes.push(target);
 		}
 		self.focus_switched_composer = true;
-		state.status = "Direct message opened. Review the message, then press Enter to send.";
+		state.status = "Mensagem direta aberta. Revise a mensagem e pressione Enter para enviar.";
 	}
 }
 

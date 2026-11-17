@@ -21,7 +21,7 @@ pub(super) async fn run<A: Applications>(
 			};
 			request
 				.validate()
-				.map_err(|_| "Custom activity contains invalid fields.")?;
+				.map_err(|_| "A atividade personalizada tem campos inválidos.")?;
 			let application = request.application_id.parse::<Id>().map_err(|_| INVALID)?;
 			if session
 				.as_ref()
@@ -67,9 +67,9 @@ pub(super) async fn run<A: Applications>(
 					}),
 				},
 			};
-			activity
-				.validate()
-				.map_err(|_| "Custom activity is too large. Shorten its text or links.")?;
+			activity.validate().map_err(
+				|_| "A atividade personalizada é grande demais. Encurte o texto ou os links.",
+			)?;
 			if let Some(assets) = activity.assets.take() {
 				let session = session.as_mut().expect("custom session");
 				if session.metadata.is_none() {
@@ -80,14 +80,14 @@ pub(super) async fn run<A: Applications>(
 					|| assets.small_image.is_some() && resolved.small_image.is_none()
 				{
 					return Err(
-						"Custom activity artwork could not be resolved. Check the application ID and image keys or HTTPS URLs.",
+						"Não foi possível carregar as imagens da atividade personalizada. Confira o ID do aplicativo e as chaves de imagem ou URLs HTTPS.",
 					);
 				}
 				activity.assets = Some(resolved);
 			}
-			activity
-				.validate()
-				.map_err(|_| "Custom activity is too large. Shorten its text or links.")?;
+			activity.validate().map_err(
+				|_| "A atividade personalizada é grande demais. Encurte o texto ou os links.",
+			)?;
 			Ok(Some(activity))
 		};
 		tokio::select! {
@@ -112,7 +112,7 @@ fn timestamps(
 	now: time::OffsetDateTime,
 ) -> Result<Option<rpc::Timestamps>, &'static str> {
 	let millis = u64::try_from(now.unix_timestamp_nanos() / 1_000_000)
-		.map_err(|_| "The system clock is unavailable.")?;
+		.map_err(|_| "O relógio do sistema está indisponível.")?;
 	Ok(match timer {
 		RichPresenceTimer::None => {
 			*elapsed = None;
@@ -140,8 +140,7 @@ fn timestamps(
 }
 
 fn local_midnight(now: time::OffsetDateTime) -> Result<u64, &'static str> {
-	const ERROR: &str =
-		"Local midnight could not be determined safely. Choose an elapsed or custom timer.";
+	const ERROR: &str = "Não foi possível determinar a meia-noite local com segurança. Escolha um cronômetro de tempo decorrido ou personalizado.";
 	let offset = time::UtcOffset::local_offset_at(now).map_err(|_| ERROR)?;
 	let midnight = now.to_offset(offset).date().midnight();
 	let mut candidate = midnight.assume_offset(offset);

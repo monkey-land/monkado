@@ -10,7 +10,7 @@ use std::{
 pub(super) const MAX_CONTROL: usize = 16 * 1024 * 1024;
 const MAX_BLOCKS: usize = 262_144;
 const BUFFER: usize = 1024 * 1024;
-const INVALID: &str = "Unsupported or invalid delta metadata.";
+const INVALID: &str = "Metadados de atualização parcial inválidos ou sem suporte.";
 
 struct Control {
 	block: usize,
@@ -132,13 +132,19 @@ impl Control {
 					&& (cancel.load(Ordering::Relaxed)
 						|| started.elapsed() > Duration::from_secs(15))
 				{
-					return Err("Delta scan cancelled or exceeded its time limit.".into());
+					return Err(
+						"Análise da atualização parcial cancelada ou excedeu o tempo limite."
+							.into(),
+					);
 				}
 				let weak = ((u32::from(a) << 16) | u32::from(b)) & mask;
 				if weak_keys.contains_key(&weak) {
 					hashed += self.block as u64;
 					if hashed > 2 * MAX_DOWNLOAD {
-						return Err("Delta scan exceeded its work limit.".into());
+						return Err(
+							"Análise da atualização parcial excedeu o limite de processamento."
+								.into(),
+						);
 					}
 					let mut strong: [u8; 16] =
 						md4::Md4::digest(&buffer[position..position + self.block]).into();
@@ -156,7 +162,7 @@ impl Control {
 									|| started.elapsed() > Duration::from_secs(15))
 							{
 								return Err(
-									"Delta scan cancelled or exceeded its time limit.".into()
+									"Análise da atualização parcial cancelada ou excedeu o tempo limite.".into()
 								);
 							}
 							let start = (index * self.block) as u64;
@@ -185,7 +191,7 @@ impl Control {
 			offset += windows as u64;
 		}
 		if reused == 0 {
-			return Err("No reusable AppImage blocks.".into());
+			return Err("Nenhum bloco do AppImage pôde ser reaproveitado.".into());
 		}
 		// Coalesce nearby holes to avoid a request per block; cap requests for fragmented images.
 		let mut ranges: Vec<(u64, u64)> = Vec::new();
@@ -199,7 +205,7 @@ impl Control {
 				last.1 = end;
 			} else {
 				if ranges.len() == 128 {
-					return Err("Delta update is too fragmented.".into());
+					return Err("A atualização parcial está fragmentada demais.".into());
 				}
 				ranges.push((start, end));
 			}
@@ -265,7 +271,7 @@ pub(super) async fn download(
 		progress.store(completed, Ordering::Relaxed);
 		for (start, end) in ranges {
 			if cancel.load(Ordering::Relaxed) {
-				return Err("Update cancelled.");
+				return Err("Atualização cancelada.");
 			}
 			let response = client
 				.get(&archive.browser_download_url)
@@ -286,7 +292,7 @@ pub(super) async fn download(
 					.content_length()
 					.is_some_and(|size| size != end - start)
 			{
-				return Err("Server did not provide the requested delta range.");
+				return Err("O servidor não forneceu o trecho solicitado da atualização parcial.");
 			}
 			output
 				.seek(SeekFrom::Start(start))
@@ -333,7 +339,7 @@ fn verify(path: &Path, size: u64, expected: &[u8; 32], cancel: &AtomicBool) -> R
 	let mut remaining = size;
 	while remaining > 0 {
 		if cancel.load(Ordering::Relaxed) {
-			return Err("Update cancelled.".into());
+			return Err("Atualização cancelada.".into());
 		}
 		let bytes = remaining.min(BUFFER as u64) as usize;
 		file.read_exact(&mut buffer[..bytes]).map_err(|_| INVALID)?;
@@ -341,7 +347,7 @@ fn verify(path: &Path, size: u64, expected: &[u8; 32], cancel: &AtomicBool) -> R
 		remaining -= bytes as u64;
 	}
 	if hash.finalize().as_slice() != expected {
-		return Err("Delta checksum mismatch.".into());
+		return Err("O checksum da atualização parcial não confere.".into());
 	}
 	Ok(())
 }
@@ -358,7 +364,8 @@ pub(super) fn debug_check() -> Result<(), String> {
 		] {
 		return Err("MD4 compatibility failed.".into());
 	}
-	let directory = std::env::temp_dir().join(format!("monkado-delta-debug-{}", std::process::id()));
+	let directory =
+		std::env::temp_dir().join(format!("monkado-delta-debug-{}", std::process::id()));
 	std::fs::create_dir(&directory).map_err(|e| e.to_string())?;
 	let result = (|| {
 		let mut random = 42_u32;

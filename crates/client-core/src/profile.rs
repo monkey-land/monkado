@@ -180,13 +180,14 @@ impl State {
 	) -> Option<Command> {
 		if self.badge_editor.saving || !settings.valid() || self.user.is_none() {
 			if !settings.valid() {
-				self.badge_editor.fail("Badge settings are invalid");
+				self.badge_editor
+					.fail("As configurações de insígnias são inválidas");
 			}
 			return None;
 		}
 		if !self.demo && (self.auth != AuthState::Authenticated || !self.gateway_connected) {
 			self.badge_editor
-				.fail("Badge settings need a connected session");
+				.fail("As configurações de insígnias precisam de uma sessão conectada");
 			return None;
 		}
 		let own = self.user.as_ref().map(|user| user.id)?;
@@ -207,7 +208,7 @@ impl State {
 			.is_some_and(|catalog| catalog.limited)
 		{
 			self.badge_editor
-				.fail("Reload your profile before editing an incomplete badge catalog");
+				.fail("Recarregue seu perfil antes de editar um catálogo de insígnias incompleto");
 			return None;
 		}
 		self.badge_editor.request = self.badge_editor.request.wrapping_add(1);
@@ -286,11 +287,11 @@ impl State {
 			.map(|user| user.id)
 			.filter(|id| id.0 != 0)
 		else {
-			self.own_profile.error = Some("Sign in before editing your profile");
+			self.own_profile.error = Some("Entre antes de editar seu perfil");
 			return None;
 		};
 		if !self.demo && (self.auth != AuthState::Authenticated || !self.gateway_connected) {
-			self.own_profile.error = Some("Reconnect to load your profile");
+			self.own_profile.error = Some("Reconecte para carregar seu perfil");
 			return None;
 		}
 		let data = if self.own_profile.user == Some(user)
@@ -317,7 +318,8 @@ impl State {
 			return None;
 		}
 		if !changes.valid() {
-			self.own_profile.error = Some("Profile changes are invalid or exceed safe limits");
+			self.own_profile.error =
+				Some("As alterações do perfil são inválidas ou excedem os limites seguros");
 			return None;
 		}
 		let user = self.user.as_ref()?.id;
@@ -346,17 +348,17 @@ impl State {
 			self.badge_editor.saving = false;
 			self.badge_editor.request = self.badge_editor.request.wrapping_add(1);
 			self.badge_editor
-				.fail("Save interrupted; changes may have applied. Reopen the profile to check");
+				.fail("Salvamento interrompido; as alterações podem ter sido aplicadas. Reabra o perfil para conferir");
 		}
 	}
 	pub(crate) fn interrupt_own_profile(&mut self) {
 		if self.own_profile.loading || self.own_profile.saving || self.own_profile.data.is_some() {
 			self.own_profile.error = Some(if self.own_profile.saving {
-				"Save interrupted; changes may have applied. Reload your profile before saving again"
+				"Salvamento interrompido; as alterações podem ter sido aplicadas. Recarregue seu perfil antes de salvar de novo"
 			} else if self.own_profile.loading {
-				"Profile loading interrupted; reconnect and reload"
+				"Carregamento do perfil interrompido; reconecte e recarregue"
 			} else {
-				"Profile is no longer current; reconnect and reload before saving"
+				"O perfil está desatualizado; reconecte e recarregue antes de salvar"
 			});
 		}
 		self.own_profile.request = self.own_profile.request.wrapping_add(1);
@@ -375,7 +377,8 @@ impl State {
 		if self.own_profile_pending(user, request) {
 			self.own_profile.loading = false;
 			self.own_profile.saving = false;
-			self.own_profile.error = Some("Profile request was not queued; try again");
+			self.own_profile.error =
+				Some("A solicitação do perfil não entrou na fila; tente novamente");
 		}
 	}
 	pub(crate) fn apply_own_profile(
@@ -393,8 +396,9 @@ impl State {
 		match result {
 			Ok(data) if data.user.id == user && data.guild.is_none() && data.valid() => {
 				if !self.refresh_own_user(&data.user) {
-					self.own_profile.error =
-						Some("Profile metadata exceeds safe capacity; reload required");
+					self.own_profile.error = Some(
+						"Os metadados do perfil excedem a capacidade segura; é preciso recarregar",
+					);
 					self.own_profile.reload_required = true;
 					return;
 				}
@@ -407,18 +411,18 @@ impl State {
 				}
 				self.own_profile.error = data
 					.limited
-					.then_some("Full profile unavailable; editing is disabled");
+					.then_some("Perfil completo indisponível; a edição está desativada");
 				self.own_profile.reload_required = data.limited;
 				self.own_profile.data = Some(*data);
 			}
 			result => {
 				self.own_profile.reload_required = true;
 				self.own_profile.error = Some(if saving {
-					"Save could not be confirmed; some changes may have applied. Reload before saving again"
+					"Não foi possível confirmar o salvamento; algumas alterações podem ter sido aplicadas. Recarregue antes de salvar de novo"
 				} else if let Err(failure) = result {
 					failure.label()
 				} else {
-					"Profile response was invalid or too large"
+					"A resposta do perfil era inválida ou grande demais"
 				});
 				if let Err(failure) = result
 					&& failure.ends_session()
@@ -516,7 +520,8 @@ impl State {
 				self.cancel_history();
 				self.timeline.clear_window_preserving_deletions();
 				self.freshness = model::Freshness::Stale;
-				self.status = "Profile updated; use Reload history to refresh this conversation";
+				self.status =
+					"Perfil atualizado; use Recarregar histórico para atualizar esta conversa";
 				break;
 			}
 		}
@@ -554,7 +559,7 @@ impl State {
 			request: self.profile_request,
 			loading: allowed,
 			error: (!allowed)
-				.then_some("Profile unavailable while disconnected or outside this session"),
+				.then_some("Perfil indisponível enquanto desconectado ou fora desta sessão"),
 			data: None,
 		});
 		// A card whose profile is already being preloaded waits for that response instead.
@@ -685,12 +690,12 @@ impl State {
 				self.profile_cache.insert(user, guild, data, Instant::now());
 			}
 			Ok(_) => {
-				view.error = Some("Profile response was invalid or too large");
+				view.error = Some("A resposta do perfil era inválida ou grande demais");
 				view.data = None;
 			}
 			Err(failure) => {
 				view.error = Some(if failure == Failure::Capacity {
-					"Profile request or response exceeded safe capacity"
+					"A solicitação ou resposta do perfil excedeu a capacidade segura"
 				} else {
 					failure.label()
 				});
@@ -1246,7 +1251,7 @@ mod tests {
 			assert!(state.timeline.is_empty() && state.timeline.is_deleted(Id(2)));
 			assert!(!state.history_pending && state.request != request);
 			assert_eq!(state.freshness, model::Freshness::Stale);
-			assert!(state.status.contains("Reload history"));
+			assert!(state.status.contains("Recarregar histórico"));
 		}
 		{
 			let mut state = own_state();

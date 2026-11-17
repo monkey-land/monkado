@@ -75,7 +75,7 @@ impl State {
 		self.guild_creation.pending = false;
 		self.guild_creation.result = Some(result);
 		self.status = match result {
-			Ok(_) => "Server created · waiting for Discord to load it",
+			Ok(_) => "Servidor criado · aguardando o Discord carregá-lo",
 			Err(failure) => failure.label(),
 		};
 		if let Err(failure) = result

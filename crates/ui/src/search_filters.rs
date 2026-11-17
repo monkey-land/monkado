@@ -298,15 +298,15 @@ pub fn wire(query: &str, state: &State, labels: &Labels) -> Result<String, &'sta
 		let next = match key {
 			"from" | "mentions" => user_id(value, state, labels)
 				.map(|id| format!("{key}:{id}"))
-				.ok_or("Choose a user from the suggestions.")?,
+				.ok_or("Escolha um usuário das sugestões.")?,
 			"in" if guild(state).is_some() => channel_id(value, state, labels)
 				.map(|id| format!("in:{id}"))
-				.ok_or("Choose a channel from the suggestions.")?,
+				.ok_or("Escolha um canal das sugestões.")?,
 			"before" | "after" => super::date_id(value)
 				.ok()
 				.flatten()
 				.map(|id| format!("{key}_id:{id}"))
-				.ok_or("Enter dates as YYYY-MM-DD, after January 1, 2015.")?,
+				.ok_or("Insira as datas como AAAA-MM-DD, após 1º de janeiro de 2015.")?,
 			_ => token.to_owned(),
 		};
 		changed |= next != token;
@@ -754,7 +754,11 @@ impl Draft {
 					ui.visuals_mut().widgets.inactive.weak_bg_fill = colors.base;
 					ui.visuals_mut().widgets.inactive.bg_stroke =
 						egui::Stroke::new(1.0, colors.border);
-					heading(ui, "From", "Sent by any of the selected users");
+					heading(
+						ui,
+						"De",
+						"Enviada por qualquer um dos usuários selecionados",
+					);
 					user_picker(
 						ui,
 						&mut self.query,
@@ -766,11 +770,15 @@ impl Draft {
 					);
 					ui.add_space(22.0);
 					if !channels.is_empty() {
-						heading(ui, "In", "Sent in any of the selected channels");
+						heading(ui, "Em", "Enviada em qualquer um dos canais selecionados");
 						channel_picker(ui, state, &mut self.query, &mut self.in_search, &channels);
 						ui.add_space(22.0);
 					}
-					heading(ui, "Has", "Includes any of the selected types of data");
+					heading(
+						ui,
+						"Contém",
+						"Inclui qualquer um dos tipos de dados selecionados",
+					);
 					choices(
 						ui,
 						&mut self.query,
@@ -787,7 +795,11 @@ impl Draft {
 						true,
 					);
 					ui.add_space(22.0);
-					heading(ui, "Mentions", "Mentions any of the selected users");
+					heading(
+						ui,
+						"Menções",
+						"Menciona qualquer um dos usuários selecionados",
+					);
 					user_picker(
 						ui,
 						&mut self.query,
@@ -798,7 +810,7 @@ impl Draft {
 						state.demo,
 					);
 					ui.add_space(22.0);
-					heading(ui, "Date", "When the message was sent");
+					heading(ui, "Data", "Quando a mensagem foi enviada");
 					if !self.date_open {
 						if ui
 							.add_sized(
@@ -813,7 +825,7 @@ impl Draft {
 						}
 					} else {
 						for (label, date) in
-							[("After", &mut self.after), ("Before", &mut self.before)]
+							[("Depois", &mut self.after), ("Antes", &mut self.before)]
 						{
 							ui.label(label);
 							ui.add(
@@ -838,8 +850,8 @@ impl Draft {
 					ui.add_space(22.0);
 					heading(
 						ui,
-						"Author Type",
-						"Sent by any of the selected types of author",
+						"Tipo de autor",
+						"Enviada por qualquer um dos tipos de autor selecionados",
 					);
 					choices(
 						ui,
@@ -854,7 +866,7 @@ impl Draft {
 						true,
 					);
 					ui.add_space(22.0);
-					heading(ui, "Pinned", "If the message is pinned or not");
+					heading(ui, "Fixada", "Se a mensagem está fixada ou não");
 					choices(
 						ui,
 						&mut self.query,
@@ -924,11 +936,11 @@ impl Draft {
 
 	fn applied(&self) -> Result<String, &'static str> {
 		let after = super::date_id(&self.after)
-			.map_err(|_| "Enter dates as YYYY-MM-DD, after January 1, 2015.")?;
+			.map_err(|_| "Insira as datas como AAAA-MM-DD, após 1º de janeiro de 2015.")?;
 		let before = super::date_id(&self.before)
-			.map_err(|_| "Enter dates as YYYY-MM-DD, after January 1, 2015.")?;
+			.map_err(|_| "Insira as datas como AAAA-MM-DD, após 1º de janeiro de 2015.")?;
 		if after.zip(before).is_some_and(|(a, b)| a >= b) {
-			return Err("After must be earlier than Before.");
+			return Err("A data de “Depois” deve ser anterior à de “Antes”.");
 		}
 		let mut query = self
 			.query

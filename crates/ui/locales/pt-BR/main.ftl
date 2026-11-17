@@ -289,7 +289,7 @@ attachments-download-button-a-download-is-already-active = Um download já está
 # Context: download_button
 attachments-download-button-choose-where-to-save-this-file-up-to-100-mib = Escolha onde salvar este arquivo · até 100 MiB
 # Context: download_button
-attachments-download-button-download = Download
+attachments-download-button-download = Baixar
 # Context: download_button
 attachments-download-button-downloads-are-disabled-for-synthetic-attachments = Os downloads estão desativados para anexos sintéticos
 # Context: media_menu
@@ -1574,7 +1574,7 @@ keybinds-show-voice-use-voice-shortcuts-while-another-app-is-focused-when-off = 
 
 ## crates/ui/src/lib.rs
 # Context: account_card
-lib-account-card-dnd = dnd
+lib-account-card-dnd = não perturbe
 # Context: account_card
 lib-account-card-idle = parado
 # Context: account_card
@@ -4624,11 +4624,11 @@ screen-macos-system-picker-kind = Seletor de conteúdo do sistema
 
 member-in-voice = No chat de voz
 
-profiles-board = Board
-profiles-board-unavailable = This profile’s board is unavailable.
-profiles-board-empty = No games on this board yet.
-profiles-board-show-more = Show more
-profiles-board-show-less = Show less
+profiles-board = Mural
+profiles-board-unavailable = O mural deste perfil não está disponível.
+profiles-board-empty = Ainda não há jogos neste mural.
+profiles-board-show-more = Mostrar mais
+profiles-board-show-less = Mostrar menos
 profiles-activity-empty = Nenhuma atividade compartilhada.
 profiles-in-voice-server = em { $server }
 profiles-in-voice-join = Entrar
@@ -4637,7 +4637,7 @@ profiles-in-voice-failed = Dispense a chamada que falhou e entre novamente.
 profiles-in-voice-unavailable = Não é possível entrar neste canal de voz agora.
 profiles-mutuals-empty = Nothing to show here.
 
-reading-double-click-reaction = Double-click reaction
+reading-double-click-reaction = Reação com clique duplo
 
 ## crates/platform/src/app_menu.rs
 # Context: macos_menu_bar

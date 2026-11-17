@@ -65,7 +65,7 @@ fn main() {
 	state.demo = false; // Synthetic state only; no connection, runtime or devices exist here.
 	assert!(state.can_call(channel) && state.can_camera(channel) && state.can_stream(channel));
 	for width in [1400.0, 800.0] {
-		render(&mut state, width, &["Start voice call"]);
+		render(&mut state, width, &["Iniciar chamada de voz"]);
 	}
 	assert!(state.voice.active.is_none());
 	assert!(matches!(
@@ -91,7 +91,7 @@ fn main() {
 	state.apply_voice(call(peers.clone()));
 	assert!(state.voice.has_dm_call(channel) && state.voice.active.is_none());
 	assert_eq!(state.voice.incoming, Some(channel));
-	render(&mut state, 800.0, &["Answer", "Decline"]);
+	render(&mut state, 800.0, &["Atender", "Recusar"]);
 	assert!(matches!(
 		state.decline_call(),
 		Some(Command::Voice(voice::Command::Decline { .. }))
@@ -168,17 +168,17 @@ fn main() {
 			&mut state,
 			width,
 			&[
-				"Mute",
-				"Deafen",
-				"Turn on camera",
-				"Share your screen",
+				"Silenciar",
+				"Ensurdecer",
+				"Ligar câmera",
+				"Compartilhar sua tela",
 				"Disconnect",
 			],
 		);
 	}
 	state.leave_call().unwrap();
 	assert!(state.voice.has_dm_call(channel));
-	render(&mut state, 800.0, &["Join call"]);
+	render(&mut state, 800.0, &["Entrar na chamada"]);
 	state.start_call(channel, false).unwrap();
 	assert_eq!(state.voice.active.as_ref().unwrap().participants.len(), 10);
 	state.apply(Envelope {

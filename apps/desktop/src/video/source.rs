@@ -13,8 +13,9 @@ use tokio::runtime::Handle;
 const MAX_BYTES: usize = 100 * 1024 * 1024;
 const CHUNK: usize = 256 * 1024;
 const CACHE_CHUNKS: usize = 8;
-const INVALID: &str = "Video download failed or changed; reload the conversation";
-const UNSUPPORTED: &str = "Video server does not support buffering; download to play externally";
+const INVALID: &str = "O download do vídeo falhou ou mudou; recarregue a conversa";
+const UNSUPPORTED: &str =
+	"O servidor do vídeo não permite carregamento parcial; baixe para reproduzir fora do app";
 
 pub(super) fn source(
 	url: Option<url::Url>,
@@ -23,7 +24,7 @@ pub(super) fn source(
 	runtime: Handle,
 ) -> Result<Box<dyn platform::video::ReadSeek>, &'static str> {
 	if expected == 0 || expected > MAX_BYTES {
-		return Err("Video preview limit: 100 MiB");
+		return Err("Limite da prévia de vídeo: 100 MiB");
 	}
 	let (input, len) = if let Some(url) = url {
 		// The caller has validated the service URL; never let URL userinfo add credentials.

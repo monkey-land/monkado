@@ -327,7 +327,8 @@ const MAX_DISK: u64 = 1024 * 1024 * 1024;
 const MAX_FILES: usize = 4096;
 #[cfg(test)]
 const RETENTION: Duration = Duration::from_secs(90 * 24 * 60 * 60);
-const CACHE_ERROR: &str = "Images could not be cached; they remain available in memory";
+const CACHE_ERROR: &str =
+	"Não foi possível guardar as imagens em cache; elas continuam disponíveis na memória";
 pub type Cleanup = mpsc::Receiver<Result<(), &'static str>>;
 
 pub struct AvatarResult {
@@ -383,7 +384,7 @@ impl ResultSender {
 			// A future decoder change must not wait forever for an impossible reservation.
 			result.image = None;
 			result.frames = Vec::new();
-			result.error = Some("Decoded image exceeds the memory limit");
+			result.error = Some("A imagem decodificada excede o limite de memória");
 		}
 		let bytes = result.bytes();
 		if bytes > RESULT_BYTES {
@@ -510,7 +511,7 @@ impl AvatarWorker {
 				let _ = done.send(result);
 				ctx.request_repaint();
 			})
-			.map_err(|_| "Could not start image worker")?;
+			.map_err(|_| "Não foi possível iniciar o processador de imagens")?;
 		Ok(Self {
 			requests,
 			results,
@@ -580,11 +581,13 @@ impl Drop for AvatarWorker {
 }
 
 fn clear_directory(root: Option<&Path>) -> Result<(), &'static str> {
-	let root = root.ok_or("Could not locate cached images for removal")?;
+	let root = root.ok_or("Não foi possível localizar as imagens em cache para remover")?;
 	match fs::remove_dir_all(root) {
 		Ok(()) => Ok(()),
 		Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-		Err(_) => Err("Could not remove cached images; files may remain on disk"),
+		Err(_) => Err(
+			"Não foi possível remover as imagens em cache; os arquivos podem continuar no disco",
+		),
 	}
 }
 

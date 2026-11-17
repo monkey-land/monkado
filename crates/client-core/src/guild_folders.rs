@@ -34,7 +34,8 @@ impl State {
 			folder.guild_ids.shrink_to_fit();
 		}
 		if !settings.valid() {
-			self.folders_error = Some("Server folder layout exceeds supported limits");
+			self.folders_error =
+				Some("O layout das pastas de servidores excede os limites suportados");
 			return None;
 		}
 		self.folders_error = None;
@@ -61,7 +62,10 @@ impl State {
 				self.guild_folders = Some(settings);
 				self.folders_error = None;
 			}
-			Ok(_) => self.folders_error = Some("Server folder response exceeds supported limits"),
+			Ok(_) => {
+				self.folders_error =
+					Some("A resposta das pastas de servidores excede os limites suportados")
+			}
 			Err(failure) => {
 				self.folders_error = Some(failure.label());
 				if failure.ends_session() && failure != Failure::Capacity {

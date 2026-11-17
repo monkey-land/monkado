@@ -804,7 +804,7 @@ fn activity_row(
 fn activity_timer(start: Option<u64>, end: Option<u64>, now: u64) -> Option<String> {
 	match end {
 		Some(end) => {
-			activity_elapsed(0, end.saturating_sub(now)).map(|time| format!("{time} remaining"))
+			activity_elapsed(0, end.saturating_sub(now)).map(|time| format!("{time} restantes"))
 		}
 		None => start.and_then(|start| activity_elapsed(start, now)),
 	}

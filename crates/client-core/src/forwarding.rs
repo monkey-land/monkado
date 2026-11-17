@@ -29,7 +29,7 @@ impl State {
 			|| self.draft_bytes() + count * (note.len() + 128 + size_of::<Pending>())
 				> crate::MAX_DRAFT_BYTES
 		{
-			self.status = "Forward unavailable: check destinations, connection and message limits";
+			self.status = "Encaminhamento indisponível: verifique os destinos, a conexão e os limites de mensagens";
 			return Vec::new();
 		}
 		let source = self.timeline.get(message).unwrap().channel;
@@ -48,7 +48,7 @@ impl State {
 				self.pending.push(Pending {
 					sticker: None,
 					channel,
-					content: content.unwrap_or("Forwarded message").into(),
+					content: content.unwrap_or("Mensagem encaminhada").into(),
 					attachments: Vec::new(),
 					nonce: nonce.clone(),
 					delivery: Delivery::Sending,

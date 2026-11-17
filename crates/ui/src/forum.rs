@@ -2104,12 +2104,18 @@ fn ago(id: Id, now: time::OffsetDateTime) -> String {
 			.expect("snowflake timestamp is in range");
 	let seconds = (now - created).whole_seconds().max(0);
 	match seconds {
-		0..60 => "just now".to_owned(),
-		60..3_600 => format!("{}m ago", seconds / 60),
-		3_600..86_400 => format!("{}h ago", seconds / 3_600),
-		86_400..2_592_000 => format!("{}d ago", seconds / 86_400),
-		2_592_000..31_536_000 => format!("{}mo ago", seconds / 2_592_000),
-		_ => format!("{}y ago", seconds / 31_536_000),
+		0..60 => "agora mesmo".to_owned(),
+		60..3_600 => format!("há {} min", seconds / 60),
+		3_600..86_400 => format!("há {} h", seconds / 3_600),
+		86_400..2_592_000 => format!("há {} d", seconds / 86_400),
+		2_592_000..31_536_000 => match seconds / 2_592_000 {
+			1 => "há 1 mês".to_owned(),
+			months => format!("há {months} meses"),
+		},
+		_ => match seconds / 31_536_000 {
+			1 => "há 1 ano".to_owned(),
+			years => format!("há {years} anos"),
+		},
 	}
 }
 

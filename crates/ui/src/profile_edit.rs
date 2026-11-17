@@ -111,7 +111,7 @@ impl Editor {
 					|| image.resolution()[0] > 512
 					|| image.resolution()[1] > 512
 				{
-					return Err("That picture is too large; choose a simpler image");
+					return Err("Essa imagem é grande demais; escolha uma imagem mais simples");
 				}
 				let Some(draft) = self.draft.as_mut() else {
 					return Ok(());

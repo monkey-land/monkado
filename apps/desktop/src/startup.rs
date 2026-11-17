@@ -37,9 +37,9 @@ impl Startup {
 		self.pending = Some(receive);
 		view.startup_busy = true;
 		view.startup_status = if setting.is_some() {
-			"Saving startup settings…"
+			"Salvando configurações de inicialização…"
 		} else {
-			"Loading startup settings…"
+			"Carregando configurações de inicialização…"
 		};
 		let ctx = ctx.clone();
 		runtime.spawn_blocking(move || {
@@ -57,9 +57,9 @@ impl Startup {
 		let result = match pending.try_recv() {
 			Ok(result) => result,
 			Err(TryRecvError::Empty) => return,
-			Err(TryRecvError::Disconnected) => {
-				Err("Startup settings worker stopped. Toggle the setting to retry.")
-			}
+			Err(TryRecvError::Disconnected) => Err(
+				"O salvamento das configurações de inicialização parou. Alterne a opção para tentar de novo.",
+			),
 		};
 		self.pending = None;
 		view.startup_busy = false;

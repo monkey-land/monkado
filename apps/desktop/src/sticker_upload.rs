@@ -35,9 +35,9 @@ impl StickerUpload {
 		parent: Arc<winit::window::Window>,
 	) -> Result<(), &'static str> {
 		if self.choosing.is_some() {
-			return Err("Close the previous sticker picker first");
+			return Err("Feche primeiro o seletor de figurinhas anterior");
 		}
-		let dialog = platform::save::icon_source(parent, "Choose sticker artwork");
+		let dialog = platform::save::icon_source(parent, "Escolher imagem da figurinha");
 		let (send, result) = mpsc::sync_channel(1);
 		let cancelled = Arc::new(AtomicBool::new(false));
 		let flag = cancelled.clone();
@@ -48,7 +48,7 @@ impl StickerUpload {
 					let flag = flag.clone();
 					tokio::task::spawn_blocking(move || read(path, &flag).map(Some))
 						.await
-						.unwrap_or(Err("Sticker preparation interrupted; choose it again"))
+						.unwrap_or(Err("Preparação da figurinha interrompida; escolha de novo"))
 				}
 				_ => Ok(None),
 			};
@@ -86,7 +86,7 @@ impl StickerUpload {
 			Ok(result) => result,
 			Err(mpsc::TryRecvError::Empty) => return None,
 			Err(mpsc::TryRecvError::Disconnected) => {
-				Err("Sticker preparation interrupted; choose it again")
+				Err("Preparação da figurinha interrompida; escolha de novo")
 			}
 		};
 		let job = self.choosing.take()?;
@@ -103,28 +103,28 @@ impl Drop for StickerUpload {
 fn read(path: PathBuf, cancelled: &AtomicBool) -> Result<Prepared, &'static str> {
 	const MAX_INPUT: u64 = 8 * 1024 * 1024;
 	if !path.is_absolute() || path.as_os_str().as_encoded_bytes().len() > 4096 {
-		return Err("Choose a local image with a supported path");
+		return Err("Escolha uma imagem local com um caminho compatível");
 	}
 	let metadata = std::fs::symlink_metadata(&path)
-		.map_err(|_| "Could not open the chosen sticker artwork")?;
+		.map_err(|_| "Não foi possível abrir a imagem da figurinha escolhida")?;
 	if !metadata.is_file()
 		|| metadata.file_type().is_symlink()
 		|| metadata.len() == 0
 		|| metadata.len() > MAX_INPUT
 	{
-		return Err("Choose a regular PNG, JPEG or WebP image up to 8 MB");
+		return Err("Escolha uma imagem PNG, JPEG ou WebP comum de até 8 MB");
 	}
 	let mut input = Vec::with_capacity(metadata.len() as usize);
 	std::fs::File::open(&path)
-		.map_err(|_| "Could not open the chosen sticker artwork")?
+		.map_err(|_| "Não foi possível abrir a imagem da figurinha escolhida")?
 		.take(MAX_INPUT + 1)
 		.read_to_end(&mut input)
-		.map_err(|_| "Could not read the chosen sticker artwork")?;
+		.map_err(|_| "Não foi possível ler a imagem da figurinha escolhida")?;
 	if cancelled.load(Ordering::Acquire) {
-		return Err("Sticker preparation cancelled");
+		return Err("Preparação da figurinha cancelada");
 	}
 	let (file, preview) = crate::group_icon::decode_png(&input, 320, true, 512 * 1024)
-		.map_err(|_| "Use a static PNG, JPEG or WebP image that can fit within 512 KB")?;
+		.map_err(|_| "Use uma imagem PNG, JPEG ou WebP estática que caiba em 512 KB")?;
 	let mut name: String = path
 		.file_stem()
 		.and_then(|name| name.to_str())

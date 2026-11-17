@@ -119,7 +119,7 @@ impl CaptchaView {
 		};
 		let view = builder
 			.build_as_child(parent.as_ref())
-			.map_err(|_| "The native verification window could not open.")?;
+			.map_err(|_| "Não foi possível abrir a janela de verificação nativa.")?;
 		#[cfg(target_os = "macos")]
 		load_page(&view, &html)?;
 		Ok(Self {
@@ -155,7 +155,7 @@ fn load_page(view: &WebView, html: &str) -> Result<(), &'static str> {
 	use objc2_foundation::{NSString, NSURL};
 	use wry::WebViewExtMacOS;
 	let base = NSURL::URLWithString(&NSString::from_str(PAGE))
-		.ok_or("The native verification window could not open.")?;
+		.ok_or("Não foi possível abrir a janela de verificação nativa.")?;
 	// SAFETY: runs on the main thread that built the view, with retained Foundation objects.
 	unsafe {
 		view.webview()
@@ -173,7 +173,7 @@ pub(super) fn page(
 	dark: bool,
 ) -> Result<(String, String, String), &'static str> {
 	let mut random = [0_u8; 32];
-	getrandom::fill(&mut random).map_err(|_| "Verification could not start.")?;
+	getrandom::fill(&mut random).map_err(|_| "Não foi possível iniciar a verificação.")?;
 	let capability = random
 		.iter()
 		.map(|byte| format!("{byte:02x}"))
@@ -198,9 +198,11 @@ pub(super) fn parse_result(body: &str, capability: &str) -> Option<Result<Soluti
 		Ok(Solution::new(value.to_owned())?)
 	} else {
 		Err(match payload {
-			"cancelled:" => "Verification cancelled.",
-			"expired:" => "Verification expired. Please try again.",
-			"error:" => "Verification could not load. Try again or open the invite in Discord.",
+			"cancelled:" => "Verificação cancelada.",
+			"expired:" => "A verificação expirou. Tente novamente.",
+			"error:" => {
+				"Não foi possível carregar a verificação. Tente novamente ou abra o convite no Discord."
+			}
 			_ => return None,
 		})
 	})

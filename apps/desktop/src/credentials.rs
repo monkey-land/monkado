@@ -215,14 +215,14 @@ fn cleanup_accounts(
 
 pub fn loaded_status(result: &Result<Option<SessionSecret>, CredentialError>) -> &'static str {
 	match result {
-		Ok(Some(_)) => "Saved login found; connecting to Discord",
+		Ok(Some(_)) => "Login salvo encontrado; conectando ao Discord",
 		Ok(None) | Err(CredentialError::NoStore) => {
-			"No saved login found. Sign in with Discord to save one."
+			"Nenhum login salvo encontrado. Entre com o Discord para salvar um."
 		}
-		Err(CredentialError::Invalid) => "Saved login is invalid. Sign in with Discord again.",
-		Err(CredentialError::Unavailable) => "Saved login unavailable; sign in with Discord.",
+		Err(CredentialError::Invalid) => "O login salvo é inválido. Entre com o Discord de novo.",
+		Err(CredentialError::Unavailable) => "Login salvo indisponível; entre com o Discord.",
 		Err(CredentialError::TimedOut) => {
-			"Saved-login check timed out. Sign in with Discord; the credential store did not respond."
+			"A verificação do login salvo demorou demais. Entre com o Discord; o armazenamento de credenciais não respondeu."
 		}
 	}
 }
@@ -252,7 +252,7 @@ mod tests {
 		let (_, Outcome::Loaded(result)) = store.poll(now, None).unwrap() else {
 			panic!()
 		};
-		assert!(loaded_status(&result).contains("No saved login"));
+		assert!(loaded_status(&result).contains("Nenhum login salvo"));
 		assert!(store.remaining(now).is_none());
 		assert!(store.load(2, now));
 		let timed_out = request(&commands);
@@ -297,8 +297,8 @@ mod tests {
 				.is_ok()
 		);
 		assert!(store.poll(now, None).is_none());
-		assert!(loaded_status(&Ok(Some(synthetic()))).contains("found"));
-		assert!(loaded_status(&Err(CredentialError::Invalid)).contains("invalid"));
+		assert!(loaded_status(&Ok(Some(synthetic()))).contains("encontrado"));
+		assert!(loaded_status(&Err(CredentialError::Invalid)).contains("inválido"));
 		assert!(store.load(4, now));
 		drop(events);
 		assert!(matches!(

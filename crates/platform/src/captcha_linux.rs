@@ -63,7 +63,7 @@ impl CaptchaView {
 		proxy: Option<&Proxy>,
 		wake: impl Fn() + Send + Sync + 'static,
 	) -> Result<Self, &'static str> {
-		gtk4::init().map_err(|_| "Linux verification window unavailable.")?;
+		gtk4::init().map_err(|_| "Janela de verificação do Linux indisponível.")?;
 		crate::ensure_webkit_locale()?;
 		crate::ensure_gtk_application_id();
 		let (capability, captcha_script, html) = page(challenge, dark)?;
@@ -190,7 +190,7 @@ impl CaptchaView {
 		view.connect_print(|_, _| true);
 		view.connect_show_notification(|_, _| true);
 		let window = gtk4::Window::builder()
-			.title("Verification · Monkado")
+			.title("Verificação · Monkado")
 			.default_width(500)
 			.default_height(560)
 			.child(&view)

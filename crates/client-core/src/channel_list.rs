@@ -328,11 +328,14 @@ impl State {
 	}
 	pub fn change_channel_list(&mut self, guild: Id, change: Change) -> Option<Command> {
 		if !self.can_change_channel_list(guild) {
-			self.channel_list.status = Some((guild, "Channel list settings are not loaded yet"));
+			self.channel_list.status = Some((
+				guild,
+				"As configurações da lista de canais ainda não foram carregadas",
+			));
 			return None;
 		}
 		let Some(write) = self.plan_channel_list(guild, change) else {
-			self.channel_list.status = Some((guild, "Channel list unchanged"));
+			self.channel_list.status = Some((guild, "Lista de canais inalterada"));
 			return None;
 		};
 		let setting = self.notification_preferences.setting(Some(guild))?;
@@ -396,7 +399,7 @@ impl State {
 		if let Some(write) = self.channel_list.take() {
 			self.channel_list.status = Some((
 				write.guild,
-				"Outcome unknown; check Discord before retrying",
+				"Resultado desconhecido; verifique o Discord antes de tentar de novo",
 			));
 		}
 	}
@@ -426,7 +429,7 @@ impl State {
 				if !observed {
 					self.confirm_channel_list(&sent)?;
 				}
-				"Channel list updated"
+				"Lista de canais atualizada"
 			}
 		};
 		self.channel_list.status = Some((guild, status));

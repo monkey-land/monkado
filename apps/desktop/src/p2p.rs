@@ -184,11 +184,14 @@ impl P2p {
 		}
 		self.upload_streams(ui, ctx);
 		if let Some(primary) = primary.filter(|user| watching.contains(&user.0)) {
-			let shown = ui.voice_stream_views.iter().any(|(user, _)| *user == primary);
+			let shown = ui
+				.voice_stream_views
+				.iter()
+				.any(|(user, _)| *user == primary);
 			ui.voice_stream_status = if shown {
-				"Watching the stream"
+				"Assistindo à transmissão"
 			} else {
-				"Connecting to the stream…"
+				"Conectando à transmissão…"
 			};
 		}
 		self.live_times(state, ui, me);

@@ -4,13 +4,13 @@ pub const fn supported() -> bool {
 }
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub fn set(_window: &winit::window::Window, _count: u32) -> Result<(), &'static str> {
-	Err("App icon badges are currently available on Windows and macOS.")
+	Err("Os selos no ícone do app estão disponíveis apenas no Windows e no macOS.")
 }
 #[cfg(target_os = "macos")]
 pub fn set(_window: &winit::window::Window, count: u32) -> Result<(), &'static str> {
 	use objc2_app_kit::NSApplication;
 	use objc2_foundation::{MainThreadMarker, NSString};
-	let mtm = MainThreadMarker::new().ok_or("The Dock badge requires the main thread.")?;
+	let mtm = MainThreadMarker::new().ok_or("O selo do Dock exige a thread principal.")?;
 	let label = match count {
 		0 => None,
 		1..=99 => Some(NSString::from_str(&count.to_string())),
@@ -39,7 +39,7 @@ pub fn set(window: &winit::window::Window, count: u32) -> Result<(), &'static st
 		core::w,
 	};
 	use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-	const ERROR: &str = "Taskbar badge unavailable. Check your Windows taskbar settings.";
+	const ERROR: &str = "Selo da barra de tarefas indisponível. Verifique as configurações da barra de tarefas do Windows.";
 	let RawWindowHandle::Win32(handle) = window.window_handle().map_err(|_| ERROR)?.as_raw() else {
 		return Err(ERROR);
 	};
@@ -60,7 +60,11 @@ pub fn set(window: &winit::window::Window, count: u32) -> Result<(), &'static st
 		};
 		// SAFETY: SetOverlayIcon copies the icon; its owned handle is destroyed immediately after.
 		let result = unsafe {
-			taskbar.SetOverlayIcon(HWND(handle.hwnd.get() as *mut _), icon, w!("Direct pings"))
+			taskbar.SetOverlayIcon(
+				HWND(handle.hwnd.get() as *mut _),
+				icon,
+				w!("Menções diretas"),
+			)
 		}
 		.map_err(|_| ERROR);
 		if count > 0 {

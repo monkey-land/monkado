@@ -137,7 +137,7 @@ impl ThemeEditor {
 				manifest: Manifest {
 					api_version: extensions::API_VERSION,
 					id: identity(),
-					name: "My theme".into(),
+					name: "Meu tema".into(),
 					version: "1.0.0".into(),
 					author: String::new(),
 					license: "CC0-1.0".into(),
@@ -191,7 +191,7 @@ impl ThemeEditor {
 	) -> Self {
 		package.manifest.id = identity();
 		package.manifest.name = format!(
-			"{} copy",
+			"{} (cópia)",
 			package.manifest.name.chars().take(30).collect::<String>()
 		);
 		let mut editor = Self::edit(package, image, cover);
@@ -260,7 +260,7 @@ impl ThemeEditor {
 		if manifest.name.trim().is_empty() || manifest.author.trim().is_empty() {
 			return (
 				EditorTab::Basics,
-				"Add a theme name and creator name before saving.",
+				"Adicione o nome do tema e do criador antes de salvar.",
 				None,
 				false,
 			);
@@ -268,7 +268,7 @@ impl ThemeEditor {
 		if manifest.license.trim().is_empty() || manifest.version.trim().is_empty() {
 			return (
 				EditorTab::Advanced,
-				"Add a license and version before saving.",
+				"Adicione uma licença e uma versão antes de salvar.",
 				None,
 				false,
 			);
@@ -276,7 +276,7 @@ impl ThemeEditor {
 		if manifest.validate().is_err() {
 			return (
 				EditorTab::Advanced,
-				"Check the license, version, and optional source URL.",
+				"Verifique a licença, a versão e a URL de origem opcional.",
 				None,
 				false,
 			);
@@ -296,7 +296,7 @@ impl ThemeEditor {
 						} else {
 							EditorTab::Advanced
 						},
-						"Correct the highlighted color value.",
+						"Corrija o valor de cor destacado.",
 						Some(dark),
 						!basic,
 					);
@@ -318,7 +318,7 @@ impl ThemeEditor {
 				}) {
 					return (
 						EditorTab::Background,
-						"Keep image and section opacity between 0% and 100%.",
+						"Mantenha a opacidade da imagem e das seções entre 0% e 100%.",
 						Some(dark),
 						false,
 					);
@@ -330,7 +330,7 @@ impl ThemeEditor {
 				}) {
 					return (
 						EditorTab::Advanced,
-						"Correct the highlighted gradient value.",
+						"Corrija o valor de gradiente destacado.",
 						Some(dark),
 						false,
 					);
@@ -339,7 +339,7 @@ impl ThemeEditor {
 		}
 		(
 			EditorTab::Advanced,
-			"Check the remaining theme settings before saving.",
+			"Verifique as demais configurações do tema antes de salvar.",
 			None,
 			false,
 		)
@@ -485,7 +485,7 @@ impl ThemeEditor {
 							"theme-editor-show-theme-name",
 							&mut manifest.name,
 							32,
-							"My theme",
+							"Meu tema",
 						);
 						if show_errors && manifest.name.trim().is_empty() {
 							design::notice(
@@ -499,7 +499,7 @@ impl ThemeEditor {
 							"theme-editor-show-created-by",
 							&mut manifest.author,
 							32,
-							"Your name",
+							"Seu nome",
 						);
 						if show_errors && manifest.author.trim().is_empty() {
 							design::notice(
@@ -576,7 +576,7 @@ impl ThemeEditor {
 								.changed();
 							}
 						}
-						changed |= row(ui, "Image fit", |ui| {
+						changed |= row(ui, "Ajuste da imagem", |ui| {
 							let mut changed = false;
 							crate::design::Select::from_id_salt("image-fit")
 								.selected_text(crate::i18n::translate_if_key(
@@ -754,9 +754,9 @@ impl ThemeEditor {
 										changed |= row(
 											ui,
 											if index == 0 {
-												"Start color"
+												"Cor inicial"
 											} else {
-												"End color"
+												"Cor final"
 											},
 											|ui| color_input(ui, stop),
 										);
@@ -860,32 +860,38 @@ impl ThemeEditor {
 								);
 								let style = &mut theme.style;
 								for (label, value, default, min, max) in [
-									("Body text", &mut style.body_size, 15, 10, 28),
-									("Headings", &mut style.heading_size, 20, 12, 40),
-									("Buttons", &mut style.button_size, 14, 10, 28),
-									("Icons", &mut style.icon_size, 20, 16, 24),
-									("Small text", &mut style.small_size, 12, 10, 28),
-									("Code", &mut style.monospace_size, 14, 10, 28),
-									("Control height", &mut style.control_height, 32, 24, 56),
+									("Texto do corpo", &mut style.body_size, 15, 10, 28),
+									("Títulos", &mut style.heading_size, 20, 12, 40),
+									("Botões", &mut style.button_size, 14, 10, 28),
+									("Ícones", &mut style.icon_size, 20, 16, 24),
+									("Texto pequeno", &mut style.small_size, 12, 10, 28),
+									("Código", &mut style.monospace_size, 14, 10, 28),
+									(
+										"Altura dos controles",
+										&mut style.control_height,
+										32,
+										24,
+										56,
+									),
 								] {
 									changed |= metric(ui, label, value, default, min..=max);
 								}
 								changed |= pair_metric(
 									ui,
-									"Item spacing",
+									"Espaçamento entre itens",
 									&mut style.item_spacing,
 									[8, 8],
 								);
 								changed |= pair_metric(
 									ui,
-									"Button padding",
+									"Margem interna dos botões",
 									&mut style.button_padding,
 									[12, 6],
 								);
 								for (label, value, default) in [
-									("Control corners", &mut style.widget_radius, 8),
-									("Window corners", &mut style.window_radius, 12),
-									("Menu corners", &mut style.menu_radius, 12),
+									("Cantos dos controles", &mut style.widget_radius, 8),
+									("Cantos das janelas", &mut style.window_radius, 12),
+									("Cantos dos menus", &mut style.menu_radius, 12),
 								] {
 									changed |= metric(ui, label, value, default, 0..=24);
 								}
@@ -921,7 +927,7 @@ impl ThemeEditor {
 							"theme-editor-show-source-url",
 							&mut manifest.source,
 							512,
-							"Optional",
+							"Opcional",
 						);
 						if self.show_errors
 							&& !manifest.source.is_empty()
@@ -1005,11 +1011,11 @@ impl ThemeEditor {
 		if self.discard {
 			match dialog::Confirm::new(
 				"discard-theme-draft",
-				"Discard unsaved theme?",
-				"Your changes have not been saved.",
+				"Descartar tema não salvo?",
+				"Suas alterações não foram salvas.",
 			)
-			.confirm_label("Discard changes")
-			.cancel_label("Keep editing")
+			.confirm_label("Descartar alterações")
+			.cancel_label("Continuar editando")
 			.danger()
 			.show(ui.ctx())
 			{
@@ -1384,36 +1390,41 @@ fn section_diagram(
 		)
 	};
 	let regions = [
-		(ImageRegion::TopBars, area(0.0, 0.0, 1.0, 0.11), "Top", 0_u8),
+		(
+			ImageRegion::TopBars,
+			area(0.0, 0.0, 1.0, 0.11),
+			"Topo",
+			0_u8,
+		),
 		(ImageRegion::ServerList, area(0.0, 0.11, 0.09, 0.89), "S", 0),
 		(
 			ImageRegion::PeopleChannels,
 			area(0.09, 0.11, 0.23, 0.89),
-			"People",
+			"Pessoas",
 			0,
 		),
 		(
 			ImageRegion::TopBars,
 			area(0.32, 0.11, 0.46, 0.11),
-			"Header",
+			"Cabeçalho",
 			1,
 		),
 		(
 			ImageRegion::MessageList,
 			area(0.32, 0.22, 0.46, 0.63),
-			"Messages",
+			"Mensagens",
 			0,
 		),
 		(
 			ImageRegion::MemberList,
 			area(0.78, 0.11, 0.22, 0.89),
-			"Members",
+			"Membros",
 			0,
 		),
 		(
 			ImageRegion::InputArea,
 			area(0.32, 0.85, 0.46, 0.15),
-			"Input",
+			"Entrada",
 			0,
 		),
 	];
@@ -1572,24 +1583,24 @@ fn color_input(ui: &mut egui::Ui, value: &mut String) -> bool {
 }
 fn color_label(key: &str) -> &str {
 	match key {
-		"base" => "Window background",
-		"sidebar" => "Sidebar",
-		"chat" => "Message area",
-		"raised" => "Cards & message input",
-		"hover" => "Hover",
-		"selected" => "Selection",
-		"border" => "Borders",
-		"text_strong" => "Headings",
-		"text" => "Body text",
-		"muted" => "Secondary text",
+		"base" => "Fundo da janela",
+		"sidebar" => "Barra lateral",
+		"chat" => "Área de mensagens",
+		"raised" => "Cartões e caixa de mensagem",
+		"hover" => "Ao passar o mouse",
+		"selected" => "Seleção",
+		"border" => "Bordas",
+		"text_strong" => "Títulos",
+		"text" => "Texto do corpo",
+		"muted" => "Texto secundário",
 		"link" => "Links",
-		"accent" => "Accent",
-		"accent_text" => "Text on accent",
-		"positive" => "Success",
-		"warning" => "Warning",
-		"danger" => "Error & danger",
-		"mention_bg" => "Mention background",
-		"mention_text" => "Mention text",
+		"accent" => "Destaque",
+		"accent_text" => "Texto sobre o destaque",
+		"positive" => "Sucesso",
+		"warning" => "Aviso",
+		"danger" => "Erro e perigo",
+		"mention_bg" => "Fundo de menção",
+		"mention_text" => "Texto de menção",
 		_ => key,
 	}
 }
@@ -1694,11 +1705,11 @@ fn color_override(
 	fallback: egui::Color32,
 ) -> bool {
 	let description = match key {
-		"accent" => Some("Buttons, selection and highlights"),
-		"text" => Some("Messages and regular labels"),
-		"muted" => Some("Timestamps and supporting text"),
-		"sidebar" => Some("Channel, conversation and member lists"),
-		"chat" => Some("Background behind your messages"),
+		"accent" => Some("Botões, seleção e destaques"),
+		"text" => Some("Mensagens e rótulos comuns"),
+		"muted" => Some("Horários e textos de apoio"),
+		"sidebar" => Some("Listas de canais, conversas e membros"),
+		"chat" => Some("Fundo atrás das suas mensagens"),
 		_ => None,
 	};
 	let changed = settings_row(ui, color_label(key), description, |ui| {

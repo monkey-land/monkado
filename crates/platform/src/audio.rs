@@ -2,7 +2,8 @@
 use cpal::traits::DeviceTrait;
 use cpal::{SampleFormat, SupportedStreamConfig, SupportedStreamConfigRange};
 
-const UNSUPPORTED: &str = "Audio device format is unsupported; choose another device";
+const UNSUPPORTED: &str =
+	"O formato do dispositivo de áudio não é suportado; escolha outro dispositivo";
 
 /// Selection policy for the caller's existing playback and channel conversion.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -26,12 +27,12 @@ pub fn output_config(
 		|| {
 			device
 				.default_output_config()
-				.map_err(|_| "Default audio format is unavailable")
+				.map_err(|_| "O formato de áudio padrão está indisponível")
 		},
 		|| {
 			device
 				.supported_output_configs()
-				.map_err(|_| "Speaker formats are unavailable")
+				.map_err(|_| "Os formatos do alto-falante estão indisponíveis")
 		},
 	)
 }

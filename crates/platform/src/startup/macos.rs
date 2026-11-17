@@ -9,11 +9,10 @@ use std::{
 
 const LABEL: &str = "land.monkey.monkado.startup";
 const MAX_BYTES: u64 = 16 * 1024;
-const READ_ERROR: &str = "Could not read the macOS login setting.";
-const WRITE_ERROR: &str = "Could not update the macOS login setting.";
-const PATH_ERROR: &str = "This executable path cannot be registered for macOS login.";
-const INVALID_ENTRY: &str =
-	"The Monkado login entry does not match this application. Turn startup on to replace it.";
+const READ_ERROR: &str = "Não foi possível ler a configuração de login do macOS.";
+const WRITE_ERROR: &str = "Não foi possível atualizar a configuração de login do macOS.";
+const PATH_ERROR: &str = "Este caminho do executável não pode ser registrado no login do macOS.";
+const INVALID_ENTRY: &str = "A entrada de login do Monkado não corresponde a este aplicativo. Ative a inicialização para substituí-la.";
 
 fn entry_path() -> Result<PathBuf, &'static str> {
 	let home = dirs::home_dir()

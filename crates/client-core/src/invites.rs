@@ -17,8 +17,9 @@ impl State {
 		{
 			self.invites.remove(&self.invite_join.code);
 			self.cancel_invite_join();
-			self.invite_join.result =
-				Some(Err(Failure::ProtocolAt("Verification expired; join again")));
+			self.invite_join.result = Some(Err(Failure::ProtocolAt(
+				"A verificação expirou; entre novamente",
+			)));
 		}
 	}
 	pub fn invite_challenge(&self) -> Option<(u64, &crate::captcha::Challenge)> {
@@ -30,7 +31,7 @@ impl State {
 		if request == self.invite_join.sequence && self.invite_join.challenge.is_some() {
 			self.cancel_invite_join();
 			self.invite_join.result = Some(Err(Failure::ProtocolAt(
-				"Verification cancelled; join again",
+				"Verificação cancelada; entre novamente",
 			)));
 		}
 	}
@@ -75,7 +76,7 @@ impl State {
 			&& self.invite_join.challenge.is_none()
 		{
 			self.invite_join.challenge = Some((Instant::now(), challenge));
-			self.status = "Verify to join this server";
+			self.status = "Verifique para entrar neste servidor";
 		}
 	}
 	pub fn request_invite(&mut self, code: String) -> Option<Command> {
@@ -415,7 +416,7 @@ mod join_tests {
 			assert_eq!(
 				state.invite_join.result,
 				Some(Err(Failure::ProtocolAt(
-					"Verification cancelled; join again"
+					"Verificação cancelada; entre novamente"
 				)))
 			);
 			state.invite_join.pending = true;

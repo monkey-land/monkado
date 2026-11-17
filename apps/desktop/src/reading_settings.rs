@@ -69,16 +69,16 @@ impl ReadingSettings {
 	pub fn status(&self) -> &'static str {
 		if self.failed {
 			if self.touched {
-				"Reading and layout could not be saved; changes exist only in this session"
+				"Não foi possível salvar leitura e layout; as mudanças valem só nesta sessão"
 			} else {
-				"Saved reading and layout could not be loaded; using defaults"
+				"Não foi possível carregar leitura e layout salvos; usando o padrão"
 			}
 		} else if self.due.is_some() || self.saving {
-			"Saving reading and layout…"
+			"Salvando leitura e layout…"
 		} else if self.loaded || self.touched {
-			"Reading and layout are saved on this device, including after logout. Reset restores defaults."
+			"Leitura e layout ficam salvos neste dispositivo, mesmo depois de sair da conta. Redefinir restaura o padrão."
 		} else {
-			"Loading saved reading and layout…"
+			"Carregando leitura e layout salvos…"
 		}
 	}
 }
@@ -120,7 +120,7 @@ mod tests {
 		settings.queued(true);
 		settings.saved(Err(StoreError::Unavailable));
 		assert!(settings.needs_attention());
-		assert!(settings.status().contains("could not"));
+		assert!(settings.status().contains("Não foi possível"));
 		assert_eq!(settings.current, ReadingPreferences::default());
 	}
 	#[test]

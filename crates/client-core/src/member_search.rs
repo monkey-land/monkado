@@ -157,7 +157,7 @@ impl State {
 			}
 			Ok(_) => {
 				self.member_search[request.slot].error =
-					Some("Member search exceeded its safety limit");
+					Some("A busca de membros excedeu o limite de segurança");
 			}
 			Err(error) => self.member_search[request.slot].error = Some(error.label()),
 		}

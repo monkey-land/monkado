@@ -82,19 +82,19 @@ fn direct_call(state: &State) -> Option<Id> {
 }
 
 fn home_request_label(friends: u32, messages: u32) -> String {
-	let mut parts = vec!["Direct Messages".to_owned()];
+	let mut parts = vec!["Mensagens diretas".to_owned()];
 	if friends > 0 {
 		parts.push(if friends == 1 {
-			"1 friend request".into()
+			"1 pedido de amizade".into()
 		} else {
-			format!("{friends} friend requests")
+			format!("{friends} pedidos de amizade")
 		});
 	}
 	if messages > 0 {
 		parts.push(if messages == 1 {
-			"1 message request".into()
+			"1 pedido de mensagem".into()
 		} else {
-			format!("{messages} message requests")
+			format!("{messages} pedidos de mensagem")
 		});
 	}
 	parts.join(" · ")

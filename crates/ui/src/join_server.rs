@@ -181,7 +181,7 @@ impl JoinDialog {
 				));
 				self.icon_error = None;
 			}
-			Ok(Some(_)) => self.icon_error = Some("Prepared icon is too large"),
+			Ok(Some(_)) => self.icon_error = Some("O ícone preparado é grande demais"),
 			Ok(None) => {}
 			Err(error) => self.icon_error = Some(error),
 		}
@@ -226,11 +226,11 @@ impl JoinDialog {
 				let busy = loading || state.invite_join.pending;
 				let enabled = !state.demo && !busy && !member && !accepted;
 				let text = if busy {
-					"Please wait…"
+					"Aguarde…"
 				} else if ready {
-					"Join Server"
+					"Entrar no servidor"
 				} else {
-					"Check Invite"
+					"Verificar convite"
 				};
 				ui.add_enabled_ui(enabled, |ui| {
 					if dialog::action(ui, text, dialog::Action::Primary).clicked() {
@@ -289,16 +289,16 @@ impl JoinDialog {
 		}
 		let (title, subtitle) = match self.page {
 			Page::Choose => (
-				"Create Your Server",
-				"Your server is where you and your friends hang out. Make yours and start talking.",
+				"Crie seu servidor",
+				"Seu servidor é onde você e seus amigos se reúnem. Crie o seu e comece a conversar.",
 			),
 			Page::Audience => (
-				"Tell Us More About Your Server",
-				"Is your new server for a few friends or a larger community?",
+				"Conte mais sobre seu servidor",
+				"Seu novo servidor é para alguns amigos ou para uma comunidade maior?",
 			),
 			Page::Customize => (
-				"Customize Your Server",
-				"Give your new server a name and icon. You can change them later.",
+				"Personalize seu servidor",
+				"Dê um nome e um ícone ao seu novo servidor. Você pode alterá-los depois.",
 			),
 			Page::Join => unreachable!(),
 		};
@@ -364,7 +364,7 @@ impl JoinDialog {
 			ui.add_space(8.0);
 			ui.horizontal_wrapped(|ui| {
 				ui.label(crate::i18n::translate("join-server-audience-not-sure"));
-				if ui.link("Skip this question").clicked() {
+				if ui.link("Pular esta pergunta").clicked() {
 					self.begin_customize(state);
 				}
 				ui.label(crate::i18n::translate("join-server-audience-for-now"));
@@ -530,7 +530,7 @@ impl JoinDialog {
 							self.submitted = true;
 							self.status = "";
 						}
-						None => self.status = "Unable to create this server right now.",
+						None => self.status = "Não foi possível criar este servidor agora.",
 					}
 				}
 			});
@@ -787,7 +787,7 @@ impl JoinDialog {
 		commands: &mut Vec<Command>,
 	) {
 		let Some(code) = parsed else {
-			self.status = "Enter a valid Discord invite link or invite code.";
+			self.status = "Insira um link ou código de convite do Discord válido.";
 			return;
 		};
 		let command = if ready {
@@ -803,7 +803,7 @@ impl JoinDialog {
 				self.status = "";
 			}
 			None => {
-				self.status = "Unable to proceed. Check your connection or try again after the current request.";
+				self.status = "Não foi possível continuar. Verifique sua conexão ou tente novamente após a solicitação atual.";
 			}
 		}
 	}
@@ -1011,7 +1011,7 @@ mod tests {
 				&mut state,
 				&mut commands,
 				size,
-				"Check Invite",
+				"Verificar convite",
 			);
 			assert!(matches!(commands.pop(), Some(Command::Invite { .. })));
 			frame(&ctx, &mut dialog, &mut state, &mut commands, size, vec![]);
@@ -1022,7 +1022,7 @@ mod tests {
 			);
 			let texts = frame(&ctx, &mut dialog, &mut state, &mut commands, size, vec![]);
 			assert!(
-				texts.iter().any(|(text, _)| text == "Permission denied"),
+				texts.iter().any(|(text, _)| text == "Permissão negada"),
 				"{texts:?}"
 			);
 			assert!(commands.is_empty(), "no automatic retries");
@@ -1032,7 +1032,7 @@ mod tests {
 				&mut state,
 				&mut commands,
 				size,
-				"Check Invite",
+				"Verificar convite",
 			);
 			assert!(matches!(commands.pop(), Some(Command::Invite { .. })));
 			state.apply_invite(
@@ -1059,7 +1059,7 @@ mod tests {
 				&mut state,
 				&mut commands,
 				size,
-				"Join Server",
+				"Entrar no servidor",
 			);
 			let Some(Command::JoinInvite { request, .. }) = commands.pop() else {
 				panic!("join missing")
@@ -1070,7 +1070,7 @@ mod tests {
 				&mut state,
 				&mut commands,
 				size,
-				"Please wait…",
+				"Aguarde…",
 			);
 			assert!(commands.is_empty());
 			state.apply(client_core::Envelope {

@@ -56,7 +56,7 @@ const MAX_MP4_CHILDREN: usize = 4096;
 const MAX_MOOV: usize = 8 * 1024 * 1024;
 const MAX_FLAC_BLOCKS: usize = 128;
 const RANGE_UNSUPPORTED: &str =
-	"Audio server does not support buffering; download to play externally";
+	"O servidor do áudio não permite carregamento parcial; baixe para reproduzir fora do app";
 
 /// Open a cancellable range reader and bound metadata before handing the stream to a demuxer.
 pub(super) fn source(
@@ -76,7 +76,7 @@ pub(super) fn source(
 					.redirect(wreq::redirect::Policy::none())
 					.timeout(Duration::from_secs(15))
 					.build()
-					.map_err(|_| "Audio download unavailable")?,
+					.map_err(|_| "Download do áudio indisponível")?,
 				url: url.clone(),
 				gate,
 				wake,

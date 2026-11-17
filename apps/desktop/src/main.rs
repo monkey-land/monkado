@@ -1272,8 +1272,7 @@ fn queue_channel_preferences(
 	}
 	let Some(cache) = cache else {
 		messaging.channel_preferences_reload = false;
-		messaging.channel_preferences_status =
-			"Local storage is unavailable; channel preferences could not be restored.";
+		messaging.channel_preferences_status = "O armazenamento local está indisponível; não foi possível restaurar as preferências dos canais.";
 		return false;
 	};
 	let accepted = cache.queue(
@@ -1903,9 +1902,9 @@ impl Desktop {
 			});
 			cache_pending += usize::from(messaging.custom_font.busy);
 			messaging.custom_font.status = if messaging.custom_font.busy {
-				"Loading saved font…"
+				"Carregando fonte salva…"
 			} else {
-				"Could not load the saved font."
+				"Não foi possível carregar a fonte salva."
 			};
 		}
 		messaging.minimize_to_tray = tray_setting.enabled;
@@ -2387,7 +2386,7 @@ impl Desktop {
 					.unwrap_or_default();
 			}
 			state.user = None;
-			state.status = "Disconnected";
+			state.status = "Desconectado";
 			sign_in_panels = rest == "panels";
 			if rest == "forget" {
 				sign_in_forget = messaging.accounts.get(1).map(|account| account.id);
@@ -2584,7 +2583,7 @@ impl Desktop {
 			cache_pending,
 			cache_clears: Default::default(),
 			cache_error: false,
-			cache_status: "Loading local appearance…",
+			cache_status: "Carregando aparência local…",
 			appearance: egui::ThemePreference::System,
 			appearance_changed: false,
 			transparency_available,
@@ -2635,9 +2634,9 @@ impl Desktop {
 			credential_status: if demo {
 				"Fixture mode skips saved login; extensions use public GitHub downloads"
 			} else if loading_saved {
-				"Checking saved login…"
+				"Verificando login salvo…"
 			} else {
-				"Saved login unavailable; could not start credential lookup"
+				"Login salvo indisponível; não foi possível iniciar a busca de credenciais"
 			},
 			forgetting: false,
 			confirming_close: false,
@@ -2688,12 +2687,13 @@ impl Desktop {
 			if cache.queue(self.state.generation, account, operation) {
 				self.cache_pending += 1;
 				if !self.cache_error {
-					self.cache_status = "Saving local changes…";
+					self.cache_status = "Salvando alterações locais…";
 				}
 				return true;
 			} else {
 				self.cache_error = true;
-				self.cache_status = "Local storage queue full; some changes are not saved";
+				self.cache_status =
+					"Fila do armazenamento local cheia; algumas alterações não foram salvas";
 			}
 		}
 		false
@@ -2900,14 +2900,14 @@ impl Desktop {
 	fn save_font(&mut self, ctx: &egui::Context, font: Option<ui::fonts::CustomFont>) {
 		if self.fixture_only || self.state.demo {
 			self.accept_font(ctx, &Ok(font));
-			self.messaging.custom_font.status = "Preview only; this font is not saved.";
+			self.messaging.custom_font.status = "Apenas prévia; esta fonte não foi salva.";
 		} else {
 			self.messaging.custom_font.busy =
 				self.queue_cache_for(model::Id(0), cache::Operation::SaveCustomFont(font));
 			self.messaging.custom_font.status = if self.messaging.custom_font.busy {
-				"Saving font…"
+				"Salvando fonte…"
 			} else {
-				"Could not save the font. Try again."
+				"Não foi possível salvar a fonte. Tente novamente."
 			};
 		}
 	}
@@ -2917,7 +2917,7 @@ impl Desktop {
 				Ok(result) => Some(result),
 				Err(std::sync::mpsc::TryRecvError::Empty) => None,
 				Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-					Some(Err("Font import interrupted. Try again."))
+					Some(Err("Importação da fonte interrompida. Tente novamente."))
 				}
 			};
 			if let Some(result) = result {
@@ -2955,7 +2955,7 @@ impl Desktop {
 				ui::fonts::Action::Select(family) => {
 					self.font_picker = Some(font_import::load(&self.runtime, ctx, family));
 					self.messaging.custom_font.busy = true;
-					self.messaging.custom_font.status = "Loading font…";
+					self.messaging.custom_font.status = "Carregando fonte…";
 				}
 				ui::fonts::Action::Reset => self.save_font(ctx, None),
 			}
@@ -3290,9 +3290,9 @@ impl Desktop {
 		let published = self.presence_snapshot();
 		let previous_status = self.messaging.own_presence_status;
 		self.messaging.own_presence_status = if !published.valid() {
-			"Status must be at most 128 characters without line breaks or surrounding spaces."
+			"O status deve ter no máximo 128 caracteres, sem quebras de linha nem espaços nas pontas."
 		} else if self.state.demo || self.fixture_only {
-			"Offline preview: not shared or saved."
+			"Prévia offline: não compartilhado nem salvo."
 		} else if let Some(connection) = &self.connection {
 			let save_error = *connection.presence_error.borrow();
 			let rejected = connection.own_presence.is_closed()
@@ -3301,14 +3301,14 @@ impl Desktop {
 				connection.presence_edits.send_replace(Some(published));
 			}
 			if rejected {
-				"Could not update status: connection unavailable."
+				"Não foi possível atualizar o status: conexão indisponível."
 			} else if !self.state.gateway_connected {
-				"Waiting for connection."
+				"Aguardando conexão."
 			} else {
 				save_error.unwrap_or("")
 			}
 		} else {
-			"Not connected; status is not shared."
+			"Sem conexão; o status não foi compartilhado."
 		};
 		self.persist_account_presence();
 		if changed || previous_status != self.messaging.own_presence_status {
@@ -3342,7 +3342,7 @@ impl Desktop {
 		self.messaging.own_presence_changed = true;
 		self.messaging
 			.toasts
-			.push(ui::design::Level::Info, "Custom status cleared");
+			.push(ui::design::Level::Info, "Status personalizado removido");
 	}
 	fn sync_game_activity(&mut self, ctx: &egui::Context) {
 		let previous_sharing = (
@@ -3567,12 +3567,11 @@ impl Desktop {
 		if !self.cache_clears.request(account) {
 			cache.history.fail();
 			self.cache_error = true;
-			self.cache_status = "Cache cleanup backlog exceeded; history cache disabled until restart; deleted messages may remain on disk";
+			self.cache_status = "Limpeza do cache acumulada demais; cache do histórico desativado até reiniciar; mensagens apagadas podem continuar no disco";
 			return;
 		}
 		if !self.cache_error {
-			self.cache_status =
-				"Waiting to clear cached history; cached history temporarily disabled";
+			self.cache_status = "Aguardando para limpar o histórico em cache; histórico em cache temporariamente desativado";
 		}
 		self.retry_history_clears();
 	}
@@ -3719,7 +3718,7 @@ impl Desktop {
 						request
 							.progress
 							.send_replace(discord_api::upload::Status::Failed(
-								"Upload queue full; reselect the file",
+								"Fila de envio cheia; selecione o arquivo de novo",
 							));
 						self.state.command_rejected(request.command);
 					}
@@ -3727,7 +3726,7 @@ impl Desktop {
 				}
 			}
 			// Nothing left the client: keep the caption, reply and staged files for a retry.
-			let failure = "File not sent; check the connection and attachment, then send again";
+			let failure = "Arquivo não enviado; verifique a conexão e o anexo e envie de novo";
 			if self.state.return_unsent(command, failure) {
 				self.messaging.draft_changes.push(channel);
 			}
@@ -3773,7 +3772,7 @@ impl Desktop {
 						request
 							.progress
 							.send_replace(discord_api::upload::Status::Failed(
-								"Upload queue full; reselect the file",
+								"Fila de envio cheia; selecione o arquivo de novo",
 							));
 						self.state.command_rejected(request.command);
 					}
@@ -3784,7 +3783,7 @@ impl Desktop {
 				parent,
 				request,
 				Err(Failure::ProtocolAt(
-					"Post not created; reconnect and reselect the attachment",
+					"Post não criado; reconecte e selecione o anexo de novo",
 				)),
 			);
 			return;
@@ -3810,7 +3809,7 @@ impl Desktop {
 		}
 		if let Command::Voice(control) = &command {
 			if self.state.demo || self.fixture_only {
-				self.state.status = "Voice calls are unavailable in the offline preview";
+				self.state.status = "Chamadas de voz não estão disponíveis na prévia offline";
 				return;
 			}
 			if let client_core::voice::Command::Join {
@@ -3893,7 +3892,7 @@ impl Desktop {
 					Event::Interaction(client_core::interactions::Event::Submitted {
 						nonce: request.nonce,
 						result: Err(Failure::ProtocolAt(
-							"Offline preview does not contact applications",
+							"A prévia offline não contata aplicativos",
 						)),
 					})
 				}
@@ -4813,8 +4812,7 @@ impl Desktop {
 				Err(std::sync::mpsc::TryRecvError::Disconnected) => {
 					self.avatar_cleanup = None;
 					self.cache_error = true;
-					self.cache_status =
-						"Avatar cache cleanup failed; cached pictures may remain on disk";
+					self.cache_status = "Falha ao limpar o cache de avatares; imagens em cache podem continuar no disco";
 				}
 				Err(std::sync::mpsc::TryRecvError::Empty) => {}
 			}
@@ -4926,15 +4924,14 @@ impl Desktop {
 					Err(std::sync::mpsc::TryRecvError::Disconnected) => {
 						if self.messaging.custom_font.busy && self.font_picker.is_none() {
 							self.messaging.custom_font.busy = false;
-							self.messaging.custom_font.status =
-								"Local storage worker stopped. Restart Monkado to save fonts.";
+							self.messaging.custom_font.status = "O armazenamento local parou. Reinicie o Monkado para salvar fontes.";
 						}
 						if self.messaging.channel_preferences_reload
 							|| self.messaging.channel_preferences_load_pending
 						{
 							self.messaging.channel_preferences_reload = false;
 							self.messaging.channel_preferences_load_pending = false;
-							self.messaging.channel_preferences_status = "Local storage worker stopped; restart Monkado to restore channel preferences.";
+							self.messaging.channel_preferences_status = "O armazenamento local parou; reinicie o Monkado para restaurar as preferências dos canais.";
 						}
 						presence_cache_stopped = self.presence_load_pending;
 						break;
@@ -5060,7 +5057,8 @@ impl Desktop {
 						Err(_) => {
 							self.roster_failed = true;
 							self.cache_error = true;
-							self.cache_status = "Could not read or update the saved account list";
+							self.cache_status =
+								"Não foi possível ler ou atualizar a lista de contas salvas";
 						}
 					}
 					continue;
@@ -5085,9 +5083,10 @@ impl Desktop {
 						&& !self.cache_error
 					{
 						if cache.history.allows(cache.history.epoch()) {
-							self.cache_status = "Cached history cleared; saved drafts preserved";
+							self.cache_status =
+								"Histórico em cache apagado; rascunhos salvos mantidos";
 						} else {
-							self.cache_status = "Requested history cleanup completed; history cache remains disabled until restart after a storage failure";
+							self.cache_status = "Limpeza do histórico concluída; o cache do histórico continua desativado até reiniciar, por causa de uma falha de armazenamento";
 						}
 					}
 					continue;
@@ -5106,9 +5105,11 @@ impl Desktop {
 						Err(error) => {
 							self.messaging.channel_preferences_status = match error {
 								local_store::StoreError::Incompatible => {
-									"Saved channel preferences are damaged or incompatible with this build."
+									"As preferências de canais salvas estão corrompidas ou são incompatíveis com esta versão."
 								}
-								_ => "Could not read channel preferences from local storage.",
+								_ => {
+									"Não foi possível ler as preferências dos canais do armazenamento local."
+								}
 							};
 						}
 					}
@@ -5118,7 +5119,7 @@ impl Desktop {
 					self.messaging.channel_preferences_status = if result.is_ok() {
 						""
 					} else {
-						"Could not save channel preferences."
+						"Não foi possível salvar as preferências dos canais."
 					};
 				}
 				cache::Outcome::GifFavorites(favorites) => {
@@ -5138,7 +5139,7 @@ impl Desktop {
 					self.messaging.draft_restore_pending = false;
 					self.state.drafts.retain(|_, content| !content.is_empty());
 					if !self.cache_error {
-						self.cache_status = "Saved drafts restored; check the conversation before resending recovered text";
+						self.cache_status = "Rascunhos salvos restaurados; confira a conversa antes de reenviar o texto recuperado";
 					}
 				}
 				outcome @ cache::Outcome::Channel { .. } => {
@@ -5148,7 +5149,7 @@ impl Desktop {
 				}
 				cache::Outcome::Saved => {
 					if !self.cache_error {
-						self.cache_status = "Local changes saved";
+						self.cache_status = "Alterações locais salvas";
 					}
 				}
 				cache::Outcome::Appearance(..)
@@ -5212,10 +5213,10 @@ impl Desktop {
 									has_token: false,
 								},
 							);
-							self.credential_status = "No saved login for that account on this device. Use another account to sign in again, or forget it with ×.";
+							self.credential_status = "Não há login salvo dessa conta neste dispositivo. Use outra conta para entrar de novo ou esqueça-a com ×.";
 							self.messaging.toasts.push(
 								ui::design::Level::Warning,
-								"That account's saved login is missing; sign in again to refresh it",
+								"O login salvo dessa conta sumiu; entre de novo para atualizá-lo",
 							);
 						}
 					}
@@ -5230,35 +5231,33 @@ impl Desktop {
 							},
 						);
 					} else if result != Err(platform::CredentialError::NoStore) {
-						self.credential_status =
-							"Could not save this account for the switcher; sign in again to retry";
+						self.credential_status = "Não foi possível salvar esta conta no seletor de contas; entre de novo para tentar outra vez";
 					}
 				}
 				credentials::Outcome::Saved(Ok(saved)) => {
 					self.credential_status = match saved {
 						platform::Saved::CredentialStore => {
-							"Login saved in the OS credential store"
+							"Login salvo no armazenamento de credenciais do sistema"
 						}
 						platform::Saved::Plaintext => {
-							"No OS keyring found, so the login is saved in a private file in Monkado's data folder"
+							"Nenhum chaveiro do sistema encontrado; o login foi salvo em um arquivo privado na pasta de dados do Monkado"
 						}
 					}
 				}
 				credentials::Outcome::Saved(Err(platform::CredentialError::NoStore)) => {
 					self.messaging.toasts.push(
 						ui::design::Level::Warning,
-						"No OS keyring found, so you will need to sign in again next launch.",
+						"Nenhum chaveiro do sistema encontrado; você precisará entrar de novo na próxima vez que abrir.",
 					);
 				}
 				credentials::Outcome::Saved(Err(_)) => {
-					self.credential_status =
-						"Could not save login; this session will not restore automatically"
+					self.credential_status = "Não foi possível salvar o login; esta sessão não será restaurada automaticamente"
 				}
 				credentials::Outcome::AccountForgotten(result) => {
 					if result.is_err_and(|error| error != platform::CredentialError::NoStore) {
 						self.messaging.toasts.push(
 							ui::design::Level::Error,
-							"Could not remove that account's saved login from the OS credential store",
+							"Não foi possível remover o login salvo dessa conta do armazenamento de credenciais do sistema",
 						);
 					}
 				}
@@ -5266,18 +5265,18 @@ impl Desktop {
 					if result.is_err() {
 						self.messaging.toasts.push(
 							ui::design::Level::Error,
-							"Could not remove orphaned plaintext saved logins",
+							"Não foi possível remover logins salvos órfãos em texto puro",
 						);
 					}
 				}
 				credentials::Outcome::Forgotten(result) => {
 					self.forgetting = false;
 					self.credential_status = match result {
-						Ok(()) => "Saved login removed",
+						Ok(()) => "Login salvo removido",
 						// Nothing could have been saved without a credential store.
 						Err(platform::CredentialError::NoStore) => "",
 						Err(_) => {
-							"Could not remove the Monkado saved login in your OS credential manager"
+							"Não foi possível remover o login salvo do Monkado no gerenciador de credenciais do sistema"
 						}
 					};
 				}
@@ -5539,7 +5538,7 @@ impl Desktop {
 							.is_ok();
 					}
 					if !queued {
-						self.credential_status = "Could not queue saved login; session only";
+						self.credential_status = "Não foi possível agendar o salvamento do login; vale só para esta sessão";
 					}
 				}
 			}
@@ -5670,9 +5669,9 @@ impl Desktop {
 				self.login = None;
 				self.state.auth = AuthState::Challenged;
 				self.state.status = if crashed {
-					"Login window stopped unexpectedly (web process ended); no session accepted"
+					"A janela de login parou inesperadamente (o processo web terminou); nenhuma sessão foi aceita"
 				} else {
-					"Login timed out or token handoff unavailable; no session accepted"
+					"O login expirou ou a entrega do token não estava disponível; nenhuma sessão foi aceita"
 				};
 			}
 		}
@@ -5946,7 +5945,7 @@ impl eframe::App for Desktop {
 		self.instance.release();
 		if self.updater.finish_restart().is_err() {
 			eprintln!(
-				"Could not hand off the prepared update. The installed app was not replaced."
+				"Não foi possível entregar a atualização preparada. O app instalado não foi substituído."
 			);
 		}
 	}
@@ -6139,9 +6138,9 @@ impl eframe::App for Desktop {
 				platform::tray::Event::Unavailable => {
 					self.tray = None;
 					self.tray_error = Some(if cfg!(target_os = "linux") {
-						"Tray unavailable. Start a StatusNotifier host, then toggle the tray off/on."
+						"Bandeja indisponível. Inicie um host StatusNotifier e desative/ative a bandeja."
 					} else {
-						"Tray unavailable. The window will stay visible."
+						"Bandeja indisponível. A janela continuará visível."
 					});
 					self.tray_window.show(ctx);
 				}
@@ -6383,7 +6382,7 @@ impl eframe::App for Desktop {
 					}
 					Ok(clipboard::Content::File(..)) => self.messaging.toasts.push(
 						ui::design::Level::Error,
-						"Attaching files is unavailable here",
+						"Não é possível anexar arquivos aqui",
 					),
 					Err(error) => self.messaging.toasts.push(ui::design::Level::Error, error),
 				}
@@ -6461,7 +6460,7 @@ impl eframe::App for Desktop {
 			} else {
 				self.messaging.toasts.push(
 					ui::design::Level::Error,
-					"File not attached; return to a connected conversation and drop it again",
+					"Arquivo não anexado; volte para uma conversa conectada e solte-o de novo",
 				);
 			}
 		}
@@ -6496,7 +6495,7 @@ impl eframe::App for Desktop {
 
 		let download_status = match self.downloads.poll() {
 			downloads::Status::Idle | downloads::Status::Choosing => String::new(),
-			downloads::Status::Downloading { total: 0, .. } => "Loading image…".into(),
+			downloads::Status::Downloading { total: 0, .. } => "Carregando imagem…".into(),
 			downloads::Status::Downloading { received, total } => {
 				format!("Downloading: {} / {} KiB", received / 1024, total / 1024)
 			}
@@ -6689,7 +6688,7 @@ impl eframe::App for Desktop {
 			self.messaging.storage_status = self.cache_status;
 			self.messaging.notification_status = self.notifications.status().label();
 			if self.app_settings.state.failed {
-				self.messaging.notification_sound_status = "Could not save device notification settings. Changes apply only until restart.";
+				self.messaging.notification_sound_status = "Não foi possível salvar as configurações de notificação do dispositivo. As alterações valem só até reiniciar.";
 			}
 			let mut commands = self.messaging.show(ui, &mut self.state);
 			self.extensions.cancel_stale_message_events(&self.state);
@@ -6907,10 +6906,9 @@ impl eframe::App for Desktop {
 						&ctx,
 					));
 				} else {
-					self.messaging.toasts.push(
-						ui::design::Level::Error,
-						"Wait for the current paste to finish",
-					);
+					self.messaging
+						.toasts
+						.push(ui::design::Level::Error, "Aguarde a colagem atual terminar");
 				}
 			}
 			if std::mem::take(&mut self.messaging.attach_requested)
@@ -6972,14 +6970,14 @@ impl eframe::App for Desktop {
 						.as_ref()
 						.is_some_and(|own| own.id == scope.1)
 				{
-					Err("Sign in before changing your profile picture")
+					Err("Entre na conta antes de mudar sua foto de perfil")
 				} else {
 					self.profile_avatar.start(
 						scope,
 						self.runtime.handle(),
 						&ctx,
 						self.window.clone(),
-						"Choose profile picture",
+						"Escolher foto de perfil",
 						256,
 					)
 				};
@@ -6991,14 +6989,14 @@ impl eframe::App for Desktop {
 			if let Some(scope) = self.messaging.take_group_icon_request() {
 				let result = if scope.0 != self.state.generation || !self.state.is_group_dm(scope.1)
 				{
-					Err("This group is no longer available")
+					Err("Este grupo não está mais disponível")
 				} else {
 					self.group_icon.start(
 						scope,
 						self.runtime.handle(),
 						&ctx,
 						self.window.clone(),
-						"Choose group icon",
+						"Escolher ícone do grupo",
 						256,
 					)
 				};
@@ -7008,14 +7006,14 @@ impl eframe::App for Desktop {
 			}
 			if let Some(scope) = self.messaging.take_create_server_icon_request() {
 				let result = if scope.0 != self.state.generation || scope.1 != model::Id(0) {
-					Err("This server draft is no longer available")
+					Err("Este rascunho de servidor não está mais disponível")
 				} else {
 					self.create_server_icon.start(
 						scope,
 						self.runtime.handle(),
 						&ctx,
 						self.window.clone(),
-						"Choose server icon",
+						"Escolher ícone do servidor",
 						256,
 					)
 				};
@@ -7028,14 +7026,14 @@ impl eframe::App for Desktop {
 				let result = if scope.0 != self.state.generation
 					|| !self.state.can_edit_role_icon(scope.1, scope.2)
 				{
-					Err("You can no longer change this role icon")
+					Err("Você não pode mais mudar o ícone deste cargo")
 				} else {
 					self.role_icon.start(
 						(scope.0, scope.1, scope.3),
 						self.runtime.handle(),
 						&ctx,
 						self.window.clone(),
-						"Choose role icon",
+						"Escolher ícone do cargo",
 						128,
 					)
 				};
@@ -7049,14 +7047,14 @@ impl eframe::App for Desktop {
 			if let Some(scope) = self.messaging.take_server_icon_request() {
 				let result =
 					if scope.0 != self.state.generation || !self.state.can_manage_guild(scope.1) {
-						Err("You can no longer manage this server")
+						Err("Você não pode mais gerenciar este servidor")
 					} else {
 						self.server_icon.start(
 							scope,
 							self.runtime.handle(),
 							&ctx,
 							self.window.clone(),
-							"Choose server icon",
+							"Escolher ícone do servidor",
 							512,
 						)
 					};
@@ -7071,7 +7069,7 @@ impl eframe::App for Desktop {
 				let result = if generation != self.state.generation
 					|| !self.state.can_create_guild_emoji(guild)
 				{
-					Err("You can no longer upload emoji to this server")
+					Err("Você não pode mais enviar emojis para este servidor")
 				} else {
 					self.emoji_upload.start(
 						scope,
@@ -7091,7 +7089,7 @@ impl eframe::App for Desktop {
 				let result = if generation != self.state.generation
 					|| !self.state.can_create_guild_sticker(guild)
 				{
-					Err("You can no longer upload stickers to this server")
+					Err("Você não pode mais enviar figurinhas para este servidor")
 				} else {
 					self.sticker_upload.start(
 						scope,
@@ -7123,7 +7121,7 @@ impl eframe::App for Desktop {
 				if self.state.auth == AuthState::Authenticated {
 					if let Some(connection) = &self.connection {
 						connection.reconnect();
-						self.state.status = "Reconnecting to Discord…";
+						self.state.status = "Reconectando ao Discord…";
 					}
 				} else {
 					if let Some(store) = &mut self.store {
@@ -7266,7 +7264,7 @@ impl eframe::App for Desktop {
 					if self.messaging.channel_preferences_save_pending {
 						""
 					} else {
-						"Could not save channel preferences."
+						"Não foi possível salvar as preferências dos canais."
 					};
 			}
 		}
@@ -7309,17 +7307,17 @@ impl eframe::App for Desktop {
 				notes.push(note);
 			}
 			if self.messaging.extensions.theme_editor_dirty() {
-				notes.push("Unsaved theme changes will be discarded.");
+				notes.push("As alterações não salvas do tema serão descartadas.");
 			}
 			if self.forgetting {
-				notes.push("Wait for saved-login removal to finish.");
+				notes.push("Aguarde a remoção do login salvo terminar.");
 			}
 			if self.extensions.cleanup_pending() {
-				notes.push("Removing extension data before closing.");
+				notes.push("Removendo dados de extensões antes de fechar.");
 			}
 			if self.cache_clears.pending() {
 				notes.push(
-					"Cached history cleanup is pending; closing now may leave deleted messages on disk.",
+					"A limpeza do histórico em cache está pendente; fechar agora pode deixar mensagens apagadas no disco.",
 				);
 			}
 			if !self.fixture_only && self.app_settings.state.needs_attention() {
@@ -7337,19 +7335,19 @@ impl eframe::App for Desktop {
 			let mut confirm = ui::dialog::Confirm::new(
 				"leave-session",
 				if self.confirming_logout && !self.end_intent.forgets() {
-					"Leave this account?"
+					"Sair desta conta?"
 				} else {
-					"Leave this session?"
+					"Sair desta sessão?"
 				},
 				if self.confirming_logout && !self.end_intent.forgets() {
-					"Saved text drafts survive the switch; selected files must be reselected. This account stays in the switcher."
+					"Os rascunhos de texto salvos são mantidos na troca; arquivos selecionados precisam ser escolhidos de novo. Esta conta continua no seletor."
 				} else {
-					"Saved text drafts survive exit; selected files must be reselected. Logging out removes local account data."
+					"Os rascunhos de texto salvos são mantidos ao sair; arquivos selecionados precisam ser escolhidos de novo. Desconectar remove os dados locais da conta."
 				},
 			)
 			.danger()
-			.confirm_label("Discard and Continue")
-			.cancel_label("Keep Working")
+			.confirm_label("Descartar e continuar")
+			.cancel_label("Continuar trabalhando")
 			.enabled(!self.forgetting);
 			if !notes.is_empty() {
 				confirm = confirm.note(ui::dialog::Level::Warning, notes.join("\n"));

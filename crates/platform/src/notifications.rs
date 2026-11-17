@@ -35,7 +35,7 @@ impl Activation {
 
 // Eight bounded commands; overflow drops an alert, never message state.
 const QUEUE_ITEMS: usize = 8;
-const GENERIC_BODY: &str = "You have a new message.";
+const GENERIC_BODY: &str = "Você tem uma nova mensagem.";
 const TITLE_BYTES: usize = 256;
 const BODY_BYTES: usize = 512;
 const IMAGE_PATH_BYTES: usize = 512;
@@ -54,25 +54,29 @@ pub enum Status {
 impl Status {
 	pub fn label(self) -> &'static str {
 		match self {
-			Self::Disabled => "System notifications are off in Monkado settings.",
-			Self::Enabling => "Checking system notification permission…",
+			Self::Disabled => {
+				"As notificações do sistema estão desativadas nas configurações do Monkado."
+			}
+			Self::Enabling => "Verificando a permissão de notificações do sistema…",
 			Self::Ready => "",
-			Self::Denied => "System notifications are disabled in your OS settings.",
+			Self::Denied => {
+				"As notificações do sistema estão desativadas nas configurações do seu sistema operacional."
+			}
 			Self::QueueFull => {
-				"Notification queue full; an alert was skipped. Unread indicators are retained."
+				"Fila de notificações cheia; um alerta foi ignorado. Os indicadores de não lidas foram mantidos."
 			}
 			Self::Unavailable => {
 				#[cfg(target_os = "macos")]
 				{
-					"System notifications unavailable. Run the packaged Monkado.app and check System Settings > Notifications."
+					"Notificações do sistema indisponíveis. Execute o Monkado.app empacotado e verifique Ajustes do Sistema > Notificações."
 				}
 				#[cfg(target_os = "windows")]
 				{
-					"System notifications unavailable. Register the packaged Start Menu shortcut with install-notifications.ps1 and check Windows notification settings."
+					"Notificações do sistema indisponíveis. Registre o atalho do Menu Iniciar empacotado com install-notifications.ps1 e verifique as configurações de notificação do Windows."
 				}
 				#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 				{
-					"System notifications unavailable. Check your desktop notification service and settings."
+					"Notificações do sistema indisponíveis. Verifique o serviço e as configurações de notificação do seu ambiente de trabalho."
 				}
 			}
 		}
@@ -548,7 +552,7 @@ fn notification(alert: &Alert) -> notify_rust::Notification {
 		.body(&alert.body)
 		.timeout(5_000);
 	#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-	notification.action("default", "Open channel");
+	notification.action("default", "Abrir canal");
 	if let Some(path) = &alert.image_path
 		&& std::path::Path::new(path.as_ref()).is_file()
 	{
@@ -645,7 +649,7 @@ mod tests {
 			image_path: None,
 		});
 		assert_eq!(alert.summary, "Monkado");
-		assert_eq!(alert.body, "You have a new message.");
+		assert_eq!(alert.body, "Você tem uma nova mensagem.");
 		let mut notifications = Notifications::new(|| {}, || {});
 		assert_eq!(notifications.status(), Status::Disabled);
 		assert!(notifications.send.is_none());

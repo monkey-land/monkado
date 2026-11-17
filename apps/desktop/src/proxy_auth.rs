@@ -14,7 +14,7 @@ fn endpoint(value: &str) -> std::result::Result<String, &'static str> {
 	ApiProxy::Url { url: value.into() }.validate()?;
 	url::Url::parse(value)
 		.map(|url| url.to_string())
-		.map_err(|_| "Invalid proxy URL")
+		.map_err(|_| "URL de proxy inválida")
 }
 impl Authentication {
 	fn start(
@@ -58,7 +58,7 @@ impl Authentication {
 									}
 									_ => ApiProxy::Url { url: url.clone() },
 								});
-								form.status = "Proxy credentials loaded. Future API requests use this setting.".into();
+								form.status = "Credenciais do proxy carregadas. As próximas requisições da API usarão esta configuração.".into();
 							}
 							Err(error) => {
 								self.route = None;
@@ -72,7 +72,7 @@ impl Authentication {
 					self.route = None;
 					self.pending = None;
 					form.status =
-						"Proxy credential operation ended; retry saving or removing credentials."
+						"A operação de credenciais do proxy terminou; tente salvar ou remover as credenciais de novo."
 							.into();
 				}
 				Err(mpsc::TryRecvError::Empty) => {}
@@ -91,7 +91,7 @@ impl Authentication {
 			}
 			extensions::ApiProxyConfig::Url { url } => {
 				let Ok(url) = endpoint(&url) else {
-					form.status = "Invalid proxy URL".into();
+					form.status = "URL de proxy inválida".into();
 					return None;
 				};
 				if self.endpoint.as_ref() != Some(&url) {
@@ -105,7 +105,7 @@ impl Authentication {
                         match platform::proxy_credentials::load() {
                             Ok(value) => Ok(value),
                             Err(platform::CredentialError::NoStore) => Ok(None),
-                            Err(_) => Err("OS credential store unavailable. API routing is paused; retry saving or removing credentials."),
+                            Err(_) => Err("Armazenamento de credenciais do sistema indisponível. O roteamento da API está pausado; tente salvar ou remover as credenciais de novo."),
                         }
                     });
 				}
@@ -114,12 +114,13 @@ impl Authentication {
 		};
 		if let Some(request) = form.request.take() {
 			if demo {
-				form.status = "Demo mode does not read or save proxy credentials.".into();
+				form.status = "O modo demonstração não lê nem salva credenciais de proxy.".into();
 			} else if self.pending.is_some() {
-				form.status = "Wait for the current credential operation.".into();
+				form.status = "Aguarde a operação de credenciais atual.".into();
 			} else if let Ok(url) = endpoint(&request.endpoint) {
 				if self.endpoint.as_ref() != Some(&url) {
-					form.status = "Apply this URL in the plugin before saving credentials.".into();
+					form.status =
+						"Aplique esta URL no plugin antes de salvar as credenciais.".into();
 				} else {
 					let value = request.credentials.map(|(username, password)| Credentials {
 						endpoint: url.clone(),
@@ -130,7 +131,7 @@ impl Authentication {
 						.as_ref()
 						.is_some_and(|value| value.validate().is_err())
 					{
-						form.status = "Use a username of 1-256 bytes without a colon, and a password up to 1024 bytes; control characters are unsupported.".into();
+						form.status = "Use um nome de usuário de 1 a 256 bytes sem dois-pontos e uma senha de até 1024 bytes; caracteres de controle não são aceitos.".into();
 					} else {
 						form.clear_draft();
 						current = self.start(url, runtime, ctx, move || {
@@ -139,13 +140,13 @@ impl Authentication {
 								None => platform::proxy_credentials::forget(),
 							};
 							result.map(|()| value).map_err(
-								|_| "OS credential store update failed; stored credentials retained, API routing paused. Retry Save or Remove.",
+								|_| "Falha ao atualizar o armazenamento de credenciais do sistema; as credenciais guardadas foram mantidas e o roteamento da API está pausado. Tente Salvar ou Remover de novo.",
 							)
 						});
 					}
 				}
 			} else {
-				form.status = "Enter a valid HTTP/HTTPS proxy URL first.".into();
+				form.status = "Primeiro informe uma URL de proxy HTTP/HTTPS válida.".into();
 			}
 		}
 		form.busy = self.pending.is_some();

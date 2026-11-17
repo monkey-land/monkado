@@ -172,7 +172,7 @@ impl GroupMenu {
 					|| image.resolution()[1] > 256
 					|| image.pixels().len() > 256 * 256
 				{
-					dialog.error = Some("Group icon exceeds the size limit");
+					dialog.error = Some("O ícone do grupo excede o limite de tamanho");
 					return;
 				}
 				dialog.icon = Patch::Value(data);
@@ -424,7 +424,7 @@ impl MessagingUi {
 			.channel(channel)
 			.filter(|channel| channel.guild.is_none() && channel.kind == 3)
 			.cloned()
-			.ok_or_else(|| "Group conversation is unavailable".to_owned())?;
+			.ok_or_else(|| "A conversa em grupo não está disponível".to_owned())?;
 		self.group_menu.open(state, &channel, true);
 		Ok(())
 	}

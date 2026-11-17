@@ -113,13 +113,13 @@ pub fn open(rate: u32, controls: Controls) -> Result<Output, &'static str> {
 	let host = cpal::default_host();
 	let device = host
 		.default_output_device()
-		.ok_or("No audio output device")?;
+		.ok_or("Nenhum dispositivo de saída de áudio")?;
 	let supported = device
 		.default_output_config()
-		.map_err(|_| "Audio output unavailable")?;
+		.map_err(|_| "Saída de áudio indisponível")?;
 	let config = crate::audio::playback_config(host.id(), supported.config());
 	if !(1..=8).contains(&config.channels) || !(8000..=192000).contains(&config.sample_rate) {
-		return Err("Unsupported audio output format");
+		return Err("Formato de saída de áudio sem suporte");
 	}
 	let (producer, frames) = rtrb::RingBuffer::new(rate as usize);
 	controls.position.store(0, Ordering::Release);
@@ -136,10 +136,12 @@ pub fn open(rate: u32, controls: Controls) -> Result<Output, &'static str> {
 		cpal::SampleFormat::I16 => output::<i16>(&device, &config, playback),
 		cpal::SampleFormat::I32 => output::<i32>(&device, &config, playback),
 		cpal::SampleFormat::U16 => output::<u16>(&device, &config, playback),
-		_ => return Err("Unsupported audio output format"),
+		_ => return Err("Formato de saída de áudio sem suporte"),
 	}
-	.map_err(|_| "Audio output unavailable")?;
-	stream.play().map_err(|_| "Could not start audio output")?;
+	.map_err(|_| "Saída de áudio indisponível")?;
+	stream
+		.play()
+		.map_err(|_| "Não foi possível iniciar a saída de áudio")?;
 	Ok(Output {
 		producer,
 		_stream: stream,

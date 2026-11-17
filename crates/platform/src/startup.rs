@@ -21,12 +21,12 @@ pub use macos::{load, save};
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub fn load() -> Result<Settings, &'static str> {
-	Err("Automatic startup is currently available on Windows and macOS only.")
+	Err("A inicialização automática está disponível apenas no Windows e no macOS.")
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub fn save(_settings: Settings) -> Result<(), &'static str> {
-	Err("Automatic startup is currently available on Windows and macOS only.")
+	Err("A inicialização automática está disponível apenas no Windows e no macOS.")
 }
 
 #[cfg(target_os = "windows")]
@@ -49,11 +49,12 @@ mod native {
 	const VALUE: PCWSTR = w!("Monkado");
 	// Windows documents a 260-character limit for Run commands, excluding the terminator.
 	const MAX_COMMAND: usize = 260;
-	const READ_ERROR: &str = "Could not read the Windows startup setting.";
-	const WRITE_ERROR: &str = "Could not update the Windows startup setting.";
-	const PATH_ERROR: &str = "This executable path cannot be registered for Windows startup.";
-	const INVALID_ENTRY: &str =
-		"The Monkado startup entry does not match this application. Turn startup on to replace it.";
+	const READ_ERROR: &str = "Não foi possível ler a configuração de inicialização do Windows.";
+	const WRITE_ERROR: &str =
+		"Não foi possível atualizar a configuração de inicialização do Windows.";
+	const PATH_ERROR: &str =
+		"Este caminho do executável não pode ser registrado na inicialização do Windows.";
+	const INVALID_ENTRY: &str = "A entrada de inicialização do Monkado não corresponde a este aplicativo. Ative a inicialização para substituí-la.";
 
 	pub fn load() -> Result<Settings, &'static str> {
 		let executable = std::env::current_exe().map_err(|_| PATH_ERROR)?;
@@ -83,7 +84,7 @@ mod native {
 		let command = format!("\"{path}\" --autostart{suffix}");
 		if command.encode_utf16().count() > MAX_COMMAND {
 			return Err(
-				"The executable path is too long for Windows startup. Move Monkado to a shorter path.",
+				"O caminho do executável é longo demais para a inicialização do Windows. Mova o Monkado para um caminho mais curto.",
 			);
 		}
 		Ok(command)
@@ -169,7 +170,9 @@ mod native {
 			let executable = Path::new(r"C:\Program Files\Monkado\monkado.exe");
 			for minimized in [false, true] {
 				let command = startup_command(executable, minimized).unwrap();
-				assert!(command.starts_with(r#""C:\Program Files\Monkado\monkado.exe" --autostart"#));
+				assert!(
+					command.starts_with(r#""C:\Program Files\Monkado\monkado.exe" --autostart"#)
+				);
 				assert_eq!(
 					parse_command(&command, executable),
 					Ok(Settings {

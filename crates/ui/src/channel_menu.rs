@@ -848,7 +848,7 @@ impl ChannelMenu {
 		let mut message = String::new();
 		if self.preference_error {
 			message.push_str(
-				"Saved channel preferences are full. Remove a favorite or pin, or expand a category.",
+				"As preferências de canal salvas estão cheias. Remova um favorito ou fixado, ou expanda uma categoria.",
 			);
 		}
 		if let Some(id) = self.feedback {
@@ -856,11 +856,11 @@ impl ChannelMenu {
 				message.push_str("\n\n");
 			}
 			message.push_str(if state.channel_action_pending() {
-				"Updating channel settings…"
+				"Atualizando configurações do canal…"
 			} else {
 				state
 					.channel_action_status(id)
-					.unwrap_or("The channel action could not be started.")
+					.unwrap_or("Não foi possível iniciar a ação do canal.")
 			});
 		}
 		let dismissed = dialog::Dialog::new(
@@ -897,19 +897,19 @@ impl Dialog {
 				for (kind, label, description) in [
 					(
 						CreateKind::Text,
-						"Text",
-						"Send messages, images, and files.",
+						"Texto",
+						"Envie mensagens, imagens e arquivos.",
 					),
-					(CreateKind::Voice, "Voice", "Hang out and talk together."),
+					(CreateKind::Voice, "Voz", "Converse e passe tempo junto."),
 					(
 						CreateKind::Announcement,
-						"Announcement",
-						"Share updates. Requires a Community server.",
+						"Anúncios",
+						"Compartilhe novidades. Requer um servidor Comunidade.",
 					),
 					(
 						CreateKind::Forum,
-						"Forum",
-						"Organize discussions into separate posts.",
+						"Fórum",
+						"Organize discussões em publicações separadas.",
 					),
 				] {
 					if design::radio_row(ui, self.create_kind == kind, label, Some(description))
@@ -1434,15 +1434,10 @@ pub(super) fn debug_creation(mut state: State) {
 			},
 		]
 	};
-	frame(&mut menu, &mut state, vec![], "Announcement");
-	let choice = frame(&mut menu, &mut state, vec![], "Announcement").unwrap();
+	frame(&mut menu, &mut state, vec![], "Anúncios");
+	let choice = frame(&mut menu, &mut state, vec![], "Anúncios").unwrap();
 	for pressed in [true, false] {
-		frame(
-			&mut menu,
-			&mut state,
-			pointer(choice, pressed),
-			"Announcement",
-		);
+		frame(&mut menu, &mut state, pointer(choice, pressed), "Anúncios");
 	}
 	assert_eq!(
 		menu.dialog.as_ref().unwrap().create_kind,
@@ -1973,9 +1968,9 @@ mod tests {
 	#[test]
 	fn create_channel_selects_type_before_submitting() {
 		for (kind, label, width, light) in [
-			(CreateKind::Text, "Text", 1120.0, false),
-			(CreateKind::Voice, "Voice", 760.0, true),
-			(CreateKind::Forum, "Forum", 320.0, false),
+			(CreateKind::Text, "Texto", 1120.0, false),
+			(CreateKind::Voice, "Voz", 760.0, true),
+			(CreateKind::Forum, "Fórum", 320.0, false),
 		] {
 			let ctx = egui::Context::default();
 			design::apply(&ctx);
@@ -2020,7 +2015,7 @@ mod tests {
 			assert!(text.iter().any(|(s, _)| s == "CHANNEL NAME"));
 			assert!(!text.iter().any(|(s, _)| s == "CATEGORY NAME"));
 			let viewport = Rect::from_min_size(Pos2::ZERO, egui::vec2(width, 760.0));
-			for choice in ["Text", "Voice", "Forum"] {
+			for choice in ["Texto", "Voz", "Fórum"] {
 				assert!(viewport.contains_rect(text.iter().find(|(s, _)| s == choice).unwrap().1));
 			}
 			h.click(
@@ -2138,7 +2133,7 @@ mod tests {
 			h.click(
 				&ctx,
 				text.iter()
-					.find(|(s, _)| s == "Member 88")
+					.find(|(s, _)| s == "Membro 88")
 					.unwrap()
 					.1
 					.center(),

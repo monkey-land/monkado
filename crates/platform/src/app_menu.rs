@@ -218,20 +218,20 @@ impl AppMenu {
 	) -> Result<Self, &'static str> {
 		use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
-		let mtm = MainThreadMarker::new().ok_or("The menu bar requires the main thread.")?;
+		let mtm = MainThreadMarker::new().ok_or("A barra de menus exige a thread principal.")?;
 		let RawWindowHandle::AppKit(handle) = window
 			.window_handle()
-			.map_err(|_| "Native window unavailable.")?
+			.map_err(|_| "Janela nativa indisponível.")?
 			.as_raw()
 		else {
-			return Err("Expected a macOS window.");
+			return Err("Era esperada uma janela do macOS.");
 		};
 		// SAFETY: winit owns this NSView for the window's lifetime, which the retained
 		// `window` outlives; retaining the view and its window keeps both valid.
 		let view: Retained<NSView> =
 			unsafe { Retained::retain(handle.ns_view.cast::<NSView>().as_ptr()) }
-				.ok_or("Native window unavailable.")?;
-		let ns_window = view.window().ok_or("Native window unavailable.")?;
+				.ok_or("Janela nativa indisponível.")?;
+		let ns_window = view.window().ok_or("Janela nativa indisponível.")?;
 		let target = Target::alloc(mtm).set_ivars(State {
 			window,
 			ns_window,

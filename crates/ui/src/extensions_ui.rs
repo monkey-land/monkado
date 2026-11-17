@@ -674,7 +674,7 @@ impl ExtensionUi {
 		});
 		if let Some((action, target, context)) = chosen {
 			if !context.is_current(state) {
-				self.status = "Menu action discarded because the account changed.".into();
+				self.status = "Ação de menu descartada porque a conta mudou.".into();
 				return;
 			}
 			self.queue(
@@ -927,9 +927,9 @@ impl ExtensionUi {
 			inset.center() + egui::vec2(0.0, 23.0),
 			egui::Align2::CENTER_CENTER,
 			if entry.preview.is_some() && !self.previews.contains_key(id) {
-				"Preview not loaded"
+				"Prévia não carregada"
 			} else {
-				"Preview unavailable"
+				"Prévia indisponível"
 			},
 			egui::FontId::proportional(12.0),
 			colors.muted,
@@ -1111,7 +1111,7 @@ impl ExtensionUi {
 		state: &State,
 	) {
 		if !context.is_current(state) {
-			self.status = "Result discarded because the conversation or draft changed.".into();
+			self.status = "Resultado descartado porque a conversa ou o rascunho mudou.".into();
 			return;
 		}
 		invocation.storage = None;
@@ -1151,7 +1151,7 @@ impl ExtensionUi {
 			ctx.request_repaint();
 		} else {
 			self.status =
-				"Extensions are busy. Try again after the current action finishes.".into();
+				"As extensões estão ocupadas. Tente novamente quando a ação atual terminar.".into();
 		}
 	}
 	pub(crate) fn message_actions(&self) -> Arc<Vec<MenuAction>> {
@@ -1340,7 +1340,7 @@ impl ExtensionUi {
 			if self.themes {
 				if toolbar_button(
 					ui,
-					"Create theme",
+					"Criar tema",
 					true,
 					!self.busy,
 					egui::vec2(132.0, height),
@@ -1352,7 +1352,7 @@ impl ExtensionUi {
 					self.theme_editor = Some(crate::theme_editor::ThemeEditor::new());
 				}
 				let more =
-					toolbar_button(ui, "More", false, true, egui::vec2(84.0, height), colors);
+					toolbar_button(ui, "Mais", false, true, egui::vec2(84.0, height), colors);
 				egui::Popup::menu(&more).show(|ui| {
 					ui.set_min_width(176.0);
 					if ui
@@ -1387,7 +1387,7 @@ impl ExtensionUi {
 			}
 			if toolbar_button(
 				ui,
-				"Refresh",
+				"Atualizar",
 				false,
 				!self.busy,
 				egui::vec2(92.0, height),
@@ -1404,7 +1404,7 @@ impl ExtensionUi {
 			}
 			if toolbar_button(
 				ui,
-				"Import package…",
+				"Importar pacote…",
 				true,
 				!self.busy,
 				egui::vec2(150.0, height),
@@ -2051,7 +2051,7 @@ impl ExtensionUi {
 			.on_hover_text(&entry.manifest.author);
 			ui.spacing_mut().item_spacing.y = 8.0;
 			let description = if entry.description.is_empty() {
-				"Add a new tool to your conversations."
+				"Adicione uma nova ferramenta às suas conversas."
 			} else {
 				&entry.description
 			};
@@ -2082,7 +2082,7 @@ impl ExtensionUi {
 			if entry.cleanup_pending {
 				if card_button(
 					ui,
-					"Retry cleanup",
+					"Tentar limpar novamente",
 					egui::vec2(ui.available_width(), FOOTER_HEIGHT),
 					neutral,
 					outline,
@@ -2111,9 +2111,9 @@ impl ExtensionUi {
 						card_button(
 							ui,
 							if self.themes {
-								"Install theme"
+								"Instalar tema"
 							} else {
-								"Review & enable"
+								"Revisar e ativar"
 							},
 							egui::vec2(width, FOOTER_HEIGHT),
 							if self.themes { neutral } else { colors.accent },
@@ -2185,7 +2185,7 @@ impl ExtensionUi {
 						.add_enabled_ui(!self.busy, |ui| {
 							card_button(
 								ui,
-								"Use theme",
+								"Usar tema",
 								egui::vec2(width, FOOTER_HEIGHT),
 								colors.accent,
 								egui::Stroke::NONE,
@@ -2212,7 +2212,7 @@ impl ExtensionUi {
 							card_button(
 								ui,
 								if entry.local_theme {
-									"Edit theme"
+									"Editar tema"
 								} else {
 									"extensions-ui-theme-preview-bar-customize"
 								},
@@ -2284,7 +2284,7 @@ impl ExtensionUi {
 			}
 			if card_button(
 				ui,
-				"Disable",
+				"Desativar",
 				egui::vec2(ui.available_width().max(1.0), FOOTER_HEIGHT),
 				neutral,
 				outline,
@@ -2645,7 +2645,7 @@ impl ExtensionUi {
 		};
 		if !result.context.is_current(state) {
 			self.proxy_auth.clear_draft();
-			self.status = "Result discarded because the conversation or draft changed.".into();
+			self.status = "Resultado descartado porque a conversa ou o rascunho mudou.".into();
 			return None;
 		}
 		let mut applied = false;
@@ -2655,7 +2655,9 @@ impl ExtensionUi {
 			.entries
 			.iter()
 			.find(|entry| entry.manifest.id == result.id)
-			.map_or("Extension tool", |entry| entry.manifest.name.as_str())
+			.map_or("Ferramenta de extensão", |entry| {
+				entry.manifest.name.as_str()
+			})
 			.to_owned();
 		let rich = self.entries.iter().any(|entry| {
 			entry.manifest.id == result.id
@@ -2674,7 +2676,7 @@ impl ExtensionUi {
 		let mut close = false;
 		let response = crate::dialog::Dialog::new("extension-result", title)
 			.subtitle(if rich {
-				"Create your activity, preview it, then apply when ready.".into()
+				"Crie sua atividade, veja a prévia e aplique quando estiver pronta.".into()
 			} else {
 				crate::i18n::translate(
 					"extensions-ui-show-result-review-the-result-app-actions-and-draft-changes-need-your",
@@ -2772,7 +2774,7 @@ impl ExtensionUi {
 									applied = true;
 								} else {
 									self.status =
-										"The draft changed or the proposal exceeds the draft limit."
+										"O rascunho mudou ou a proposta excede o limite do rascunho."
 											.into();
 								}
 							}
@@ -2925,7 +2927,7 @@ fn draw_native_preview(
 			painter.text(
 				at(0.5, 0.68),
 				egui::Align2::CENTER_CENTER,
-				"Image attachment",
+				"Imagem anexada",
 				egui::FontId::proportional((rect.width() / 24.0).clamp(10.0, 20.0)),
 				colors.text_strong,
 			);
@@ -2994,9 +2996,9 @@ fn draw_native_preview(
 				at(0.41, y),
 				egui::Align2::LEFT_CENTER,
 				if deleted {
-					"Deleted message"
+					"Mensagem excluída"
 				} else {
-					["Robin", "Alex", "You"][i]
+					["Robin", "Alex", "Você"][i]
 				},
 				font.clone(),
 				if deleted {
@@ -3267,102 +3269,122 @@ fn badge(ui: &mut egui::Ui, text: &str, foreground: egui::Color32, background: e
 fn capability_label(capability: Capability) -> &'static str {
 	match capability {
 		Capability::ApiProxy => {
-			"Route the Discord REST API through a proxy across accounts (not calls or media)"
+			"Encaminhar a API REST do Discord por um proxy em todas as contas (exceto chamadas e mídia)"
 		}
-		Capability::RichPresence => "Publish custom activity while activity sharing is enabled",
-		Capability::ImageSharing => "Enable explicit emoji and sticker image attachment selection",
-		Capability::Appearance => "Customize app colors, typography and control styling",
-		Capability::MessageEvents => "Read live message events and text in the active conversation",
-		Capability::SelectedMessage => "Read the message I choose for an action",
-		Capability::ContextMenus => "Add actions to user, channel, server and role menus",
-		Capability::InterfaceTweaks => "Change how parts of the interface look or behave",
-		Capability::Composer => "Read my draft and propose text changes",
-		Capability::Storage => "Store up to 1 MiB of local data for this account",
-		Capability::AppContext => "Read my account and current conversation details",
-		Capability::AccountProfile => "Read my loaded profile, including biography and pronouns",
-		Capability::GuildDirectory => "Read my loaded server names and identifiers",
-		Capability::ChannelDetails => "Read current channel metadata, recipients and permissions",
+		Capability::RichPresence => {
+			"Publicar atividade personalizada enquanto o compartilhamento de atividade estiver ativado"
+		}
+		Capability::ImageSharing => {
+			"Permitir escolher explicitamente anexar emojis e figurinhas como imagem"
+		}
+		Capability::Appearance => {
+			"Personalizar cores, tipografia e estilo dos controles do aplicativo"
+		}
+		Capability::MessageEvents => "Ler eventos de mensagens ao vivo e o texto da conversa ativa",
+		Capability::SelectedMessage => "Ler a mensagem que eu escolher para uma ação",
+		Capability::ContextMenus => "Adicionar ações aos menus de usuário, canal, servidor e cargo",
+		Capability::InterfaceTweaks => {
+			"Mudar a aparência ou o comportamento de partes da interface"
+		}
+		Capability::Composer => "Ler meu rascunho e propor alterações no texto",
+		Capability::Storage => "Armazenar até 1 MiB de dados locais para esta conta",
+		Capability::AppContext => "Ler detalhes da minha conta e da conversa atual",
+		Capability::AccountProfile => "Ler meu perfil carregado, incluindo biografia e pronomes",
+		Capability::GuildDirectory => "Ler nomes e identificadores dos meus servidores carregados",
+		Capability::ChannelDetails => "Ler metadados, destinatários e permissões do canal atual",
 		Capability::DataEvents => {
-			"Receive changes to separately granted account and conversation data"
+			"Receber alterações nos dados de conta e conversa concedidos separadamente"
 		}
 		Capability::MessageContent => {
-			"Read loaded embed text, stickers and message reference metadata"
+			"Ler texto de embeds, figurinhas e metadados de referência de mensagens carregados"
 		}
-		Capability::ForumData => "Read loaded forum and thread summaries",
+		Capability::ForumData => "Ler resumos de fóruns e tópicos carregados",
 		Capability::ConversationActivity => {
-			"Read current typing users and loaded pins; observe reactions"
+			"Ler quem está digitando e as mensagens fixadas carregadas; observar reações"
 		}
 		Capability::ChannelMetadata => {
-			"Read loaded channel topics, categories, thread details and permissions"
+			"Ler temas de canais, categorias, detalhes de tópicos e permissões carregados"
 		}
-		Capability::MemberDetails => "Read loaded server members, roles and server profiles",
-		Capability::ChannelDirectory => "Read the list of loaded, readable conversations",
+		Capability::MemberDetails => "Ler membros, cargos e perfis de servidor carregados",
+		Capability::ChannelDirectory => "Ler a lista de conversas carregadas e legíveis",
 		Capability::MessageDetails => {
-			"Read loaded message replies, mentions, attachment metadata and reactions"
+			"Ler respostas, menções, metadados de anexos e reações de mensagens carregadas"
 		}
-		Capability::Relationships => "Read my loaded friends, requests, blocked and ignored users",
-		Capability::Timeline => "Read loaded messages in the active conversation",
-		Capability::Members => "Read loaded members of the active conversation",
-		Capability::Presence => "Read loaded user presence status",
-		Capability::VoiceState => "Read current call state and participant identifiers",
-		Capability::ReadState => "Read unread and mention counts in the active conversation",
-		Capability::LocalSettings => "Read local reading settings and propose changes for approval",
+		Capability::Relationships => {
+			"Ler meus amigos, pedidos, usuários bloqueados e ignorados carregados"
+		}
+		Capability::Timeline => "Ler mensagens carregadas da conversa ativa",
+		Capability::Members => "Ler membros carregados da conversa ativa",
+		Capability::Presence => "Ler o status de presença dos usuários carregados",
+		Capability::VoiceState => {
+			"Ler o estado da chamada atual e os identificadores dos participantes"
+		}
+		Capability::ReadState => "Ler as contagens de não lidas e menções da conversa ativa",
+		Capability::LocalSettings => {
+			"Ler as configurações locais de leitura e propor alterações para aprovação"
+		}
 		Capability::NotificationSettings => {
-			"Read local sound and notification settings and propose changes for approval"
+			"Ler as configurações locais de som e notificação e propor alterações para aprovação"
 		}
-		Capability::MessageSend => "Propose sending messages for approval",
-		Capability::MessageManage => "Propose editing, deleting or pinning messages for approval",
-		Capability::ReactionsControl => "Propose adding or removing my reactions for approval",
-		Capability::ReadStateControl => "Propose marking conversations read or unread for approval",
+		Capability::MessageSend => "Propor o envio de mensagens para aprovação",
+		Capability::MessageManage => "Propor editar, excluir ou fixar mensagens para aprovação",
+		Capability::ReactionsControl => "Propor adicionar ou remover minhas reações para aprovação",
+		Capability::ReadStateControl => {
+			"Propor marcar conversas como lidas ou não lidas para aprovação"
+		}
 		Capability::ThreadsControl => {
-			"Propose creating and managing threads or forum posts for approval"
+			"Propor criar e gerenciar tópicos ou publicações de fórum para aprovação"
 		}
 		Capability::ChannelControl => {
-			"Propose channel, category, group conversation and mute changes for approval"
+			"Propor alterações em canais, categorias, conversas em grupo e silenciamento para aprovação"
 		}
 		Capability::ServerControl => {
-			"Propose server settings, invites, emoji and membership changes for approval"
+			"Propor alterações em configurações do servidor, convites, emojis e associação para aprovação"
 		}
-		Capability::RoleControl => "Propose server role changes for approval",
+		Capability::RoleControl => "Propor alterações nos cargos do servidor para aprovação",
 		Capability::ModerationControl => {
-			"Propose member role, nickname, kick and prune actions for approval"
+			"Propor ações de cargo, apelido, expulsão e remoção de membros para aprovação"
 		}
 		Capability::MediaControl => {
-			"Propose camera, screen-share and local media-device changes for approval"
+			"Propor alterações de câmera, compartilhamento de tela e dispositivos de mídia locais para aprovação"
 		}
 		Capability::ActionFeedback => {
-			"Receive whether a confirmed app action was accepted by Monkado"
+			"Saber se uma ação confirmada do aplicativo foi aceita pelo Monkado"
 		}
 		Capability::DataQueries => {
-			"Request and read bounded search, pin, thread, member, profile and GIF results"
+			"Solicitar e ler resultados limitados de busca, fixados, tópicos, membros, perfis e GIFs"
 		}
 		Capability::MessagingSettings => {
-			"Read and propose account messaging privacy changes for approval"
+			"Ler e propor alterações de privacidade de mensagens da conta para aprovação"
 		}
-		Capability::GuildFolders => "Read and propose server-folder changes for approval",
+		Capability::GuildFolders => {
+			"Ler e propor alterações nas pastas de servidores para aprovação"
+		}
 		Capability::RelationshipControl => {
-			"Propose friend, block, nickname and note changes for approval"
+			"Propor alterações de amizade, bloqueio, apelido e notas para aprovação"
 		}
 		Capability::AccountControl => {
-			"Read own presence and activity-sharing preferences; propose account changes for approval"
+			"Ler a própria presença e as preferências de compartilhamento de atividade; propor alterações na conta para aprovação"
 		}
 		Capability::AudioSettings => {
-			"Read audio preferences; propose audio settings, participant and stream volume changes for approval"
+			"Ler preferências de áudio; propor alterações nas configurações de áudio e no volume de participantes e transmissões para aprovação"
 		}
-		Capability::VoiceConnect => "Propose joining, ringing or declining calls for approval",
-		Capability::CameraControl => "Propose enabling or disabling my camera for approval",
-		Capability::Navigation => "Propose opening conversations, profiles, search and app views",
-		Capability::LocalNotices => "Propose local notices for approval",
-		Capability::ClipboardWrite => "Propose clipboard text for approval",
+		Capability::VoiceConnect => "Propor entrar, tocar ou recusar chamadas para aprovação",
+		Capability::CameraControl => "Propor ativar ou desativar minha câmera para aprovação",
+		Capability::Navigation => "Propor abrir conversas, perfis, busca e telas do aplicativo",
+		Capability::LocalNotices => "Propor avisos locais para aprovação",
+		Capability::ClipboardWrite => "Propor texto para a área de transferência para aprovação",
 		Capability::VoiceControl => {
-			"Propose call mute/deafen, leaving or watching a stream for approval"
+			"Propor silenciar/ensurdecer na chamada, sair ou assistir a uma transmissão para aprovação"
 		}
-		Capability::AppEvents => "Receive app lifecycle and navigation events while enabled",
+		Capability::AppEvents => {
+			"Receber eventos de ciclo de vida e navegação do aplicativo enquanto ativada"
+		}
 		Capability::DeletedMessages => {
-			"Keep loaded deleted messages in session memory while enabled"
+			"Manter mensagens excluídas carregadas na memória da sessão enquanto ativada"
 		}
 		Capability::ExternalNavigation => {
-			"Propose opening an external HTTPS link in the browser for approval"
+			"Propor abrir um link HTTPS externo no navegador para aprovação"
 		}
 	}
 }
@@ -3586,7 +3608,7 @@ mod tests {
 			result.output.panel.as_slice(),
 			[Element::Heading { text }] if text == "Current settings"
 		));
-		assert!(shop.status.contains("discarded"), "{}", shop.status);
+		assert!(shop.status.contains("descartad"), "{}", shop.status);
 	}
 
 	fn entry() -> ExtensionEntry {
@@ -3864,7 +3886,7 @@ mod tests {
 		})
 		.drop_without_applying_deltas();
 		assert!(shop.requests.is_empty(), "stale choice dropped");
-		assert!(shop.status.contains("discarded"), "{}", shop.status);
+		assert!(shop.status.contains("descartad"), "{}", shop.status);
 	}
 
 	/// Checks that only enabled plugins' actions for the clicked menu are listed and that choosing
@@ -4492,7 +4514,7 @@ mod tests {
 				reviewed_entry.sha256 = "b".repeat(64);
 				extensions.set_entries(vec![reviewed_entry]);
 				let labels = frame(&ctx, &mut extensions, width, vec![]);
-				click(&ctx, &mut extensions, width, &labels, "Review & enable");
+				click(&ctx, &mut extensions, width, &labels, "Revisar e ativar");
 				let labels = frame(&ctx, &mut extensions, width, vec![]);
 				click(
 					&ctx,
@@ -4513,7 +4535,13 @@ mod tests {
 				extensions.busy = true;
 				frame(&ctx, &mut extensions, width, vec![]);
 				let labels = frame(&ctx, &mut extensions, width, vec![]);
-				click(&ctx, &mut extensions, width, &labels, "Retry cleanup");
+				click(
+					&ctx,
+					&mut extensions,
+					width,
+					&labels,
+					"Tentar limpar novamente",
+				);
 				assert!(matches!(
 					extensions.requests.as_slice(),
 					[ExtensionRequest::Disable { .. }]

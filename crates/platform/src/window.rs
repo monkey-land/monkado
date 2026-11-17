@@ -9,18 +9,18 @@ pub fn set_native_title_bar(
 	use objc2_app_kit::{NSView, NSWindowStyleMask, NSWindowTitleVisibility};
 	use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
-	let _main = MainThreadMarker::new().ok_or("Window appearance requires the main thread.")?;
+	let _main = MainThreadMarker::new().ok_or("A aparência da janela exige a thread principal.")?;
 	let RawWindowHandle::AppKit(handle) = window
 		.window_handle()
-		.map_err(|_| "Native window unavailable.")?
+		.map_err(|_| "Janela nativa indisponível.")?
 		.as_raw()
 	else {
-		return Err("Expected a macOS window.");
+		return Err("Era esperada uma janela do macOS.");
 	};
 	// SAFETY: winit owns this NSView for the borrowed window's lifetime; AppKit access
 	// stays on the main thread and the containing window is retained while in use.
 	let view = unsafe { handle.ns_view.cast::<NSView>().as_ref() };
-	let window = view.window().ok_or("Native window unavailable.")?;
+	let window = view.window().ok_or("Janela nativa indisponível.")?;
 	let mut style = window.styleMask();
 	if style.contains(NSWindowStyleMask::FullSizeContentView) == native {
 		style.set(NSWindowStyleMask::FullSizeContentView, !native);

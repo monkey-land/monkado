@@ -56,8 +56,9 @@ impl State {
 		if let Some(page) = self.server_admin.audit_log.as_mut() {
 			if !page.valid() {
 				self.server_admin.audit_log = None;
-				self.server_admin.error =
-					Some("Audit log exceeded safe bounds; reload to continue");
+				self.server_admin.error = Some(
+					"O registro de auditoria excedeu os limites seguros; recarregue para continuar",
+				);
 			} else if page.has_more && page.entries.len() == MAX_ENTRIES {
 				page.has_more = false;
 				self.server_admin.audit_limit_reached = true;

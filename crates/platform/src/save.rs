@@ -7,8 +7,8 @@ pub fn extension_source(
 ) -> impl std::future::Future<Output = Option<PathBuf>> + Send + 'static {
 	let dialog = rfd::AsyncFileDialog::new()
 		.set_parent(parent.as_ref())
-		.set_title("Import Monkado extension")
-		.add_filter("Monkado extensions", &["monkado-extension", "json"])
+		.set_title("Importar extensão do Monkado")
+		.add_filter("Extensões do Monkado", &["monkado-extension", "json"])
 		.pick_file();
 	async move {
 		let file = dialog.await?;
@@ -24,7 +24,7 @@ pub fn icon_source(
 	let dialog = rfd::AsyncFileDialog::new()
 		.set_parent(parent.as_ref())
 		.set_title(title)
-		.add_filter("Images", &["png", "jpg", "jpeg", "gif", "webp"])
+		.add_filter("Imagens", &["png", "jpg", "jpeg", "gif", "webp"])
 		.pick_file();
 	async move {
 		let file = dialog.await?;
@@ -38,8 +38,8 @@ pub fn theme_background_source(
 ) -> impl std::future::Future<Output = Option<PathBuf>> + Send + 'static {
 	let dialog = rfd::AsyncFileDialog::new()
 		.set_parent(parent.as_ref())
-		.set_title("Choose theme background")
-		.add_filter("Static images", &["png", "jpg", "jpeg"])
+		.set_title("Escolher fundo do tema")
+		.add_filter("Imagens estáticas", &["png", "jpg", "jpeg"])
 		.pick_file();
 	async move {
 		let file = dialog.await?;
@@ -53,8 +53,8 @@ pub fn theme_cover_source(
 ) -> impl std::future::Future<Output = Option<PathBuf>> + Send + 'static {
 	let dialog = rfd::AsyncFileDialog::new()
 		.set_parent(parent.as_ref())
-		.set_title("Choose theme card cover")
-		.add_filter("Static images", &["png", "jpg", "jpeg"])
+		.set_title("Escolher capa do cartão do tema")
+		.add_filter("Imagens estáticas", &["png", "jpg", "jpeg"])
 		.pick_file();
 	async move {
 		let file = dialog.await?;
@@ -69,9 +69,9 @@ pub fn theme_destination(
 ) -> impl std::future::Future<Output = Option<PathBuf>> + Send + 'static {
 	let dialog = rfd::AsyncFileDialog::new()
 		.set_parent(parent.as_ref())
-		.set_title("Export Monkado theme")
+		.set_title("Exportar tema do Monkado")
 		.set_file_name(safe_filename(filename))
-		.add_filter("Monkado theme", &["monkado-extension"])
+		.add_filter("Tema do Monkado", &["monkado-extension"])
 		.save_file();
 	async move {
 		let file = dialog.await?;
@@ -85,8 +85,8 @@ pub fn emoji_sources(
 ) -> impl std::future::Future<Output = Option<Vec<PathBuf>>> + Send + 'static {
 	let dialog = rfd::AsyncFileDialog::new()
 		.set_parent(parent.as_ref())
-		.set_title("Choose emoji images")
-		.add_filter("Images", &["png", "jpg", "jpeg", "gif", "webp"])
+		.set_title("Escolher imagens de emoji")
+		.add_filter("Imagens", &["png", "jpg", "jpeg", "gif", "webp"])
 		.pick_files();
 	async move {
 		let files = dialog.await?;
@@ -107,7 +107,7 @@ pub fn attachment_source(
 ) -> impl std::future::Future<Output = Option<Vec<PathBuf>>> + Send + 'static {
 	let dialog = rfd::AsyncFileDialog::new()
 		.set_parent(parent.as_ref())
-		.set_title("Choose attachments")
+		.set_title("Escolher anexos")
 		.pick_files();
 	async move {
 		let file = dialog.await?;
@@ -127,7 +127,7 @@ pub fn attachment_destination(
 	let filename = safe_filename(filename);
 	let dialog = rfd::AsyncFileDialog::new()
 		.set_parent(parent.as_ref())
-		.set_title("Save attachment");
+		.set_title("Salvar anexo");
 	// Windows hides known extensions in the name box and only restores them from a
 	// default extension, which rfd derives from the first filter.
 	#[cfg(target_os = "windows")]
@@ -137,7 +137,7 @@ pub fn attachment_destination(
 				format!("{} file", extension.to_ascii_uppercase()),
 				&[extension],
 			)
-			.add_filter("All files", &["*"]),
+			.add_filter("Todos os arquivos", &["*"]),
 		None => dialog,
 	};
 	let dialog = dialog.set_file_name(filename).save_file();
@@ -156,9 +156,9 @@ pub fn text_destination(
 	let filename = safe_filename(filename);
 	let dialog = rfd::AsyncFileDialog::new()
 		.set_parent(parent.as_ref())
-		.set_title("Save diagnostics")
-		.add_filter("Text file", &["txt"])
-		.add_filter("All files", &["*"])
+		.set_title("Salvar diagnósticos")
+		.add_filter("Arquivo de texto", &["txt"])
+		.add_filter("Todos os arquivos", &["*"])
 		.set_file_name(filename)
 		.save_file();
 	async move {

@@ -27,7 +27,7 @@ fn sections(state: &State) -> Vec<Section<'_>> {
 	if !state.stickers.recent.is_empty() {
 		sections.push(Section {
 			id: Group::Recent,
-			name: "Recently Used",
+			name: "Usadas recentemente",
 			stickers: &state.stickers.recent,
 		});
 	}

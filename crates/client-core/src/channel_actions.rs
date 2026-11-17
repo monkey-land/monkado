@@ -649,13 +649,13 @@ impl State {
 					_ => self.can_manage_channel(channel),
 				}) {
 			self.channel_actions.status =
-				Some((channel, "Channel action unavailable or invalid", false));
+				Some((channel, "Ação de canal indisponível ou inválida", false));
 			return None;
 		}
 		if !self.demo && (self.auth != AuthState::Authenticated || !self.gateway_connected) {
 			self.channel_actions.status = Some((
 				channel,
-				"Channel actions unavailable while disconnected",
+				"Ações de canal indisponíveis enquanto desconectado",
 				false,
 			));
 			return None;
@@ -670,7 +670,7 @@ impl State {
 		{
 			self.channel_actions.status = Some((
 				channel,
-				"Finish pending messages and leave the call before deleting this channel",
+				"Conclua as mensagens pendentes e saia da chamada antes de excluir este canal",
 				false,
 			));
 			return None;
@@ -680,7 +680,7 @@ impl State {
 		{
 			self.channel_actions.status = Some((
 				channel,
-				"Channel settings changed; reopen the editor",
+				"As configurações do canal mudaram; reabra o editor",
 				false,
 			));
 			return None;
@@ -787,7 +787,7 @@ impl State {
 			self.channel_actions.status = Some((
 				channel,
 				if matches!(action, Action::Reference | Action::Load | Action::PostLoad) {
-					"Channel load interrupted"
+					"Carregamento do canal interrompido"
 				} else {
 					Failure::Ambiguous.label()
 				},
@@ -974,7 +974,7 @@ impl State {
 				// open; it is not an ambiguous write.
 				let status = if matches!(action, Action::Reference) && failure == Failure::Ambiguous
 				{
-					"This chat is unavailable"
+					"Este chat está indisponível"
 				} else {
 					failure.label()
 				};
@@ -1062,11 +1062,14 @@ impl State {
 					self.channel_actions.post_owner = details.owner.map(|owner| (channel, owner));
 					self.channel_actions.post = Some((channel, details));
 				} else {
-					self.channel_actions.status =
-						Some((channel, "Post changed; reopen the menu to refresh", false));
+					self.channel_actions.status = Some((
+						channel,
+						"A publicação mudou; reabra o menu para atualizar",
+						false,
+					));
 					return Ok(());
 				}
-				"Post updated"
+				"Publicação atualizada"
 			}
 			Ok(Outcome::Details(edit)) => {
 				if self.can_open_channel_settings(channel) && !observed {
@@ -1074,7 +1077,7 @@ impl State {
 				} else {
 					self.channel_actions.status = Some((
 						channel,
-						"Channel changed while loading; reopen settings",
+						"O canal mudou durante o carregamento; reabra as configurações",
 						false,
 					));
 				}
@@ -1123,7 +1126,7 @@ impl State {
 						if self.channel(target).is_none() {
 							self.forget_channel_reference_name(target);
 							self.channel_actions.status =
-								Some((channel, "Thread could not be loaded", false));
+								Some((channel, "Não foi possível carregar o tópico", false));
 							return Ok(());
 						}
 						self.retire_archived_thread(None);
@@ -1147,11 +1150,11 @@ impl State {
 					self.channel_actions.details = Some((channel, after.clone()));
 				}
 				if reference {
-					"Thread loaded"
+					"Tópico carregado"
 				} else if creating {
-					"Channel created"
+					"Canal criado"
 				} else {
-					"Channel updated"
+					"Canal atualizado"
 				}
 			}
 			Ok(Outcome::Deleted) => {
@@ -1167,7 +1170,7 @@ impl State {
 						event: crate::Event::Unavailable(channel),
 					});
 				}
-				"Channel deleted"
+				"Canal excluído"
 			}
 			Ok(Outcome::Moved) => {
 				if !observed
@@ -1213,7 +1216,7 @@ impl State {
 						});
 					}
 				}
-				"Channel moved"
+				"Canal movido"
 			}
 			Ok(Outcome::Preferences {
 				muted,
@@ -1229,7 +1232,7 @@ impl State {
 					self.status = status;
 					return Ok(());
 				}
-				"Notification settings updated"
+				"Configurações de notificação atualizadas"
 			}
 			Ok(Outcome::HideMuted(hide)) => {
 				if let Err(status) = self.confirm_guild_hides_muted(guild, hide) {
@@ -1238,9 +1241,9 @@ impl State {
 					return Ok(());
 				}
 				if hide {
-					"Muted channels hidden"
+					"Canais silenciados ocultos"
 				} else {
-					"Muted channels shown"
+					"Canais silenciados visíveis"
 				}
 			}
 		};

@@ -213,7 +213,7 @@ pub(crate) fn ensure_webkit_locale() -> Result<(), &'static str> {
 		|| std::env::var_os("FLATPAK_ID").is_some();
 	if flatpak && !gtk4::glib::charset().0 {
 		return Err(
-			"Monkado Flatpak login/verification requires a UTF-8 locale. Repair runtime languages and restart Monkado; see Flatpak troubleshooting.",
+			"O login/verificação do Monkado no Flatpak exige uma localidade UTF-8. Repare os idiomas do runtime e reinicie o Monkado; consulte a solução de problemas do Flatpak.",
 		);
 	}
 	Ok(())

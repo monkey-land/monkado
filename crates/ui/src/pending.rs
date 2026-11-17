@@ -366,9 +366,9 @@ fn upload_strip(ui: &mut egui::Ui, pending: &Pending, upload: Option<&Upload>, c
 	let colors = design::palette(ui);
 	let count = pending.attachments.len();
 	let title = if count == 1 {
-		format!("Uploading {}", pending.attachments[0])
+		format!("Enviando {}", pending.attachments[0])
 	} else {
-		format!("Uploading {count} files")
+		format!("Enviando {count} arquivos")
 	};
 	let (fraction, detail) = match upload.and_then(|u| u.progress) {
 		Some((sent, total)) if total > 0 && sent < total => (
@@ -380,15 +380,15 @@ fn upload_strip(ui: &mut egui::Ui, pending: &Pending, upload: Option<&Upload>, c
 				sent.saturating_mul(100) / total
 			),
 		),
-		Some((_, total)) if total > 0 => (1.0, "Sending message…".into()),
+		Some((_, total)) if total > 0 => (1.0, "Enviando mensagem…".into()),
 		_ => (
 			0.0,
 			match upload {
 				Some(upload) => format!(
-					"Preparing upload · {}",
+					"Preparando envio · {}",
 					attachments::format_size(upload.bytes())
 				),
-				None => "Preparing upload…".into(),
+				None => "Preparando envio…".into(),
 			},
 		),
 	};

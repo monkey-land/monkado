@@ -87,16 +87,16 @@ fn segments(state: &State, channel: Id, now: Instant) -> Option<Vec<(String, boo
 		return None;
 	}
 	let verb = if count == 1 {
-		" is typing…"
+		" está digitando…"
 	} else {
-		" are typing…"
+		" estão digitando…"
 	};
 	if names.is_empty() {
 		return Some(vec![(
 			if count == 1 {
-				"Someone is typing…".into()
+				"Alguém está digitando…".into()
 			} else {
-				format!("{count} people are typing…")
+				format!("{count} pessoas estão digitando…")
 			},
 			false,
 		)]);
@@ -106,16 +106,16 @@ fn segments(state: &State, channel: Id, now: Instant) -> Option<Vec<(String, boo
 	let last_index = names.len() - 1 + usize::from(others > 0);
 	for (index, name) in names.into_iter().enumerate() {
 		if index > 0 {
-			out.push((
-				if index == last_index { " and " } else { ", " }.into(),
-				false,
-			));
+			out.push((if index == last_index { " e " } else { ", " }.into(), false));
 		}
 		out.push((name, true));
 	}
 	if others > 0 {
 		out.push((
-			format!(" and {others} other{}", if others == 1 { "" } else { "s" }),
+			format!(
+				" e mais {others} pessoa{}",
+				if others == 1 { "" } else { "s" }
+			),
 			false,
 		));
 	}
@@ -323,7 +323,7 @@ mod tests {
 		}
 		let text = label(&state, Id(10), now).unwrap();
 		assert!(text.starts_with("Alex, Robin, Long name"));
-		assert!(text.ends_with("and 5 others are typing…"));
+		assert!(text.ends_with("e mais 5 pessoas estão digitando…"));
 		assert!(!text.contains('\n'));
 		assert!(text.chars().count() < 160);
 		assert!(label(&state, Id(11), now).is_none());
@@ -359,7 +359,7 @@ mod tests {
 					assert!(output.platform_output.commands.is_empty());
 					let rendered = output.shapes.iter().any(|shape| {
 						matches!(&shape.shape,
-                        egui::Shape::Text(text) if text.galley.job.text.contains("typing"))
+                        egui::Shape::Text(text) if text.galley.job.text.contains("digitando"))
 					});
 					assert_eq!(rendered, !expired);
 					if pass == 4 {
@@ -505,7 +505,7 @@ mod tests {
 		state.observe_typing_at(signal, wall, now);
 		assert_eq!(
 			label(&state, Id(10), now).as_deref(),
-			Some("Bestie is typing…")
+			Some("Bestie está digitando…")
 		);
 		// A cleared nickname falls back to the name the conversation otherwise shows.
 		apply(
@@ -517,7 +517,7 @@ mod tests {
 		);
 		assert_eq!(
 			label(&state, Id(10), now).as_deref(),
-			Some("Alex is typing…")
+			Some("Alex está digitando…")
 		);
 	}
 
@@ -604,7 +604,7 @@ mod tests {
 		);
 		assert_eq!(
 			label(&state, Id(10), now).as_deref(),
-			Some("Someone is typing…")
+			Some("Alguém está digitando…")
 		);
 		state.drafts.insert(Id(10), "My unsent draft".into());
 		let mut messaging = crate::MessagingUi::default();
@@ -626,7 +626,7 @@ mod tests {
 			assert!(output.platform_output.commands.is_empty());
 			if pass > 0 {
 				assert!(output.shapes.iter().any(|shape| matches!(&shape.shape,
-                    egui::Shape::Text(text) if text.galley.job.text == "Someone is typing…")));
+                    egui::Shape::Text(text) if text.galley.job.text == "Alguém está digitando…")));
 			}
 			assert_eq!(state.drafts[&Id(10)], "My unsent draft");
 			assert!(messaging.draft_changes.is_empty());

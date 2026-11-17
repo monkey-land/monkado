@@ -100,41 +100,41 @@ impl MenuState {
 		rows.extend(self.account.clone().map(Row::Info));
 		if self.pings > 0 {
 			rows.push(Row::Info(format!(
-				"Unread mentions and DMs: {}",
+				"Menções e mensagens diretas não lidas: {}",
 				self.pings
 			)));
 		}
 		if let Some(call) = &self.call {
-			rows.push(Row::Info(format!("In voice: {call}")));
+			rows.push(Row::Info(format!("Na chamada: {call}")));
 		}
 		if !rows.is_empty() {
 			rows.push(Row::Separator);
 		}
-		rows.push(action("Show Monkado", Event::Show));
+		rows.push(action("Mostrar Monkado", Event::Show));
 		#[cfg(target_os = "linux")]
-		rows.push(action("Minimize Monkado", Event::Minimize));
+		rows.push(action("Minimizar Monkado", Event::Minimize));
 		rows.push(Row::Separator);
 		rows.push(Row::Action {
-			label: "Mute",
+			label: "Silenciar",
 			event: Event::ToggleMute,
 			// Deafening mutes too, as in the app.
 			checked: Some(self.muted || self.deafened),
 			enabled: true,
 		});
 		rows.push(Row::Action {
-			label: "Deafen",
+			label: "Ensurdecer",
 			event: Event::ToggleDeafen,
 			checked: Some(self.deafened),
 			enabled: true,
 		});
 		rows.push(Row::Action {
-			label: "Disconnect",
+			label: "Desconectar",
 			event: Event::Disconnect,
 			checked: None,
 			enabled: self.call.is_some(),
 		});
 		rows.push(Row::Separator);
-		rows.push(action("Quit Monkado", Event::Quit));
+		rows.push(action("Sair do Monkado", Event::Quit));
 		rows
 	}
 }
@@ -222,7 +222,7 @@ impl Tray {
 		_window: std::sync::Arc<winit::window::Window>,
 		_wake: impl Fn() + 'static,
 	) -> Result<Self, &'static str> {
-		Err("The tray icon is unavailable on this platform.")
+		Err("O ícone da bandeja não está disponível nesta plataforma.")
 	}
 	pub fn take_event(&self) -> Option<Event> {
 		None
@@ -257,7 +257,8 @@ mod native {
 	const DEAFEN: usize = 4;
 	const DISCONNECT: usize = 5;
 	const NIN_KEYSELECT: u32 = NIN_SELECT | NINF_KEY;
-	const UNAVAILABLE: &str = "The Windows tray is unavailable. The window will remain accessible.";
+	const UNAVAILABLE: &str =
+		"A bandeja do Windows está indisponível. A janela continuará acessível.";
 	const ATLAS: &[u8] = include_bytes!("../../../assets/icons/atlas.png");
 	const ICON_SIZE: usize = 32;
 	const LOGO: &[u8] = include_bytes!("../../../assets/icons/monkado.png");
@@ -446,9 +447,9 @@ mod native {
 	fn voice_state_tip(state: super::VoiceState) -> &'static str {
 		match state {
 			super::VoiceState::Unmuted => "Monkado",
-			super::VoiceState::Speaking => "Monkado (Speaking)",
-			super::VoiceState::Muted => "Monkado (Muted)",
-			super::VoiceState::Deafened => "Monkado (Deafened)",
+			super::VoiceState::Speaking => "Monkado (Falando)",
+			super::VoiceState::Muted => "Monkado (Silenciado)",
+			super::VoiceState::Deafened => "Monkado (Ensurdecido)",
 		}
 	}
 

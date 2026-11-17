@@ -235,13 +235,13 @@ fn main() {
 							modifiers: egui::Modifiers::NONE,
 						}],
 					);
-					if labels.iter().any(|(text, _)| text == "Fullscreen") {
+					if labels.iter().any(|(text, _)| text == "Tela cheia") {
 						break;
 					}
 				}
 				let pos = labels
 					.iter()
-					.find(|(text, _)| text == "Fullscreen")
+					.find(|(text, _)| text == "Tela cheia")
 					.unwrap()
 					.1
 					.center();

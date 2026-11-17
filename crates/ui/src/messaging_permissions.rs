@@ -79,14 +79,18 @@ fn detail(ui: &mut egui::Ui, text: &str) {
 	);
 }
 const SPAM_FILTERS: [(u32, &str, Option<&str>); 3] = [
-	(3, "Filter all spam", None),
-	(2, "Filter messages from non-friends", Some("Recommended")),
+	(3, "Filtrar todo spam", None),
+	(
+		2,
+		"Filtrar mensagens de quem não é amigo",
+		Some("Recomendado"),
+	),
 	(1, "Don't filter spam", None),
 ];
-const ALLOW_DMS: &str = "Allow DMs from other server members";
+const ALLOW_DMS: &str = "Permitir DMs de outros membros do servidor";
 const FILTER_REQUESTS: (&str, &str) = (
-	"Filter messages from server members I may not know",
-	"Move messages from people you may not know into Message Requests.",
+	"Filtrar mensagens de membros do servidor que talvez eu não conheça",
+	"Move mensagens de pessoas que você talvez não conheça para Pedidos de mensagem.",
 );
 const GUILD_PICKER_WIDTH: f32 = 260.0;
 
@@ -294,16 +298,16 @@ impl MessagingUi {
 			design::card(ui, |ui| {
 				design::section(ui, &crate::i18n::translate("messaging-permissions-messaging-permissions-settings-allow-friend-requests-from"), Some(&crate::i18n::translate("messaging-permissions-messaging-permissions-settings-control-who-can-send-you-friend-requests-and-how-they")));
 				for (label, bit, make, description) in [
-					("Everyone", 8, Change::Everyone as fn(bool) -> Change, None),
-					("Friends of friends", 2, Change::FriendsOfFriends, None),
-					("Server members", 4, Change::ServerMembers, Some("Only from servers where you also allow Direct Messages.")),
+					("Todos", 8, Change::Everyone as fn(bool) -> Change, None),
+					("Amigos de amigos", 2, Change::FriendsOfFriends, None),
+					("Membros do servidor", 4, Change::ServerMembers, Some("Somente de servidores em que você também permite mensagens diretas.")),
 				] {
 					if let Some(value) = toggle(ui, label, description, settings.friend_source_flags & bit != 0) {
 						change = Some(make(value));
 					}
 				}
 				design::card_divider(ui);
-				if let Some(value) = toggle(ui, "Show personalized messages", Some("Show personalized messages on incoming friend requests. If you accept, the message will still appear in your DMs."), settings.personalized_requests) {
+				if let Some(value) = toggle(ui, "Mostrar mensagens personalizadas", Some("Mostra mensagens personalizadas nos pedidos de amizade recebidos. Se você aceitar, a mensagem continuará aparecendo nas suas DMs."), settings.personalized_requests) {
 					change = Some(Change::PersonalizedRequests(value));
 				}
 			});
@@ -312,12 +316,12 @@ impl MessagingUi {
 			design::card(ui, |ui| {
 				design::hint(ui, &crate::i18n::translate("messaging-permissions-messaging-permissions-settings-settings-for-games-that-use-discord-to-power-their-social"));
 				ui.add_space(4.0);
-				if let Some(value) = toggle(ui, "Allow friends from games to send direct messages and invites", Some("Let friends from connected games send DMs and invite you to play, even when the game isn't open."), settings.game_friend_dms) {
+				if let Some(value) = toggle(ui, "Permitir que amigos de jogos enviem mensagens diretas e convites", Some("Deixa amigos de jogos conectados enviarem DMs e convidarem você para jogar, mesmo com o jogo fechado."), settings.game_friend_dms) {
 					change = Some(Change::GameFriendDms(value));
 				}
 				design::card_divider(ui);
 				design::section(ui, &crate::i18n::translate("messaging-permissions-messaging-permissions-settings-show-direct-messages-in-games"), Some(&crate::i18n::translate("messaging-permissions-messaging-permissions-settings-read-and-respond-to-dms-directly-from-in-game-chats")));
-				for (value, label) in [(1, "Show all DMs"), (2, "Show only DMs from people who also play the game"), (3, "Don't show DMs")] {
+				for (value, label) in [(1, "Mostrar todas as DMs"), (2, "Mostrar apenas DMs de quem também joga o jogo"), (3, "Não mostrar DMs")] {
 					let selected = settings.game_dms == value || (settings.game_dms == 0 && value == 1);
 					if design::radio_row(ui, selected, label, None).clicked() && !selected {
 						change = Some(Change::GameDms(value));

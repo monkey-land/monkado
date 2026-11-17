@@ -97,15 +97,15 @@ impl ArchivesUi {
 									crate::design::Select::from_id_salt(("archive-kind", parent))
 										.width(112.0)
 										.selected_text(match kind {
-											Kind::Public => "Public",
-											Kind::JoinedPrivate => "Joined private",
-											Kind::Private => "Private",
+											Kind::Public => "Públicos",
+											Kind::JoinedPrivate => "Privados em que entrei",
+											Kind::Private => "Privados",
 										})
 										.show_ui(ui, |ui| {
 											for (option, label) in [
-												(Kind::Public, "Public"),
-												(Kind::JoinedPrivate, "Joined private"),
-												(Kind::Private, "Private"),
+												(Kind::Public, "Públicos"),
+												(Kind::JoinedPrivate, "Privados em que entrei"),
+												(Kind::Private, "Privados"),
 											] {
 												ui.add_enabled_ui(
 													state.can_archive(parent, option),
@@ -468,9 +468,9 @@ mod tests {
 					.unwrap()
 					.nodes;
 				for (label, enabled) in [
-					("Public", true),
-					("Joined private", true),
-					("Private", can_manage),
+					("Públicos", true),
+					("Privados em que entrei", true),
+					("Privados", can_manage),
 				] {
 					let node = nodes
 						.iter()

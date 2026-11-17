@@ -35,7 +35,7 @@ impl GroupIcon {
 		output_edge: u32,
 	) -> Result<(), &'static str> {
 		if self.choosing.is_some() {
-			return Err("Close the previous image picker first");
+			return Err("Feche primeiro o seletor de imagens anterior");
 		}
 		let dialog = platform::save::icon_source(parent, title);
 		let (send, result) = mpsc::sync_channel(1);
@@ -54,7 +54,7 @@ impl GroupIcon {
 						}
 					})
 					.await
-					.unwrap_or(Err("Image preparation interrupted; choose it again"))
+					.unwrap_or(Err("Preparação da imagem interrompida; escolha de novo"))
 				}
 				_ => Ok(None),
 			};
@@ -98,7 +98,7 @@ impl GroupIcon {
 			Ok(result) => result,
 			Err(mpsc::TryRecvError::Empty) => return None,
 			Err(mpsc::TryRecvError::Disconnected) => {
-				Err("Image preparation interrupted; choose it again")
+				Err("Preparação da imagem interrompida; escolha de novo")
 			}
 		};
 		let choosing = self.choosing.take()?;
@@ -113,18 +113,19 @@ impl Drop for GroupIcon {
 
 fn read(path: &Path, output_edge: u32) -> Result<(String, egui::ColorImage), &'static str> {
 	let metadata =
-		std::fs::symlink_metadata(path).map_err(|_| "Could not open the chosen image")?;
+		std::fs::symlink_metadata(path).map_err(|_| "Não foi possível abrir a imagem escolhida")?;
 	if !metadata.is_file() || metadata.file_type().is_symlink() {
-		return Err("Choose a regular image file");
+		return Err("Escolha um arquivo de imagem comum");
 	}
 	if metadata.len() == 0 || metadata.len() > MAX_INPUT as u64 {
-		return Err("Choose an image up to 8 MB");
+		return Err("Escolha uma imagem de até 8 MB");
 	}
-	let file = std::fs::File::open(path).map_err(|_| "Could not open the chosen image")?;
+	let file =
+		std::fs::File::open(path).map_err(|_| "Não foi possível abrir a imagem escolhida")?;
 	let mut bytes = Vec::with_capacity(metadata.len() as usize);
 	file.take(MAX_INPUT as u64 + 1)
 		.read_to_end(&mut bytes)
-		.map_err(|_| "Could not read the chosen image")?;
+		.map_err(|_| "Não foi possível ler a imagem escolhida")?;
 	decode(&bytes, output_edge)
 }
 
@@ -139,7 +140,7 @@ pub(crate) fn decode_image(
 ) -> Result<(String, egui::ColorImage), &'static str> {
 	let (png, preview) = decode_png(bytes, output_edge, square, 256 * 1024)?;
 	let uri = discord_protocol::group_actions::icon_data_uri(&png)
-		.ok_or("Prepared icon exceeds 256 KB; choose a simpler image")?;
+		.ok_or("O ícone preparado excede 256 KB; escolha uma imagem mais simples")?;
 	Ok((uri, preview))
 }
 
@@ -150,11 +151,11 @@ pub(crate) fn decode_png(
 	max_output: usize,
 ) -> Result<(Vec<u8>, egui::ColorImage), &'static str> {
 	if bytes.len() > MAX_INPUT {
-		return Err("Choose an image up to 8 MB");
+		return Err("Escolha uma imagem de até 8 MB");
 	}
 	let mut reader = image::ImageReader::new(Cursor::new(bytes))
 		.with_guessed_format()
-		.map_err(|_| "Choose a PNG, JPEG, GIF or WebP image")?;
+		.map_err(|_| "Escolha uma imagem PNG, JPEG, GIF ou WebP")?;
 	let mut limits = image::Limits::default();
 	limits.max_image_width = Some(4096);
 	limits.max_image_height = Some(4096);
@@ -162,7 +163,7 @@ pub(crate) fn decode_png(
 	reader.limits(limits);
 	let image = reader
 		.decode()
-		.map_err(|_| "Image is unsupported or too large; use at most 4096 × 4096 pixels")?;
+		.map_err(|_| "Imagem sem suporte ou grande demais; use no máximo 4096 × 4096 pixels")?;
 	let edge = image.width().min(image.height());
 	let crop = if square {
 		image.view(
@@ -182,9 +183,9 @@ pub(crate) fn decode_png(
 	let mut png = Cursor::new(Vec::new());
 	image
 		.write_to(&mut png, image::ImageFormat::Png)
-		.map_err(|_| "Could not prepare the icon")?;
+		.map_err(|_| "Não foi possível preparar o ícone")?;
 	if png.get_ref().len() > max_output {
-		return Err("Prepared image is too large; choose a simpler image");
+		return Err("A imagem preparada é grande demais; escolha uma imagem mais simples");
 	}
 	let pixels = image.into_rgba8();
 	let preview = egui::ColorImage::from_rgba_unmultiplied(

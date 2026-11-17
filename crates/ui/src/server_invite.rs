@@ -46,9 +46,9 @@ impl InviteDialog {
 		let mut close = false;
 		let settings_open = self.settings.is_some();
 		let title = if settings_open {
-			"Invite Link Settings".to_owned()
+			"Configurações do link de convite".to_owned()
 		} else {
-			format!("Invite friends to {name}")
+			format!("Convidar amigos para {name}")
 		};
 		let response = crate::dialog::Dialog::new("server-invite-dialog", title)
 			.subtitle(crate::i18n::translate_if_key(if settings_open {
@@ -422,9 +422,9 @@ impl InviteDialog {
 				let pending = state.server_action_pending();
 				let text = link.clone().unwrap_or_else(|| {
 					if pending {
-						"Creating invite link…"
+						"Criando link de convite…"
 					} else {
-						"Create a link to share"
+						"Crie um link para compartilhar"
 					}
 					.to_owned()
 				});
@@ -435,11 +435,11 @@ impl InviteDialog {
 					egui::Layout::right_to_left(egui::Align::Center),
 					|ui| {
 						let label = if link.is_some() {
-							if self.copied { "Copied" } else { "Copy" }
+							if self.copied { "Copiado" } else { "Copiar" }
 						} else if pending {
-							"Creating…"
+							"Criando…"
 						} else {
-							"Create link"
+							"Criar link"
 						};
 						if ui
 							.add_enabled_ui(!pending && channel.is_some(), |ui| {
@@ -792,7 +792,7 @@ mod tests {
 				&mut state,
 				&mut commands,
 				size,
-				"Create link",
+				"Criar link",
 			);
 			assert!(
 				matches!(&commands[0], Command::ServerAction { action:client_core::server_actions::Action::CreateInvite { options:sent,.. },..} if *sent == options),

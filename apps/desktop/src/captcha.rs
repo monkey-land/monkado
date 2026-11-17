@@ -84,7 +84,7 @@ impl Captcha {
 			Duration::from_secs(1)
 		});
 		let result = if view.expired() {
-			Some(Err("Verification expired. Start the check again."))
+			Some(Err("A verificação expirou. Comece de novo."))
 		} else {
 			view.poll()
 		};
@@ -95,7 +95,7 @@ impl Captcha {
 				Ok(solution) => {
 					let command = state.resume_verification(flow, solution);
 					if command.is_none() {
-						panel.error = Some("Verification expired. Start the check again.");
+						panel.error = Some("A verificação expirou. Comece de novo.");
 					}
 					return command;
 				}

@@ -8,9 +8,9 @@ use model::{Id, Member};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 pub const MAX_PARTICIPANTS: usize = 64;
 /// Why a join into a room already holding [`MAX_PARTICIPANTS`] people is refused.
-pub const CALL_FULL: &str = "Voice channel exceeds the 64 participant limit";
+pub const CALL_FULL: &str = "O canal de voz excede o limite de 64 participantes";
 /// Why a join into a guild channel at its user limit is refused.
-pub const CHANNEL_FULL: &str = "This voice channel is full";
+pub const CHANNEL_FULL: &str = "Este canal de voz está cheio";
 pub const MAX_DM_CALLS: usize = 64;
 pub const MAX_DM_CALL_BYTES: usize = MAX_DM_CALLS * size_of::<Id>();
 pub const MAX_ROSTER: usize = 4096;
@@ -65,15 +65,15 @@ pub enum Phase {
 impl Phase {
 	pub fn label(self) -> &'static str {
 		match self {
-			Self::ConnectingTransport => "Connecting to voice server...",
-			Self::Discovering => "Checking voice network...",
-			Self::OpeningAudio => "Opening audio devices...",
-			Self::Connecting => "Connecting call…",
-			Self::Ringing => "Ringing…",
-			Self::Securing => "Securing audio…",
-			Self::Waiting => "Connected · waiting for others",
-			Self::Connected => "Voice connected",
-			Self::Failed => "Call failed",
+			Self::ConnectingTransport => "Conectando ao servidor de voz…",
+			Self::Discovering => "Verificando a rede de voz…",
+			Self::OpeningAudio => "Abrindo dispositivos de áudio…",
+			Self::Connecting => "Conectando chamada…",
+			Self::Ringing => "Chamando…",
+			Self::Securing => "Protegendo o áudio…",
+			Self::Waiting => "Conectado · aguardando os outros",
+			Self::Connected => "Voz conectada",
+			Self::Failed => "Falha na chamada",
 		}
 	}
 }
@@ -473,7 +473,7 @@ impl ClientState {
 			request,
 			loading: allowed,
 			url: None,
-			error: (!allowed).then_some("Stream preview unavailable while disconnected"),
+			error: (!allowed).then_some("Prévia da transmissão indisponível enquanto desconectado"),
 		});
 		allowed.then_some(crate::Command::StreamPreview {
 			guild,
@@ -520,8 +520,8 @@ impl ClientState {
 		preview.loading = false;
 		match result {
 			Ok(url) if url.len() <= 2048 => preview.url = Some(url),
-			Ok(_) => preview.error = Some("Stream preview response was too large"),
-			Err(_) => preview.error = Some("Stream preview hidden or unavailable"),
+			Ok(_) => preview.error = Some("A resposta da prévia da transmissão era grande demais"),
+			Err(_) => preview.error = Some("Prévia da transmissão oculta ou indisponível"),
 		}
 	}
 
@@ -626,7 +626,7 @@ impl ClientState {
 		muted: bool,
 		deafened: bool,
 	) -> Result<crate::Command, &'static str> {
-		const UNAVAILABLE: &str = "Joining this call is no longer available";
+		const UNAVAILABLE: &str = "Não é mais possível entrar nesta chamada";
 		if !self.can_call(channel) {
 			return Err(UNAVAILABLE);
 		}
@@ -637,7 +637,7 @@ impl ClientState {
 			.as_ref()
 			.is_some_and(|call| call.phase != Phase::Failed)
 		{
-			return Err("You are already in another call");
+			return Err("Você já está em outra chamada");
 		}
 		let guild = self.channel(channel).ok_or(UNAVAILABLE)?.guild;
 		if let Some(full) = self.call_full(channel) {
@@ -906,7 +906,7 @@ impl ClientState {
 					self.voice.active = None;
 					self.voice.outgoing = None;
 					self.voice.departed = Some((channel, request));
-					self.status = "This device's call session was replaced";
+					self.status = "A sessão de chamada deste dispositivo foi substituída";
 				}
 			}
 			Event::Departed { channel, request } => {
@@ -1238,8 +1238,8 @@ impl ClientState {
 						self.voice.outgoing = None;
 					}
 					if call.participants.len() >= MAX_PARTICIPANTS {
-						self.disconnect_voice("Voice channel exceeds the 64 participant limit");
-						self.status = "Voice channel exceeds the 64 participant limit";
+						self.disconnect_voice("O canal de voz excede o limite de 64 participantes");
+						self.status = "O canal de voz excede o limite de 64 participantes";
 						return;
 					}
 					call.participants.push(Participant {
@@ -1368,8 +1368,10 @@ impl ClientState {
 				+ entry.bytes()
 				> MAX_ROSTER_BYTES
 		{
-			self.disconnect_voice("Voice roster exceeds safe capacity; reconnect to refresh");
-			self.status = "Voice roster exceeds safe capacity; reconnect to refresh";
+			self.disconnect_voice(
+				"A lista de participantes da voz excede a capacidade segura; reconecte para atualizar",
+			);
+			self.status = "A lista de participantes da voz excede a capacidade segura; reconecte para atualizar";
 			return false;
 		}
 		self.voice.roster.push(entry);
@@ -1401,7 +1403,7 @@ impl ClientState {
 				call.watching = None;
 			}
 			if call.participants.len() > MAX_PARTICIPANTS {
-				self.disconnect_voice("Voice channel exceeds the 64 participant limit");
+				self.disconnect_voice("O canal de voz excede o limite de 64 participantes");
 			}
 		}
 	}
@@ -1615,7 +1617,10 @@ mod tests {
 		assert!(state.voice.active.is_none());
 		assert!(state.voice.outgoing.is_none());
 		assert_eq!(state.voice.departed, Some((Id(20), request)));
-		assert_eq!(state.status, "This device's call session was replaced");
+		assert_eq!(
+			state.status,
+			"A sessão de chamada deste dispositivo foi substituída"
+		);
 		assert!(state.start_call(Id(20), false).is_some());
 		let next = state.voice.active.as_ref().unwrap().request;
 		assert_ne!(request, next);
@@ -1906,7 +1911,7 @@ mod tests {
 				participants: vec![oversized],
 			});
 			assert!(state.voice.roster.is_empty());
-			assert!(state.status.contains("capacity"));
+			assert!(state.status.contains("capacidade"));
 			state.apply_voice(Event::Snapshot {
 				guild: None,
 				partial: false,

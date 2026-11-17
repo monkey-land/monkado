@@ -326,7 +326,7 @@ impl State {
 		if !model::valid_components(&components)
 			|| !valid_modal_values(&modal.components, &components)
 		{
-			self.interactions.error = Some("Complete the required fields within their limits");
+			self.interactions.error = Some("Preencha os campos obrigatórios dentro dos limites");
 			return None;
 		}
 		let data = Data::Modal {
@@ -362,7 +362,7 @@ impl State {
 		{
 			self.interactions.pending = None;
 			self.interactions.error =
-				Some("No response received; check the conversation before trying again");
+				Some("Nenhuma resposta recebida; verifique a conversa antes de tentar de novo");
 		}
 		if self
 			.interactions
@@ -442,10 +442,8 @@ impl State {
 					self.interactions.error = None;
 				}
 			}
-			Event::Failed { nonce } => self.interaction_failed(
-				&nonce,
-				"The application could not complete this interaction",
-			),
+			Event::Failed { nonce } => self
+				.interaction_failed(&nonce, "O aplicativo não conseguiu concluir esta interação"),
 			Event::Submitted {
 				nonce,
 				result: Err(failure),

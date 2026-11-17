@@ -9,16 +9,16 @@ use x11_dl::xlib;
 pub(super) fn set_blur(window: &winit::window::Window, enabled: bool) -> Result<(), &'static str> {
 	let window_handle = window
 		.window_handle()
-		.map_err(|_| "Native window unavailable.")?;
+		.map_err(|_| "Janela nativa indisponível.")?;
 	let display_handle = window
 		.display_handle()
-		.map_err(|_| "Native display unavailable.")?;
+		.map_err(|_| "Tela nativa indisponível.")?;
 	let (RawWindowHandle::Xlib(handle), RawDisplayHandle::Xlib(display)) =
 		(window_handle.as_raw(), display_handle.as_raw())
 	else {
-		return Err("Expected an X11 window.");
+		return Err("Era esperada uma janela X11.");
 	};
-	let display = display.display.ok_or("Native display unavailable.")?;
+	let display = display.display.ok_or("Tela nativa indisponível.")?;
 	let xlib = xlib::Xlib::open().map_err(|_| "X11 window effects unavailable.")?;
 	// SAFETY: both handles belong to the borrowed winit window. Xlib manages its
 	// connection locking; the property contains no data and retains no pointers.

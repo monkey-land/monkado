@@ -831,7 +831,7 @@ pub fn show(
 								));
 								link(
 									ui,
-									"Open video…",
+									"Abrir vídeo…",
 									embed.url.as_deref().or_else(|| {
 										embed.video.as_ref().and_then(|v| v.url.as_deref())
 									}),

@@ -631,9 +631,9 @@ impl State {
 		if self.server_admin.pending {
 			self.server_admin.needs_refresh |= self.server_admin.saving;
 			self.server_admin.error = Some(if self.server_admin.saving {
-				"Outcome unknown; reload before retrying"
+				"Resultado desconhecido; recarregue antes de tentar de novo"
 			} else {
-				"Server administration disconnected; reload to continue"
+				"A administração do servidor foi desconectada; recarregue para continuar"
 			});
 			self.server_admin.pending = false;
 			self.server_admin.saving = false;
@@ -690,7 +690,7 @@ impl State {
 			Ok(result) if result.valid() => result,
 			Ok(_) => {
 				self.server_admin.error =
-					Some("Server administration response exceeded safe bounds");
+					Some("A resposta da administração do servidor excedeu os limites seguros");
 				self.server_admin.needs_refresh = true;
 				return Ok(());
 			}
@@ -715,7 +715,8 @@ impl State {
 				!= self.server_admin.permission_revision
 		{
 			self.server_admin.audit_log = None;
-			self.server_admin.error = Some("Server permissions changed; reload the audit log");
+			self.server_admin.error =
+				Some("As permissões do servidor mudaram; recarregue o registro de auditoria");
 			return Ok(());
 		}
 		if matches!(action, Some(Action::Integrations(_)))
@@ -724,7 +725,7 @@ impl State {
 		{
 			self.server_admin.integrations = None;
 			self.server_admin.error =
-				Some("Server permissions changed; reload integrations to continue");
+				Some("As permissões do servidor mudaram; recarregue as integrações para continuar");
 			self.server_admin.needs_refresh = true;
 			return Ok(());
 		}
@@ -734,7 +735,7 @@ impl State {
 			&& !matches!(&result, Outcome::Roles(model::server_roles::Result::Catalog { catalog, .. }) if self.roles_catalog_matches_permissions(catalog))
 		{
 			self.server_admin.error =
-				Some("Server roles or permissions changed; reload before continuing");
+				Some("Os cargos ou permissões do servidor mudaram; recarregue antes de continuar");
 			self.server_admin.needs_refresh = true;
 			return Ok(());
 		}
@@ -852,7 +853,7 @@ impl State {
 		};
 		if !expected {
 			self.server_admin.error =
-				Some("Unexpected server administration response; reload to continue");
+				Some("Resposta inesperada da administração do servidor; recarregue para continuar");
 			self.server_admin.needs_refresh = true;
 			return Ok(());
 		}
@@ -924,7 +925,7 @@ impl State {
 						.is_err()
 					{
 						self.fail(crate::auth::Failure::Capacity);
-						return Err("Permission metadata exceeds safe capacity");
+						return Err("Os metadados de permissões excedem a capacidade segura");
 					}
 					self.permissions.clear_cache();
 					self.invalidate_navigation();
@@ -957,7 +958,7 @@ impl State {
 				}
 			}
 			Outcome::VoiceUpdated(user) => {
-				self.status = "Voice moderation request accepted";
+				self.status = "Solicitação de moderação de voz aceita";
 				if self.demo
 					&& let Some(Action::Voice {
 						channel, change, ..

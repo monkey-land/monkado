@@ -73,7 +73,7 @@ impl State {
 	pub fn prepare_poll(&mut self, message: Option<Id>, action: Action) -> Option<crate::Command> {
 		let channel = self.selected?;
 		if self.polls.pending.is_some() {
-			self.status = "Wait for the current poll action";
+			self.status = "Aguarde a ação atual da enquete";
 			return None;
 		}
 		let valid = match &action {
@@ -114,7 +114,7 @@ impl State {
 			}
 		};
 		if !valid {
-			self.status = "Poll action is unavailable with the current permissions or poll state";
+			self.status = "A ação da enquete está indisponível com as permissões ou o estado atual da enquete";
 			return None;
 		}
 		self.polls.sequence = self.polls.sequence.wrapping_add(1);
@@ -185,9 +185,9 @@ impl State {
 						}
 						self.polls.error = Some(
 							if matches!(failure, Failure::Network | Failure::Ambiguous) {
-								"Poll action could not be confirmed. Refresh before trying again."
+								"Não foi possível confirmar a ação da enquete. Atualize antes de tentar de novo."
 							} else {
-								"Poll action failed. Check permissions and refresh the conversation."
+								"A ação da enquete falhou. Verifique as permissões e atualize a conversa."
 							},
 						);
 						self.status = self.polls.error.unwrap();

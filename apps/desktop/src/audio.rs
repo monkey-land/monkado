@@ -28,8 +28,8 @@ const MAX_FIXTURE_BYTES: usize = 20 * 1024 * 1024;
 const MAX_SAMPLES: usize = 64 * 1024 * 1024 / size_of::<f32>();
 const MAX_SECONDS: u64 = 600;
 const NO_SEEK: u64 = u64::MAX;
-const INVALID: &str = "Unsupported or damaged audio; download to play externally";
-const TOO_LARGE: &str = "Audio preview limit: 64 MiB decoded, 10 minutes";
+const INVALID: &str = "Áudio sem suporte ou danificado; baixe para reproduzir fora do app";
+const TOO_LARGE: &str = "Limite da prévia de áudio: 64 MiB decodificados, 10 minutos";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum State {
@@ -132,14 +132,11 @@ impl Audio {
 		let expected = usize::try_from(attachment.size)
 			.ok()
 			.filter(|size| *size > 0)
-			.ok_or("Audio attachment size is invalid")?;
+			.ok_or("O tamanho do anexo de áudio é inválido")?;
 		let url = if demo {
 			None
 		} else {
-			Some(
-				crate::downloads::original_url(&attachment)
-					.ok_or("Audio attachment unavailable")?,
-			)
+			Some(crate::downloads::original_url(&attachment).ok_or("Anexo de áudio indisponível")?)
 		};
 		if self.worker.is_none() {
 			let (requests, receiver) = watch::channel(None);
@@ -154,7 +151,7 @@ impl Audio {
 				.spawn(move || {
 					worker(receiver, status, gate, worker_wake, runtime, context);
 				})
-				.map_err(|_| "Could not start audio worker")?;
+				.map_err(|_| "Não foi possível iniciar o reprodutor de áudio")?;
 			self.worker = Some(Worker {
 				requests,
 				status: updates,
@@ -172,8 +169,8 @@ impl Audio {
 		};
 		let worker = self.worker.as_ref().expect("worker created");
 		if worker.requests.is_closed() {
-			self.status.state = State::Failed("Audio worker stopped; restart Monkado");
-			return Err("Audio worker stopped; restart Monkado");
+			self.status.state = State::Failed("O reprodutor de áudio parou; reinicie o Monkado");
+			return Err("O reprodutor de áudio parou; reinicie o Monkado");
 		}
 		worker.requests.send_replace(Some(Request {
 			generation,
@@ -329,16 +326,16 @@ async fn fetch(
 		.redirect(wreq::redirect::Policy::none())
 		.timeout(Duration::from_secs(60))
 		.build()
-		.map_err(|_| "Audio download unavailable")?;
+		.map_err(|_| "Download do áudio indisponível")?;
 	let transfer = async {
 		let response =
 			client_core::fingerprint::discord_request(client.get(url.as_str()), url.as_str())
 				.header(wreq::header::ACCEPT_ENCODING, "identity")
 				.send()
 				.await
-				.map_err(|_| "Audio download failed")?;
+				.map_err(|_| "Falha no download do áudio")?;
 		if response.status() != wreq::StatusCode::OK {
-			return Err("Audio unavailable; reload the conversation");
+			return Err("Áudio indisponível; recarregue a conversa");
 		}
 		if response
 			.headers()
@@ -348,14 +345,14 @@ async fn fetch(
 				.content_length()
 				.is_some_and(|size| size != expected as u64)
 		{
-			return Err("Audio size or encoding changed; reload the conversation");
+			return Err("O tamanho ou a codificação do áudio mudou; recarregue a conversa");
 		}
 		let mut bytes = Vec::with_capacity(expected);
 		let mut response_body = std::pin::pin!(response.bytes_stream());
 		while let Some(chunk) = futures_util::StreamExt::next(&mut response_body)
 			.await
 			.transpose()
-			.map_err(|_| "Audio download interrupted")?
+			.map_err(|_| "Download do áudio interrompido")?
 		{
 			if !gate.current(generation) {
 				return Err("Cancelled");
@@ -366,7 +363,7 @@ async fn fetch(
 			bytes.extend_from_slice(&chunk);
 		}
 		if bytes.len() != expected {
-			return Err("Audio download incomplete");
+			return Err("Download do áudio incompleto");
 		}
 		Ok(bytes)
 	};

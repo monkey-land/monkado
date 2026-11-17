@@ -401,10 +401,10 @@ fn execute(
 			return Outcome::CustomFont((|| {
 				let store = store
 					.as_ref()
-					.map_err(|_| "Could not load the saved font.")?;
+					.map_err(|_| "Não foi possível carregar a fonte salva.")?;
 				store
 					.custom_font()
-					.map_err(|_| "Could not load the saved font.")?
+					.map_err(|_| "Não foi possível carregar a fonte salva.")?
 					.map(|(name, bytes)| ui::fonts::CustomFont::new(name, bytes))
 					.transpose()
 			})());
@@ -413,10 +413,10 @@ fn execute(
 			return Outcome::CustomFont((|| {
 				let store = store
 					.as_ref()
-					.map_err(|_| "Could not save the font. Try importing it again.")?;
+					.map_err(|_| "Não foi possível salvar a fonte. Tente importá-la de novo.")?;
 				store
 					.save_custom_font(font.as_ref().map(|font| (font.name.as_str(), font.bytes())))
-					.map_err(|_| "Could not save the font. Try again.")?;
+					.map_err(|_| "Não foi possível salvar a fonte. Tente novamente.")?;
 				Ok(font.clone())
 			})());
 		}
@@ -538,31 +538,35 @@ fn execute(
 		Operation::DeleteMessages { .. } | Operation::ClearHistory | Operation::Forget
 	);
 	let failure_message = match &operation {
-		Operation::LoadAppearance => "Could not load saved appearance; using system theme",
+		Operation::LoadAppearance => {
+			"Não foi possível carregar a aparência salva; usando o tema do sistema"
+		}
 		Operation::SaveAppearance(_) | Operation::SaveThemeVariant(_) => {
-			"Could not save appearance; change exists only in this session"
+			"Não foi possível salvar a aparência; a mudança vale só nesta sessão"
 		}
 		Operation::Forget => {
-			"Could not remove local account data; history and drafts may remain on disk"
+			"Não foi possível remover os dados locais da conta; histórico e rascunhos podem continuar no disco"
 		}
 		Operation::ClearHistory => {
-			"Could not clear cached history; history cache disabled until restart; messages may remain on disk"
+			"Não foi possível limpar o histórico em cache; cache do histórico desativado até reiniciar; mensagens podem continuar no disco"
 		}
 		Operation::DeleteMessages { .. } => {
-			"Could not remove deleted cached messages; history cache disabled until restart; messages may remain on disk"
+			"Não foi possível remover as mensagens apagadas do cache; cache do histórico desativado até reiniciar; mensagens podem continuar no disco"
 		}
 		Operation::SaveDraft { .. } => {
-			"Could not save a draft; latest text may exist only in memory"
+			"Não foi possível salvar um rascunho; o texto mais recente pode existir só na memória"
 		}
 		Operation::SaveChannel { .. } | Operation::SaveChanges { .. } => {
-			"Could not save cached history"
+			"Não foi possível salvar o histórico em cache"
 		}
-		Operation::LoadDrafts => "Could not restore drafts from local storage",
-		Operation::LoadGifFavorites => "Could not restore GIF favorites from local storage",
+		Operation::LoadDrafts => "Não foi possível restaurar os rascunhos do armazenamento local",
+		Operation::LoadGifFavorites => {
+			"Não foi possível restaurar os GIFs favoritos do armazenamento local"
+		}
 		Operation::SaveGifFavorites(_) => {
-			"Could not save GIF favorites; the change exists only in this session"
+			"Não foi possível salvar os GIFs favoritos; a mudança vale só nesta sessão"
 		}
-		Operation::LoadChannel { .. } => "Could not read cached history",
+		Operation::LoadChannel { .. } => "Não foi possível ler o histórico em cache",
 		Operation::LoadCustomFont
 		| Operation::SaveCustomFont(_)
 		| Operation::LoadAccounts

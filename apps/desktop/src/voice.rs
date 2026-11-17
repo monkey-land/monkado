@@ -64,7 +64,7 @@ fn device_wait(
 		.filter(|remaining| !remaining.is_zero())
 		.map(Some)
 		.ok_or(
-			"Audio device opening timed out; check device selection and system microphone permission",
+			"Os dispositivos de áudio demoraram demais para abrir; confira o dispositivo selecionado e a permissão de microfone do sistema",
 		)
 }
 
@@ -338,7 +338,7 @@ const MOVE_WINDOW: Duration = Duration::from_secs(10);
 const MOVE_GRACE: Duration = Duration::from_secs(2);
 /// Shown while a live call has no audio device; the call itself stays connected.
 const AUDIO_UNAVAILABLE: &str =
-	"Audio devices are unavailable; the call stays connected while they come back";
+	"Dispositivos de áudio indisponíveis; a chamada continua conectada enquanto eles voltam";
 
 /// One call-lifecycle line. Every field is a constant or a number, so an attached log needs no
 /// redaction; the owner's log level decides whether the line is kept.
@@ -448,27 +448,37 @@ impl Voice {
 		self.mic_preview = None;
 		self.reap();
 		if self.retiring.is_some() {
-			return Err("Previous audio devices are still closing; try again shortly");
+			return Err(
+				"Os dispositivos de áudio anteriores ainda estão fechando; tente de novo em instantes",
+			);
 		}
 		if self.pending.is_some() || self.live.is_some() {
-			return Err("A voice call is already active");
+			return Err("Já existe uma chamada de voz ativa");
 		}
-		let call = state.voice.active.as_ref().ok_or("No call was requested")?;
+		let call = state
+			.voice
+			.active
+			.as_ref()
+			.ok_or("Nenhuma chamada foi solicitada")?;
 		if !state.can_call(call.channel) {
-			return Err("Select an existing DM or server voice channel");
+			return Err("Selecione uma DM existente ou um canal de voz de servidor");
 		}
-		let user = state.user.as_ref().ok_or("Sign in before calling")?.id;
+		let user = state
+			.user
+			.as_ref()
+			.ok_or("Entre na conta antes de ligar")?
+			.id;
 		let channel = state
 			.channels
 			.iter()
 			.find(|c| c.id == call.channel)
-			.ok_or("The voice channel is unavailable")?;
+			.ok_or("O canal de voz está indisponível")?;
 		// Only one-to-one DMs pin a peer; group calls use the authenticated voice roster.
 		let peer = (channel.guild.is_none() && channel.kind == 1)
 			.then(|| channel.recipients.first().map(|u| u.id))
 			.flatten();
 		if channel.kind == 1 && peer.is_none() {
-			return Err("The DM recipient is unavailable");
+			return Err("O destinatário da DM está indisponível");
 		}
 		self.pending = Some(Pending {
 			generation: state.generation,
@@ -681,7 +691,7 @@ impl Voice {
 		}
 		// A move's new voice server is taken below, by the negotiation that follows the move.
 		if server_changed && !self.follow_move(state) {
-			return Some("Voice server changed; start a new encrypted call");
+			return Some("O servidor de voz mudou; inicie uma nova chamada criptografada");
 		}
 		let pending = self.pending.as_mut()?;
 		if pending.generation != state.generation
@@ -730,7 +740,7 @@ impl Voice {
 					return None;
 				};
 				let Some(token) = token.take() else {
-					return Some("Discord omitted the voice connection token");
+					return Some("O Discord não enviou o token da conexão de voz");
 				};
 				pending.server = Some((token, endpoint));
 				note(Level::Info, "voice server received", &[]);
@@ -955,7 +965,7 @@ impl Voice {
 			// Silence from the gateway is a failed attempt, not a reason to join blind.
 			return self.fail_or_rejoin(
 				state,
-				"Discord did not confirm leaving the channel before the reconnect",
+				"O Discord não confirmou a saída do canal antes de reconectar",
 			);
 		}
 		rejoin.at = None;
@@ -966,7 +976,7 @@ impl Voice {
 			}
 			None => self.give_up_rejoin(
 				state,
-				"Voice reconnect is no longer allowed in this channel",
+				"Não é mais permitido reconectar a voz neste canal",
 				true,
 			),
 		}
@@ -1022,7 +1032,10 @@ impl Voice {
 						self.device_scan = Some(receive);
 						ui.voice_device_status = ui::VOICE_DEVICES_LOOKING;
 					}
-					Err(_) => ui.voice_device_status = "Could not start audio device discovery",
+					Err(_) => {
+						ui.voice_device_status =
+							"Não foi possível começar a procurar dispositivos de áudio"
+					}
 				}
 			}
 		}
@@ -1039,7 +1052,7 @@ impl Voice {
 					self.device_scan = None;
 				}
 				Err(mpsc::TryRecvError::Disconnected) => {
-					ui.voice_device_status = "Audio device discovery stopped";
+					ui.voice_device_status = "A busca por dispositivos de áudio parou";
 					self.device_scan = None;
 				}
 				Err(mpsc::TryRecvError::Empty) => {}
@@ -1123,9 +1136,9 @@ impl Voice {
 					],
 				);
 				return self.fail_or_rejoin(
-                    state,
-                    "Discord did not answer the voice join within 30 seconds; the account may still be in the channel",
-                );
+					state,
+					"O Discord não respondeu à entrada na voz em 30 segundos; a conta pode continuar no canal",
+				);
 			}
 			ctx.request_repaint_after(
 				Duration::from_secs(30).saturating_sub(pending.started.elapsed()),
@@ -1317,11 +1330,12 @@ impl Voice {
 				});
 			}
 			if live.audio.is_stopped() && failure.is_none() {
-				failure =
-					Some("Audio devices stopped; check microphone permission and device selection");
+				failure = Some(
+					"Os dispositivos de áudio pararam; confira a permissão do microfone e o dispositivo selecionado",
+				);
 			}
 			if live.task.is_finished() && failure.is_none() {
-				failure = Some("Voice connection ended; start a new call explicitly");
+				failure = Some("A conexão de voz terminou; inicie uma nova chamada");
 			}
 			// A worker can finish between draining notices and checking its lifecycle.
 			failure = live.failure.get().copied().or(failure);
@@ -1433,7 +1447,7 @@ impl Voice {
 			self.stop();
 			self.pending = Some(pending);
 			// Only new service credentials can retry. Do not hang up another client's candidate.
-			state.status = "Waiting for current voice connection details";
+			state.status = "Aguardando os dados da conexão de voz atual";
 			ctx.request_repaint_after(Duration::from_millis(50));
 			return None;
 		}
@@ -1574,11 +1588,11 @@ impl Voice {
 		preview.audio.set_ready(true);
 		let error = preview.failure.get().copied().or_else(|| {
 			if preview.audio.is_stopped() {
-				Some("Microphone test stopped; try again.")
+				Some("O teste de microfone parou; tente novamente.")
 			} else if !preview.audio.is_ready() && preview.started.elapsed() >= DEVICE_OPEN_TIMEOUT
 			{
 				Some(
-					"Audio devices did not open; check device selection and microphone permission.",
+					"Os dispositivos de áudio não abriram; confira o dispositivo selecionado e a permissão do microfone.",
 				)
 			} else {
 				None
@@ -1593,11 +1607,11 @@ impl Voice {
 		}
 		ui.voice_preview_level = Some(preview.audio.preview_level_db());
 		ui.voice_preview_status = if preview.audio.microphone_unavailable() {
-			"Microphone unavailable; check permission or choose another input. Retrying…"
+			"Microfone indisponível; confira a permissão ou escolha outra entrada. Tentando de novo…"
 		} else if preview.audio.is_ready() {
-			"Playing your microphone through the selected speakers."
+			"Reproduzindo seu microfone pelos alto-falantes selecionados."
 		} else {
-			"Opening microphone and speakers…"
+			"Abrindo microfone e alto-falantes…"
 		};
 		ctx.request_repaint_after(Duration::from_millis(50));
 	}
@@ -1607,7 +1621,7 @@ impl Voice {
 		ui.camera_test_available =
 			!state.demo && ui.voice_available && discord_voice::camera::SUPPORTED && !in_call;
 		ui.camera_test_blocked = if in_call {
-			"The preview is off during a call. Turn on your camera in the call to see it here."
+			"A prévia fica desligada durante uma chamada. Ligue sua câmera na chamada para vê-la aqui."
 		} else {
 			""
 		};
@@ -1623,7 +1637,7 @@ impl Voice {
 				ui.camera_test_status = "";
 				ui.toasts.push(
 					ui::design::Level::Info,
-					"Camera settings changed. Click Preview camera to use them.",
+					"As configurações da câmera mudaram. Abra a prévia da câmera para usá-las.",
 				);
 			} else if let Some(error) = preview.camera.error() {
 				ui.camera_test_requested = false;
@@ -1661,7 +1675,7 @@ impl Voice {
 						device: ui.voice_camera_device.clone(),
 						picture,
 					});
-					ui.camera_test_status = "Opening camera…";
+					ui.camera_test_status = "Abrindo câmera…";
 				}
 				Err(error) => {
 					ui.camera_test_requested = false;
@@ -1683,7 +1697,7 @@ impl Voice {
 				ui.camera_test_texture =
 					Some(ctx.load_texture("settings-camera", image, egui::TextureOptions::LINEAR));
 			}
-			ui.camera_test_status = "Local camera preview · not shared";
+			ui.camera_test_status = "Prévia local da câmera · não compartilhada";
 		}
 	}
 
@@ -1701,16 +1715,18 @@ impl Voice {
 				.name("camera-devices".into())
 				.spawn(move || {
 					let result = std::panic::catch_unwind(discord_voice::camera::devices)
-						.unwrap_or(Err("Camera device discovery failed"));
+						.unwrap_or(Err("Falha ao procurar câmeras"));
 					let _ = send.send(result);
 					wake.request_repaint();
 				}) {
 				Ok(_) => {
 					self.camera_scan = Some(receive);
 					ui.voice_camera_devices_loading = true;
-					ui.voice_camera_device_status = "Looking for cameras…";
+					ui.voice_camera_device_status = "Procurando câmeras…";
 				}
-				Err(_) => ui.voice_camera_device_status = "Could not start camera device discovery",
+				Err(_) => {
+					ui.voice_camera_device_status = "Não foi possível começar a procurar câmeras"
+				}
 			}
 		}
 		if let Some(scan) = &self.camera_scan {
@@ -1720,9 +1736,9 @@ impl Voice {
 						Ok(devices) => {
 							ui.voice_cameras = devices;
 							if ui.voice_cameras.is_empty() {
-								"No cameras found. Check the camera connection or virtual camera installation, then refresh."
+								"Nenhuma câmera encontrada. Confira a conexão da câmera ou a instalação da câmera virtual e atualize."
 							} else {
-								"Cameras loaded"
+								"Câmeras carregadas"
 							}
 						}
 						Err(error) => error,
@@ -1731,7 +1747,7 @@ impl Voice {
 					ui.voice_camera_devices_loading = false;
 				}
 				Err(mpsc::TryRecvError::Disconnected) => {
-					ui.voice_camera_device_status = "Camera device discovery stopped";
+					ui.voice_camera_device_status = "A busca por câmeras parou";
 					ui.voice_camera_devices_loading = false;
 					self.camera_scan = None;
 				}
@@ -1758,7 +1774,7 @@ impl Voice {
 			ui.voice_camera_status = "";
 			ui.toasts.push(
 				ui::design::Level::Info,
-				"Camera device changed. Turn on the camera to use the selected device.",
+				"A câmera mudou. Ligue a câmera para usar o dispositivo selecionado.",
 			);
 			return state.set_call_camera(false);
 		}
@@ -1772,7 +1788,7 @@ impl Voice {
 			self.stop_camera();
 			self.camera_restart_deadline = Some(Instant::now() + Duration::from_secs(5));
 			ui.voice_camera_preview = None;
-			ui.voice_camera_status = "Updating camera frame rate…";
+			ui.voice_camera_status = "Atualizando a taxa de quadros da câmera…";
 			ctx.request_repaint_after(Duration::from_millis(50));
 			return None;
 		}
@@ -1785,7 +1801,7 @@ impl Voice {
 				ui.voice_camera_status = "";
 				ui.toasts.push(
 					ui::design::Level::Error,
-					error.unwrap_or("Camera stopped; reconnect securely before turning it on"),
+					error.unwrap_or("A câmera parou; reconecte com segurança antes de ligá-la"),
 				);
 				return state.set_call_camera(false);
 			}
@@ -1804,7 +1820,7 @@ impl Voice {
 				ui.voice_camera_status = "";
 				ui.toasts.push(
 					ui::design::Level::Warning,
-					"Camera is still closing; try again shortly",
+					"A câmera ainda está fechando; tente de novo em instantes",
 				);
 				return state.set_call_camera(false);
 			}
@@ -1861,7 +1877,7 @@ impl Voice {
 					self.camera_device = ui.voice_camera_device.clone();
 					self.camera = Some(camera);
 					self.camera_preview = Some(receive);
-					ui.voice_camera_status = "Opening camera…";
+					ui.voice_camera_status = "Abrindo câmera…";
 					// A P2P camera never reaches the Discord transport.
 					if self.p2p_camera.is_none() {
 						live.controls.send_modify(|controls| {

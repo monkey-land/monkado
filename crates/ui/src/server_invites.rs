@@ -281,11 +281,10 @@ impl InvitesUi {
 													|ui| {
 														ui.set_width(width);
 														ui.spacing_mut().item_spacing.y = 1.0;
-														let name =
-															invite.inviter.as_ref().map_or(
-																"Unknown inviter",
-																|user| user.name.as_str(),
-															);
+														let name = invite.inviter.as_ref().map_or(
+															"Autor do convite desconhecido",
+															|user| user.name.as_str(),
+														);
 														ui.add(
 															egui::Label::new(design::medium(
 																ui, name, 14.0,
@@ -539,9 +538,15 @@ impl InvitesUi {
 }
 /// The table's column headings in the `header` row.
 fn headings(ui: &mut egui::Ui, header: egui::Rect) {
-	for (index, label) in ["Inviter", "Invite Code", "Uses", "Expires", "Roles"]
-		.into_iter()
-		.enumerate()
+	for (index, label) in [
+		"Autor do convite",
+		"Código do convite",
+		"Usos",
+		"Expira",
+		"Cargos",
+	]
+	.into_iter()
+	.enumerate()
 	{
 		cell(ui, column(header, &COLUMNS, index), |ui| {
 			ui.add(egui::Label::new(design::medium(ui, label, 14.0)).truncate());
@@ -629,7 +634,7 @@ fn uses(invite: &Invite) -> String {
 	match (invite.uses, invite.max_uses) {
 		(Some(used), Some(max)) if max > 0 => format!("{used}/{max}"),
 		(Some(used), _) => used.to_string(),
-		(None, _) => "Unknown".into(),
+		(None, _) => "Desconhecido".into(),
 	}
 }
 fn expiry(invite: &Invite, now: i128) -> (String, bool) {
@@ -646,7 +651,7 @@ fn expiry(invite: &Invite, now: i128) -> (String, bool) {
 			.saturating_add(999_999_999)
 			/ 1_000_000_000;
 		if seconds == 0 {
-			return ("Expired".into(), false);
+			return ("Expirado".into(), false);
 		}
 		let clock = format!(
 			"{:02}:{:02}:{:02}",
@@ -667,7 +672,7 @@ fn expiry(invite: &Invite, now: i128) -> (String, bool) {
 		if invite.max_age == Some(0) {
 			"∞"
 		} else {
-			"Unknown"
+			"Desconhecido"
 		}
 		.into(),
 		false,

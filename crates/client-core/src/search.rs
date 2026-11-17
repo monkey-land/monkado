@@ -218,9 +218,13 @@ impl State {
 				view.error = None;
 			}
 			Ok(Outcome::Indexing) if !view.pins => {
-				view.error = Some("Discord is indexing this conversation. Try Search again later.")
+				view.error = Some(
+					"O Discord está indexando esta conversa. Tente pesquisar novamente mais tarde.",
+				)
 			}
-			Ok(_) => view.error = Some("Message results were invalid or too large"),
+			Ok(_) => {
+				view.error = Some("Os resultados de mensagens eram inválidos ou grandes demais")
+			}
 			Err(f) => view.error = Some(f.label()),
 		}
 	}

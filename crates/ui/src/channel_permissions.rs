@@ -632,7 +632,7 @@ fn target_name(state: &State, guild: Id, key: (u8, Id)) -> String {
 			.get(&guild)
 			.and_then(|g| g.roles.as_ref())
 			.and_then(|roles| roles.iter().find(|r| r.id == key.1))
-			.map_or_else(|| format!("Role {}", key.1), |r| r.name.clone());
+			.map_or_else(|| format!("Cargo {}", key.1), |r| r.name.clone());
 	}
 	let user: Option<&User> = state
 		.members
@@ -647,7 +647,7 @@ fn target_name(state: &State, guild: Id, key: (u8, Id)) -> String {
 		.map(|m| &m.user)
 		.chain(state.user.iter())
 		.find(|u| u.id == key.1);
-	user.map_or_else(|| format!("Member {}", key.1), |u| u.name.clone())
+	user.map_or_else(|| format!("Membro {}", key.1), |u| u.name.clone())
 }
 
 fn set_permission(rows: &mut Vec<p::Overwrite>, key: (u8, Id), bit: u128, value: i8) {

@@ -42,7 +42,7 @@ impl Loader {
 					ctx.request_repaint();
 				}
 				Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
-					catalog.finish(Err("The game catalog is unavailable."));
+					catalog.finish(Err("O catálogo de jogos está indisponível."));
 					self.pending = None;
 				}
 				Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
@@ -89,7 +89,7 @@ impl Loader {
 					discord_api::detectable::decode_mentions(&bytes)
 				})
 				.await
-				.map_err(|_| "The game catalog is unavailable.")?
+				.map_err(|_| "O catálogo de jogos está indisponível.")?
 			}
 			.await;
 			let _ = send.send((result, cooldown));

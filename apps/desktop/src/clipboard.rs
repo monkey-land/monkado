@@ -40,7 +40,7 @@ impl Paste {
 								total += source.size();
 								if total > discord_api::upload::MAX_TOTAL_BYTES {
 									error = Some(
-										"Attachments must total at most 500 MB; account limits may be lower",
+										"Os anexos devem somar no máximo 500 MB; os limites da conta podem ser menores",
 									);
 									break;
 								}
@@ -59,7 +59,7 @@ impl Paste {
 				}
 				Ok(Ok(Read::Content(content))) => Ok(content),
 				Ok(Err(error)) => Err(error),
-				Err(_) => Err("Clipboard reading interrupted; paste again"),
+				Err(_) => Err("Leitura da área de transferência interrompida; cole de novo"),
 			};
 			let _ = send.send(result);
 			context.request_repaint();
@@ -76,7 +76,9 @@ impl Paste {
 		match self.result.try_recv() {
 			Ok(result) => Some(result),
 			Err(mpsc::TryRecvError::Empty) => None,
-			Err(mpsc::TryRecvError::Disconnected) => Some(Err("Clipboard reading interrupted")),
+			Err(mpsc::TryRecvError::Disconnected) => {
+				Some(Err("Leitura da área de transferência interrompida"))
+			}
 		}
 	}
 }
@@ -93,20 +95,20 @@ fn read(request: ui::AttachmentPaste) -> Result<Read, &'static str> {
 			// egui already transferred text/image clipboard data through the focused
 			// Wayland surface. Do not make that data depend on arboard's headless
 			// data-control backend, which may be unavailable in a sandbox.
-			return supplied_content(request).ok_or("Clipboard unavailable")?;
+			return supplied_content(request).ok_or("Área de transferência indisponível")?;
 		}
 	};
 	match clipboard.get().file_list() {
 		Ok(paths) if !paths.is_empty() => {
 			if paths.len() > discord_api::upload::MAX_FILES {
-				return Err("Attach up to 10 files per message");
+				return Err("Anexe até 10 arquivos por mensagem");
 			}
 			let paths: Vec<_> = paths.into_iter().map(normalize).collect();
 			if paths
 				.iter()
 				.any(|path| !path.is_absolute() || path.as_os_str().as_encoded_bytes().len() > 4096)
 			{
-				return Err("Paste a local file with a supported path");
+				return Err("Cole um arquivo local com um caminho compatível");
 			}
 			return Ok(Read::Paths(paths));
 		}
@@ -114,7 +116,7 @@ fn read(request: ui::AttachmentPaste) -> Result<Read, &'static str> {
 		Err(_) => {
 			return match supplied_content(request) {
 				Some(content) => content,
-				None => Err("Could not read copied files; paste again"),
+				None => Err("Não foi possível ler os arquivos copiados; cole de novo"),
 			};
 		}
 	}
@@ -129,7 +131,7 @@ fn read(request: ui::AttachmentPaste) -> Result<Read, &'static str> {
 	}
 	let image = clipboard
 		.get_image()
-		.map_err(|_| "Copy a file, image, or text before pasting")?;
+		.map_err(|_| "Copie um arquivo, imagem ou texto antes de colar")?;
 	png(&image.bytes, image.width, image.height)
 }
 
@@ -144,7 +146,7 @@ fn supplied_image(image: std::sync::Arc<egui::ColorImage>) -> Result<Read, &'sta
 	let pixels = image
 		.width()
 		.checked_mul(image.height())
-		.ok_or("Image is too large")?;
+		.ok_or("A imagem é grande demais")?;
 	if pixels == 0 || pixels > ui::MAX_PASTE_PIXELS || pixels != image.pixels().len() {
 		return Err(ui::PASTE_PIXELS_EXCEEDED);
 	}
@@ -158,7 +160,7 @@ fn supplied_image(image: std::sync::Arc<egui::ColorImage>) -> Result<Read, &'sta
 
 fn supplied_text(text: String) -> Result<Read, &'static str> {
 	if text.len() > client_core::MAX_DRAFT_BYTES {
-		return Err("Pasted text exceeds the draft limit");
+		return Err("O texto colado excede o limite do rascunho");
 	}
 	Ok(Read::Content(Content::Text(text.replace("\r\n", "\n"))))
 }
@@ -183,7 +185,9 @@ fn normalize(path: std::path::PathBuf) -> std::path::PathBuf {
 }
 
 fn png(bytes: &[u8], width: usize, height: usize) -> Result<Read, &'static str> {
-	let pixels = width.checked_mul(height).ok_or("Image is too large")?;
+	let pixels = width
+		.checked_mul(height)
+		.ok_or("A imagem é grande demais")?;
 	if pixels == 0 || pixels > ui::MAX_PASTE_PIXELS || bytes.len() != pixels * 4 {
 		return Err(ui::PASTE_PIXELS_EXCEEDED);
 	}
@@ -195,7 +199,7 @@ fn png(bytes: &[u8], width: usize, height: usize) -> Result<Read, &'static str> 
 			height as u32,
 			image::ExtendedColorType::Rgba8,
 		)
-		.map_err(|_| "Could not prepare pasted image")?;
+		.map_err(|_| "Não foi possível preparar a imagem colada")?;
 	Source::pasted_png(encoded).map(|source| Read::Content(Content::File(vec![source])))
 }
 

@@ -15,7 +15,7 @@ const HEADING: f32 = 30.0;
 const FOOTER: f32 = 26.0;
 const HELP: f32 = 44.0;
 const CHIP: f32 = 32.0;
-const NO_PERMISSION: &str = "You don't have permission to use this command in this channel.";
+const NO_PERMISSION: &str = "Você não tem permissão para usar este comando neste canal.";
 
 #[derive(Clone)]
 pub(super) struct Pick {
@@ -304,7 +304,7 @@ impl Menu {
 	pub fn accept(&mut self, pick: Pick, draft: &mut String, remaining: usize) -> Option<usize> {
 		let completion = format!("/{} ", pick.name);
 		if completion.capacity() > remaining.saturating_add(draft.capacity()) {
-			self.error = Some("Free some draft space before choosing a command.");
+			self.error = Some("Libere espaço de rascunho antes de escolher um comando.");
 			return None;
 		}
 		*draft = completion;
@@ -418,7 +418,7 @@ impl Menu {
 						egui::Sense::hover(),
 					);
 					let title = format!(
-						"Commands matching /{}",
+						"Comandos que correspondem a /{}",
 						self.query.as_deref().unwrap_or_default()
 					)
 					.to_uppercase();
@@ -485,7 +485,7 @@ impl Menu {
 					Filter::All,
 					filter,
 					None,
-					"All commands",
+					"Todos os comandos",
 					avatars,
 					state.demo,
 				)
@@ -1012,10 +1012,10 @@ impl Menu {
 		} else if let Some(error) = error {
 			(error, colors.danger)
 		} else if state.interactions.busy() {
-			("Waiting for the application…", colors.muted)
+			("Aguardando o aplicativo…", colors.muted)
 		} else if option.is_some_and(|option| option.kind == 11) {
 			(
-				"Attachment arguments are not supported yet.",
+				"Argumentos de anexo ainda não são suportados.",
 				colors.warning,
 			)
 		} else {
@@ -1023,7 +1023,7 @@ impl Menu {
 				option
 					.map(|option| option.description.as_str())
 					.or_else(|| command.map(|command| command.description.as_str()))
-					.unwrap_or("This command is unavailable. Your arguments are kept."),
+					.unwrap_or("Este comando não está disponível. Seus argumentos foram mantidos."),
 				colors.muted,
 			)
 		};
@@ -1177,7 +1177,7 @@ fn empty_row(ui: &mut egui::Ui) {
 	ui.painter().text(
 		rect.center(),
 		egui::Align2::CENTER_CENTER,
-		"No commands match",
+		"Nenhum comando corresponde",
 		egui::FontId::proportional(14.0),
 		design::palette(ui).muted,
 	);
@@ -1501,7 +1501,7 @@ impl crate::MessagingUi {
 					.iter()
 					.any(|command| command.name == name)
 			{
-				state.status = "Choose a command from the list before running it.";
+				state.status = "Escolha um comando da lista antes de executá-lo.";
 				self.slash_commands.dismissed = false;
 				return true;
 			}

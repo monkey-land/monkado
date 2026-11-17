@@ -10,7 +10,7 @@ use std::{
 };
 
 const LIMIT: u64 = 100 * 1024 * 1024;
-const FAILED: &str = "This video could not be converted for playback";
+const FAILED: &str = "Não foi possível converter este vídeo para reprodução";
 // Match the native playback surface: never upscale, retain aspect ratio, and use even
 // dimensions for H.264 while bounding both the longest edge and total pixel count.
 const SCALE: &str = concat!(
@@ -44,7 +44,9 @@ pub(super) fn open(
 	]
 	.into_iter()
 	.find(|path| std::path::Path::new(path).is_file())
-	.ok_or("This video needs FFmpeg for playback. Install FFmpeg and try again.")?;
+	.ok_or(
+		"Este vídeo precisa do FFmpeg para ser reproduzido. Instale o FFmpeg e tente novamente.",
+	)?;
 	let mut random = [0; 16];
 	getrandom::fill(&mut random).map_err(|_| FAILED)?;
 	let name = random
@@ -59,7 +61,7 @@ pub(super) fn open(
 	let temporary = Temporary(directory);
 	let result = convert(source, cancelled, executable, &temporary);
 	fs::remove_dir_all(&temporary.0).map_err(
-		|_| "Temporary video cleanup failed; remove monkado-video files from the system temporary folder",
+		|_| "Falha ao limpar os vídeos temporários; apague os arquivos monkado-video da pasta temporária do sistema",
 	)?;
 	result
 }
@@ -90,7 +92,7 @@ fn convert(
 		}
 		total += count as u64;
 		if total > LIMIT {
-			return Err("Video preview limit: 100 MiB");
+			return Err("Limite da prévia de vídeo: 100 MiB");
 		}
 		file.write_all(&buffer[..count]).map_err(|_| FAILED)?;
 	}
@@ -168,7 +170,7 @@ fn convert(
 		if cancelled.load(Ordering::Acquire) || Instant::now() >= deadline {
 			let _ = child.kill();
 			let _ = child.wait();
-			return Err("Video conversion cancelled or exceeded two minutes");
+			return Err("A conversão do vídeo foi cancelada ou passou de dois minutos");
 		}
 		match child.try_wait() {
 			Ok(Some(status)) => break status,
@@ -186,7 +188,7 @@ fn convert(
 	let file = File::open(&output).map_err(|_| FAILED)?;
 	// Reaching the output ceiling can produce a valid but truncated movie: reject it.
 	if file.metadata().map_err(|_| FAILED)?.len() >= LIMIT {
-		return Err("Converted video exceeds the 100 MiB preview limit");
+		return Err("O vídeo convertido excede o limite de 100 MiB da prévia");
 	}
 	// macOS keeps the open descriptor valid after unlink; no playback file is retained.
 	platform::video::Decoder::open(Box::new(file))

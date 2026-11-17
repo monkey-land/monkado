@@ -102,21 +102,21 @@ async fn download_image_share(url: &str, cancelled: &AtomicBool) -> Result<Vec<u
 		.timeout(std::time::Duration::from_secs(15))
 		.connect_timeout(std::time::Duration::from_secs(5))
 		.build()
-		.map_err(|_| "Could not prepare image download")?;
+		.map_err(|_| "Não foi possível preparar o download da imagem")?;
 	if cancelled.load(Ordering::Acquire) {
-		return Err("Image selection cancelled");
+		return Err("Seleção de imagem cancelada");
 	}
 	let response = client
 		.get(url)
 		.send()
 		.await
-		.map_err(|_| "Could not download this image")?;
+		.map_err(|_| "Não foi possível baixar esta imagem")?;
 	if !response.status().is_success()
 		|| response
 			.content_length()
 			.is_some_and(|size| size > SHARE_BYTES as u64)
 	{
-		return Err("Image unavailable or larger than 8 MiB");
+		return Err("Imagem indisponível ou maior que 8 MiB");
 	}
 	let mut bytes = Vec::with_capacity(
 		response
@@ -128,13 +128,13 @@ async fn download_image_share(url: &str, cancelled: &AtomicBool) -> Result<Vec<u
 	while let Some(chunk) = futures_util::StreamExt::next(&mut response_body)
 		.await
 		.transpose()
-		.map_err(|_| "Image download interrupted")?
+		.map_err(|_| "Download da imagem interrompido")?
 	{
 		if cancelled.load(Ordering::Acquire) {
-			return Err("Image selection cancelled");
+			return Err("Seleção de imagem cancelada");
 		}
 		if chunk.len() > SHARE_BYTES - bytes.len() {
-			return Err("Image is larger than 8 MiB");
+			return Err("A imagem é maior que 8 MiB");
 		}
 		bytes.extend_from_slice(&chunk);
 	}
@@ -178,7 +178,7 @@ fn compact_artwork(
 	reader.limits(limits.clone());
 	let (width, height) = reader
 		.into_dimensions()
-		.map_err(|_| "Could not inspect this artwork safely")?;
+		.map_err(|_| "Não foi possível analisar esta imagem com segurança")?;
 	if format == output_format && width <= edge && height <= edge {
 		return Ok(bytes.to_vec());
 	}
@@ -190,9 +190,10 @@ fn compact_artwork(
 				|| index == ARTWORK_FRAMES
 				|| started.elapsed() > std::time::Duration::from_secs(3)
 			{
-				return Err("Artwork animation is too large to prepare safely");
+				return Err("A animação é grande demais para ser preparada com segurança");
 			}
-			let frame = frame.map_err(|_| "Could not decode this artwork safely")?;
+			let frame =
+				frame.map_err(|_| "Não foi possível decodificar esta imagem com segurança")?;
 			let delay = frame.delay();
 			let pixels = image::DynamicImage::ImageRgba8(frame.into_buffer())
 				.thumbnail(edge, edge)
@@ -201,43 +202,43 @@ fn compact_artwork(
 		}
 		(!resized.is_empty())
 			.then_some(resized)
-			.ok_or("Artwork animation has no frames")
+			.ok_or("A animação não tem quadros")
 	};
 	let mut output = Vec::new();
 	match (format, output_format) {
 		(image::ImageFormat::Gif, image::ImageFormat::Gif) => {
 			let mut decoder = image::codecs::gif::GifDecoder::new(std::io::Cursor::new(bytes))
-				.map_err(|_| "Could not decode this artwork safely")?;
+				.map_err(|_| "Não foi possível decodificar esta imagem com segurança")?;
 			decoder
 				.set_limits(limits)
-				.map_err(|_| "Artwork animation is too large to prepare safely")?;
+				.map_err(|_| "A animação é grande demais para ser preparada com segurança")?;
 			let frames = resize(decoder.into_frames())?;
 			let mut encoder = image::codecs::gif::GifEncoder::new(&mut output);
 			encoder
 				.set_repeat(image::codecs::gif::Repeat::Infinite)
 				.and_then(|()| encoder.encode_frames(frames))
-				.map_err(|_| "Could not resize this artwork")?;
+				.map_err(|_| "Não foi possível redimensionar esta imagem")?;
 		}
 		(image::ImageFormat::Png, image::ImageFormat::Gif) => {
 			let mut decoder = image::codecs::png::PngDecoder::new(std::io::Cursor::new(bytes))
-				.map_err(|_| "Could not decode this artwork safely")?;
+				.map_err(|_| "Não foi possível decodificar esta imagem com segurança")?;
 			decoder
 				.set_limits(limits)
-				.map_err(|_| "Artwork animation is too large to prepare safely")?;
+				.map_err(|_| "A animação é grande demais para ser preparada com segurança")?;
 			let frames = if decoder
 				.is_apng()
-				.map_err(|_| "Could not inspect this artwork safely")?
+				.map_err(|_| "Não foi possível analisar esta imagem com segurança")?
 			{
 				resize(
 					decoder
 						.apng()
-						.map_err(|_| "Could not decode this artwork safely")?
+						.map_err(|_| "Não foi possível decodificar esta imagem com segurança")?
 						.into_frames(),
 				)?
 			} else {
 				vec![image::Frame::new(
 					image::DynamicImage::from_decoder(decoder)
-						.map_err(|_| "Could not decode this artwork safely")?
+						.map_err(|_| "Não foi possível decodificar esta imagem com segurança")?
 						.thumbnail(edge, edge)
 						.into_rgba8(),
 				)]
@@ -246,22 +247,22 @@ fn compact_artwork(
 			encoder
 				.set_repeat(image::codecs::gif::Repeat::Infinite)
 				.and_then(|()| encoder.encode_frames(frames))
-				.map_err(|_| "Could not resize this artwork")?;
+				.map_err(|_| "Não foi possível redimensionar esta imagem")?;
 		}
 		(image::ImageFormat::Png, image::ImageFormat::Png) => {
 			let mut decoder = image::codecs::png::PngDecoder::new(std::io::Cursor::new(bytes))
-				.map_err(|_| "Could not decode this artwork safely")?;
+				.map_err(|_| "Não foi possível decodificar esta imagem com segurança")?;
 			decoder
 				.set_limits(limits)
-				.map_err(|_| "Artwork animation is too large to prepare safely")?;
+				.map_err(|_| "A animação é grande demais para ser preparada com segurança")?;
 			if decoder
 				.is_apng()
-				.map_err(|_| "Could not inspect this artwork safely")?
+				.map_err(|_| "Não foi possível analisar esta imagem com segurança")?
 			{
 				let frames = resize(
 					decoder
 						.apng()
-						.map_err(|_| "Could not decode this artwork safely")?
+						.map_err(|_| "Não foi possível decodificar esta imagem com segurança")?
 						.into_frames(),
 				)?;
 				let (width, height) = frames[0].buffer().dimensions();
@@ -270,33 +271,33 @@ fn compact_artwork(
 				encoder.set_depth(png::BitDepth::Eight);
 				encoder
 					.set_animated(frames.len() as u32, 0)
-					.map_err(|_| "Could not resize this artwork")?;
+					.map_err(|_| "Não foi possível redimensionar esta imagem")?;
 				let mut writer = encoder
 					.write_header()
-					.map_err(|_| "Could not resize this artwork")?;
+					.map_err(|_| "Não foi possível redimensionar esta imagem")?;
 				for frame in frames {
 					let (numerator, denominator) = apng_delay(frame.delay());
 					writer
 						.set_frame_delay(numerator, denominator)
 						.and_then(|()| writer.write_image_data(frame.buffer().as_raw()))
-						.map_err(|_| "Could not resize this artwork")?;
+						.map_err(|_| "Não foi possível redimensionar esta imagem")?;
 				}
 				writer
 					.finish()
-					.map_err(|_| "Could not resize this artwork")?;
+					.map_err(|_| "Não foi possível redimensionar esta imagem")?;
 			} else {
 				let image = image::DynamicImage::from_decoder(decoder)
-					.map_err(|_| "Could not decode this artwork safely")?
+					.map_err(|_| "Não foi possível decodificar esta imagem com segurança")?
 					.thumbnail(edge, edge);
 				image
 					.write_to(&mut std::io::Cursor::new(&mut output), format)
-					.map_err(|_| "Could not resize this artwork")?;
+					.map_err(|_| "Não foi possível redimensionar esta imagem")?;
 			}
 		}
-		_ => return Err("Unsupported artwork image format"),
+		_ => return Err("Formato de imagem sem suporte"),
 	}
 	if output.is_empty() || output.len() > SHARE_BYTES {
-		return Err("Resized artwork is larger than 8 MiB");
+		return Err("A imagem redimensionada é maior que 8 MiB");
 	}
 	Ok(output)
 }
@@ -495,20 +496,20 @@ impl Uploads {
 		demo: bool,
 	) -> Result<(), &'static str> {
 		if self.busy() {
-			return Err("Wait for the current attachment operation to finish");
+			return Err("Aguarde a operação de anexo atual terminar");
 		}
 		if !self.selected.is_empty() {
-			return Err("Send or remove existing attachments before sending artwork alone");
+			return Err("Envie ou remova os anexos atuais antes de enviar só a imagem");
 		}
 		if assets.is_empty() || assets.len() > discord_api::upload::MAX_FILES || draft.len() > 8192
 		{
-			return Err("Send up to 10 emoji or sticker images per message");
+			return Err("Envie até 10 imagens de emoji ou figurinha por mensagem");
 		}
 		let sources = assets
 			.into_iter()
 			.map(image_share_source)
 			.collect::<Option<Vec<_>>>()
-			.ok_or("Unsupported emoji or sticker artwork")?;
+			.ok_or("Imagem de emoji ou figurinha sem suporte")?;
 		let count = sources.len();
 		let cancelled = Arc::new(AtomicBool::new(false));
 		let flag = cancelled.clone();
@@ -533,32 +534,33 @@ impl Uploads {
 							|| bytes.len() > SHARE_BYTES
 							|| image::guess_format(&bytes).ok() != Some(format)
 						{
-							return Err("Unsupported or invalid image data");
+							return Err("Dados de imagem inválidos ou sem suporte");
 						}
 						let emoji = filename.starts_with("emoji-");
 						// A restored PNG link may no longer have catalog metadata identifying APNG.
 						if !emoji
 							&& output_format == image::ImageFormat::Png
 							&& image::codecs::png::PngDecoder::new(std::io::Cursor::new(&bytes))
-								.map_err(|_| "Could not inspect this artwork safely")?
+								.map_err(|_| "Não foi possível analisar esta imagem com segurança")?
 								.is_apng()
-								.map_err(|_| "Could not inspect this artwork safely")?
-						{
+								.map_err(
+									|_| "Não foi possível analisar esta imagem com segurança",
+								)? {
 							output_format = image::ImageFormat::Gif;
 							filename = filename.replace(".png", ".gif");
 						}
 						let edge = if emoji { EMOJI_EDGE } else { STICKER_EDGE };
 						let bytes =
 							compact_artwork(&bytes, format, output_format, edge, &prepare_flag)?;
-						let thumbnail =
-							decode_preview(&bytes).ok_or("Could not decode this image safely")?;
+						let thumbnail = decode_preview(&bytes)
+							.ok_or("Não foi possível decodificar esta imagem com segurança")?;
 						Ok((Source::image_bytes(filename, bytes)?, Some(thumbnail)))
 					})
 					.await
-					.map_err(|_| "Image preparation interrupted")??;
+					.map_err(|_| "Preparação da imagem interrompida")??;
 					total += prepared.0.size();
 					if total > SHARE_BYTES as u64 {
-						return Err("Selected artwork must total at most 8 MiB");
+						return Err("As imagens selecionadas devem somar no máximo 8 MiB");
 					}
 					selected.push(prepared);
 				}
@@ -617,10 +619,10 @@ impl Uploads {
 		context: &egui::Context,
 	) -> Result<(), &'static str> {
 		if !self.accepting() {
-			return Err("Wait for the current attachment operation to finish");
+			return Err("Aguarde a operação de anexo atual terminar");
 		}
 		if self.selected.len() + self.loading() + source.len() > discord_api::upload::MAX_FILES {
-			return Err("Attach up to 10 files per message");
+			return Err("Anexe até 10 arquivos por mensagem");
 		}
 		self.admit(&source)?;
 		self.scope = Some((generation, channel));
@@ -659,7 +661,7 @@ impl Uploads {
 				.iter()
 				.any(|choosing| choosing.files.load(Ordering::Acquire) == 0)
 		{
-			return Err("Wait for the current attachment operation to finish");
+			return Err("Aguarde a operação de anexo atual terminar");
 		}
 		// Construct on the native UI thread; await and inspect outside rendering.
 		let dialog = platform::save::attachment_source(parent);
@@ -675,18 +677,18 @@ impl Uploads {
 		files: Vec<egui::DroppedFileHandle>,
 	) -> Result<(), &'static str> {
 		if !self.accepting() {
-			return Err("Wait for the current attachment operation to finish");
+			return Err("Aguarde a operação de anexo atual terminar");
 		}
 		if files.is_empty()
 			|| files.len() + self.selected.len() + self.loading() > discord_api::upload::MAX_FILES
 		{
-			return Err("Attach up to 10 files per message");
+			return Err("Anexe até 10 arquivos por mensagem");
 		}
 		let mut paths = Vec::with_capacity(files.len());
 		for file in files {
 			let path = file.path();
 			if !path.is_absolute() || path.as_os_str().as_encoded_bytes().len() > 4096 {
-				return Err("Drop a local file with a supported path");
+				return Err("Solte um arquivo local com um caminho compatível");
 			}
 			paths.push(path.to_owned());
 		}
@@ -721,7 +723,7 @@ impl Uploads {
 					return Ok(None);
 				};
 				if paths.is_empty() || paths.len() > discord_api::upload::MAX_FILES {
-					return Err("Attach up to 10 files per message");
+					return Err("Anexe até 10 arquivos por mensagem");
 				}
 				count.store(paths.len(), Ordering::Release);
 				context.request_repaint();
@@ -732,7 +734,7 @@ impl Uploads {
 					total += source.size();
 					if total > discord_api::upload::MAX_TOTAL_BYTES {
 						return Err(
-							"Attachments must total at most 500 MB; account limits may be lower",
+							"Os anexos devem somar no máximo 500 MB; os limites da conta podem ser menores",
 						);
 					}
 					let thumbnail = preview(&source).await;
@@ -796,7 +798,7 @@ impl Uploads {
 		};
 		if parked.bytes() > PARKED_BYTES {
 			self.notice =
-				Some("Attachments removed: too large to keep after leaving the conversation");
+				Some("Anexos removidos: grandes demais para manter depois de sair da conversa");
 			return;
 		}
 		self.parked.retain(|other| other.scope != scope);
@@ -809,7 +811,7 @@ impl Uploads {
 			evicted = true;
 		}
 		if evicted {
-			self.notice = Some("Attachments staged in an earlier conversation were removed");
+			self.notice = Some("Os anexos preparados em uma conversa anterior foram removidos");
 		}
 	}
 	/// Drops every parked selection, as when the account session ends.
@@ -859,7 +861,7 @@ impl Uploads {
 		while let Some(choosing) = self.choosing.get(index) {
 			let result = match choosing.result.try_recv() {
 				Ok(result) => result,
-				Err(mpsc::TryRecvError::Disconnected) => Err("Attachment selection interrupted"),
+				Err(mpsc::TryRecvError::Disconnected) => Err("Seleção de anexos interrompida"),
 				Err(mpsc::TryRecvError::Empty) => {
 					index += 1;
 					continue;
@@ -907,7 +909,9 @@ impl Uploads {
 				let (reached, problem) = match status {
 					Status::Sending => (
 						None,
-						Some("Message outcome unknown; check the conversation before retrying"),
+						Some(
+							"Não se sabe se a mensagem foi enviada; confira a conversa antes de tentar de novo",
+						),
 					),
 					Status::Preparing | Status::Uploading { .. } | Status::Verifying
 						if uploading.cancelling =>
@@ -915,7 +919,7 @@ impl Uploads {
 						(Some(Status::Cancelled), None)
 					}
 					Status::Preparing | Status::Uploading { .. } | Status::Verifying => {
-						(None, Some("Attachment upload interrupted"))
+						(None, Some("Envio do anexo interrompido"))
 					}
 					Status::Failed(error) => (None, Some(error)),
 					terminal => (Some(terminal), None),
@@ -950,7 +954,7 @@ impl Uploads {
 		if sources.is_empty()
 			|| self.selected.len() + sources.len() > discord_api::upload::MAX_FILES
 		{
-			return Err("Attach up to 10 files per message");
+			return Err("Anexe até 10 arquivos por mensagem");
 		}
 		if self
 			.selected
@@ -961,7 +965,9 @@ impl Uploads {
 			.sum::<u64>()
 			> discord_api::upload::MAX_TOTAL_BYTES
 		{
-			return Err("Attachments must total at most 500 MB; account limits may be lower");
+			return Err(
+				"Os anexos devem somar no máximo 500 MB; os limites da conta podem ser menores",
+			);
 		}
 		Ok(())
 	}
@@ -1066,7 +1072,7 @@ impl Uploads {
 	) -> Result<(), &'static str> {
 		if self.busy() || !self.selected.is_empty() || self.scope.is_none() {
 			cancel.send_replace(true);
-			return Err("Attachment operation already active or no selection scope");
+			return Err("Já há uma operação de anexo em andamento ou nenhuma conversa selecionada");
 		}
 		self.last = Some(progress.borrow().clone());
 		self.uploading = Some(Uploading {
@@ -1811,7 +1817,7 @@ mod tests {
 		drop(progress);
 		uploads.poll(2, Some(Id(3)), true, &context);
 		assert!(!uploads.busy());
-		assert!(uploads.take_notice().unwrap().contains("outcome unknown"));
+		assert!(uploads.take_notice().unwrap().contains("Não se sabe"));
 
 		let (progress, receive) = watch::channel(Status::Preparing);
 		let (cancel, _) = watch::channel(false);

@@ -311,7 +311,7 @@ impl State {
 		add: bool,
 	) -> Result<Option<crate::Command>, &'static str> {
 		const UNAVAILABLE: &str =
-			"This reaction is unavailable with the current access or pending action";
+			"Esta reação está indisponível com o acesso atual ou uma ação pendente";
 		if !emoji.valid()
 			|| emoji.name.is_none()
 			|| self.reactions.writing.is_some()
@@ -359,7 +359,7 @@ impl State {
 		let reactions = self.timeline.get(message)?.reactions.as_ref()?;
 		let existing = reactions.iter().find(|r| r.emoji.same(&emoji));
 		if existing.is_none() && reactions.len() >= model::MAX_REACTIONS {
-			self.status = "Reaction limit reached";
+			self.status = "Limite de reações atingido";
 			return None;
 		}
 		let add = existing.is_none_or(|r| !r.me);
@@ -409,7 +409,7 @@ impl State {
 				burst,
 			} => {
 				if !emoji.valid() || user.0 == 0 {
-					return Err("Invalid reaction delta");
+					return Err("Alteração de reação inválida");
 				}
 				let own = self.user.as_ref().is_some_and(|me| me.id == user);
 				self.update_reactions(channel, message, |values| {
@@ -422,7 +422,7 @@ impl State {
 				emoji,
 			} => {
 				if emoji.as_ref().is_some_and(|e| !e.valid()) {
-					return Err("Invalid reaction emoji");
+					return Err("Emoji de reação inválido");
 				}
 				self.update_reactions(channel, message, |values| {
 					values.retain(|r| emoji.as_ref().is_some_and(|e| !r.emoji.same(e)));
@@ -484,9 +484,9 @@ impl State {
 							.get(message)
 							.is_some_and(|m| m.reactions.is_some())
 						{
-							"Reaction counts could not be refreshed; reload the conversation to retry"
+							"Não foi possível atualizar as contagens de reações; recarregue a conversa para tentar de novo"
 						} else {
-							"Reactions unavailable; use Reload reactions to retry"
+							"Reações indisponíveis; use Recarregar reações para tentar de novo"
 						};
 						if failure == Failure::Forbidden {
 							self.apply(crate::Envelope {
@@ -561,7 +561,7 @@ impl State {
 						if users.len() > REACTION_USER_PAGE
 							|| users.iter().any(|user| user.id.0 == 0)
 						{
-							return Err("Invalid reaction users");
+							return Err("Usuários de reação inválidos");
 						}
 						let full_page = users.len() == REACTION_USER_PAGE;
 						for user in users {
@@ -615,7 +615,7 @@ fn apply_delta(
 			reaction
 				.count
 				.checked_add(1)
-				.ok_or("Reaction count exceeds capacity")?
+				.ok_or("A contagem de reações excede a capacidade")?
 		} else {
 			reaction.count.saturating_sub(1)
 		};
@@ -624,7 +624,7 @@ fn apply_delta(
 		}
 	} else if add {
 		if values.len() >= model::MAX_REACTIONS {
-			return Err("Reaction data exceeds safe capacity");
+			return Err("Os dados de reações excedem a capacidade segura");
 		}
 		values.push(Reaction {
 			emoji: emoji.clone(),

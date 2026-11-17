@@ -105,7 +105,7 @@ fn main() {
 	}
 	view.video().state = ui::VideoState::Paused;
 	let output = frame(&ctx, &mut view, &mut state, vec![], false);
-	let enter = button(&output, "Fullscreen");
+	let enter = button(&output, "Tela cheia");
 	output.drop_without_applying_deltas();
 	view.video().state = ui::VideoState::Playing;
 	frame(&ctx, &mut view, &mut state, pointer(enter, true), false).drop_without_applying_deltas();
@@ -117,7 +117,7 @@ fn main() {
 	// Native fullscreen changes asynchronously and can resize through intermediate sizes.
 	for fullscreen in [false, true, true, false, true] {
 		let output = frame(&ctx, &mut view, &mut state, vec![], fullscreen);
-		let exit = button(&output, "Exit fullscreen (Esc)");
+		let exit = button(&output, "Sair da tela cheia (Esc)");
 		assert!(
 			exit.x > if fullscreen { 1400.0 } else { 800.0 }
 				&& exit.y > if fullscreen { 800.0 } else { 600.0 },
@@ -158,7 +158,7 @@ fn main() {
 	assert_eq!(view.video().position, 6.0);
 	view.video().state = ui::VideoState::Paused;
 	let output = frame(&ctx, &mut view, &mut state, vec![], false);
-	let enter = button(&output, "Fullscreen");
+	let enter = button(&output, "Tela cheia");
 	output.drop_without_applying_deltas();
 	for pressed in [true, false] {
 		frame(&ctx, &mut view, &mut state, pointer(enter, pressed), false)
@@ -233,7 +233,7 @@ fn main() {
 	video.active = Some((message.channel, message.id, message.attachments[0].clone()));
 	video.state = ui::VideoState::Paused;
 	let output = frame(&ctx, &mut view, &mut state, vec![], false);
-	let enter = button(&output, "Fullscreen");
+	let enter = button(&output, "Tela cheia");
 	output.drop_without_applying_deltas();
 	for pressed in [true, false] {
 		frame(&ctx, &mut view, &mut state, pointer(enter, pressed), false)

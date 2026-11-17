@@ -53,7 +53,7 @@ impl Downloads {
 		parent: Arc<winit::window::Window>,
 	) -> Result<(), &'static str> {
 		let url = original_url(&attachment)
-			.ok_or("Attachment download unavailable")
+			.ok_or("Download do anexo indisponível")
 			.inspect_err(|&error| self.status = Status::Failed(error))?;
 		self.start_job(attachment, url, runtime, context, Some(parent))
 	}
@@ -64,11 +64,11 @@ impl Downloads {
 		context: &eframe::egui::Context,
 	) -> Result<(), &'static str> {
 		if !attachment.is_image() && !attachment.is_video() {
-			self.status = Status::Failed("Copy supports images and videos");
-			return Err("Copy supports images and videos");
+			self.status = Status::Failed("Só é possível copiar imagens e vídeos");
+			return Err("Só é possível copiar imagens e vídeos");
 		}
 		let url = original_url(&attachment)
-			.ok_or("Attachment download unavailable")
+			.ok_or("Download do anexo indisponível")
 			.inspect_err(|&error| self.status = Status::Failed(error))?;
 		self.start_job(attachment, url, runtime, context, None)
 	}
@@ -87,7 +87,7 @@ impl Downloads {
 				crate::avatars::embed_url(source, DOWNLOAD_EDGE)
 					.and_then(|url| url::Url::parse(&url).ok())
 			})
-			.ok_or("Embedded image download unavailable")
+			.ok_or("Download da imagem incorporada indisponível")
 			.inspect_err(|&error| self.status = Status::Failed(error))?;
 		// Private transfer metadata: zero means a bounded PNG length from the proxy.
 		// Public attachment entry points still require valid nonzero original metadata.
@@ -114,7 +114,7 @@ impl Downloads {
 	) -> Result<(), &'static str> {
 		self.poll();
 		if self.is_active() {
-			return Err("A download or clipboard cleanup is already active");
+			return Err("Já há um download ou uma limpeza da área de transferência em andamento");
 		}
 		// Construct on the native UI thread; Cocoa reads its application/window here.
 		let copying = parent.is_none();
@@ -195,7 +195,7 @@ impl Downloads {
 						.read_timeout(Duration::from_secs(30))
 						.timeout(Duration::from_secs(300))
 						.build()
-						.map_err(|_| "Download unavailable")?;
+						.map_err(|_| "Download indisponível")?;
 					download(
 						&client,
 						url,
@@ -246,8 +246,8 @@ impl Downloads {
 			});
 		if spawn.is_err() {
 			self.job = None;
-			self.status = Status::Failed("Download worker unavailable");
-			return Err("Download worker unavailable");
+			self.status = Status::Failed("Gerenciador de downloads indisponível");
+			return Err("Gerenciador de downloads indisponível");
 		}
 		if copying {
 			self.clipboard_thread = spawn.ok();
@@ -266,7 +266,9 @@ impl Downloads {
 			self.status = Status::Cancelled;
 		}
 		if self.copy_cleanup_failed.swap(false, Ordering::AcqRel) {
-			self.status = Status::Failed("Could not release clipboard temporary media");
+			self.status = Status::Failed(
+				"Não foi possível liberar a mídia temporária da área de transferência",
+			);
 		}
 		&self.status
 	}
@@ -307,7 +309,7 @@ struct CopyFile {
 impl CopyFile {
 	fn create(filename: &str, cleanup_failed: Arc<AtomicBool>) -> Result<Self, &'static str> {
 		let mut random = [0u8; 16];
-		getrandom::fill(&mut random).map_err(|_| "Temporary file unavailable")?;
+		getrandom::fill(&mut random).map_err(|_| "Arquivo temporário indisponível")?;
 		let suffix: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
 		let root = std::env::temp_dir().join(format!("monkado-clipboard-{suffix}"));
 		#[allow(unused_mut)] // Unix permissions require the mutable builder.
@@ -319,7 +321,7 @@ impl CopyFile {
 		}
 		directory
 			.create(&root)
-			.map_err(|_| "Cannot create clipboard temporary directory")?;
+			.map_err(|_| "Não foi possível criar a pasta temporária da área de transferência")?;
 		let path = root.join(platform::save::safe_filename(filename));
 		Ok(Self {
 			root,
@@ -344,11 +346,11 @@ impl Drop for CopyFile {
 /// Invalidate our file reference before deletion, without clearing a newer clipboard.
 fn clear_copied_file(clipboard: &mut arboard::Clipboard, path: &Path) -> Result<(), &'static str> {
 	match clipboard.get().file_list() {
-		Ok(paths) if paths.len() == 1 && paths[0] == path => {
-			clipboard.clear().map_err(|_| "Could not clear copied file")
-		}
+		Ok(paths) if paths.len() == 1 && paths[0] == path => clipboard
+			.clear()
+			.map_err(|_| "Não foi possível limpar o arquivo copiado"),
 		Ok(_) | Err(arboard::Error::ContentNotAvailable) => Ok(()),
-		Err(_) => Err("Could not check copied file"),
+		Err(_) => Err("Não foi possível verificar o arquivo copiado"),
 	}
 }
 
@@ -356,7 +358,7 @@ fn clipboard_image(path: &Path) -> Result<image::RgbaImage, &'static str> {
 	use image::ImageDecoder;
 	let mut reader = image::ImageReader::open(path)
 		.and_then(|reader| reader.with_guessed_format())
-		.map_err(|_| "Could not read copied image")?;
+		.map_err(|_| "Não foi possível ler a imagem copiada")?;
 	let mut limits = image::Limits::default();
 	limits.max_image_width = Some(4096);
 	limits.max_image_height = Some(4096);
@@ -364,14 +366,16 @@ fn clipboard_image(path: &Path) -> Result<image::RgbaImage, &'static str> {
 	reader.limits(limits);
 	let decoder = reader
 		.into_decoder()
-		.map_err(|_| "Image cannot be copied within the decode limit")?;
+		.map_err(|_| "A imagem não pode ser copiada dentro do limite de decodificação")?;
 	let (width, height) = decoder.dimensions();
 	if u64::from(width) * u64::from(height) > 4 * 1024 * 1024 {
-		return Err("Copy images with at most 4 million pixels; save larger images instead");
+		return Err(
+			"Copie imagens com no máximo 4 milhões de pixels; salve as maiores em vez de copiar",
+		);
 	}
 	image::DynamicImage::from_decoder(decoder)
 		.map(|image| image.into_rgba8())
-		.map_err(|_| "Image could not be decoded")
+		.map_err(|_| "Não foi possível decodificar a imagem")
 }
 fn copy_media(
 	path: &Path,
@@ -386,7 +390,8 @@ fn copy_media(
 	if cancelled.load(Ordering::Acquire) {
 		return Err("Cancelled");
 	}
-	let mut clipboard = arboard::Clipboard::new().map_err(|_| "Clipboard unavailable")?;
+	let mut clipboard =
+		arboard::Clipboard::new().map_err(|_| "Área de transferência indisponível")?;
 	if let Some(pixels) = pixels {
 		clipboard.set_image(arboard::ImageData {
 			width: pixels.width() as usize,
@@ -396,7 +401,7 @@ fn copy_media(
 	} else {
 		clipboard.set().file_list(&[path])
 	}
-	.map_err(|_| "Could not copy media to clipboard")?;
+	.map_err(|_| "Não foi possível copiar a mídia para a área de transferência")?;
 	Ok(clipboard)
 }
 
@@ -452,9 +457,11 @@ struct Partial<'a> {
 }
 impl<'a> Partial<'a> {
 	fn create(destination: &Path, cleanup_failed: &'a AtomicBool) -> Result<Self, &'static str> {
-		let parent = destination.parent().ok_or("Invalid save destination")?;
+		let parent = destination
+			.parent()
+			.ok_or("Destino de salvamento inválido")?;
 		let mut random = [0u8; 16];
-		getrandom::fill(&mut random).map_err(|_| "Temporary file unavailable")?;
+		getrandom::fill(&mut random).map_err(|_| "Arquivo temporário indisponível")?;
 		let random: String = random.iter().map(|b| format!("{b:02x}")).collect();
 		let path = parent.join(format!(".monkado-{random}.partial"));
 		let mut options = OpenOptions::new();
@@ -466,7 +473,7 @@ impl<'a> Partial<'a> {
 		}
 		let file = options
 			.open(&path)
-			.map_err(|_| "Cannot create download file")?;
+			.map_err(|_| "Não foi possível criar o arquivo do download")?;
 		Ok(Self {
 			path,
 			file: Some(file),
@@ -483,21 +490,22 @@ impl<'a> Partial<'a> {
 			.take()
 			.expect("partial file")
 			.sync_all()
-			.map_err(|_| "Could not finish download")?;
+			.map_err(|_| "Não foi possível concluir o download")?;
 		if cancelled.load(Ordering::Acquire) {
 			return Err("Cancelled");
 		}
 		if existed {
 			// Native Save dialog explicitly confirms replacement. Rename never truncates
 			// the old file on an interrupted network transfer.
-			fs::rename(&self.path, destination).map_err(|_| "Could not replace selected file")?;
+			fs::rename(&self.path, destination)
+				.map_err(|_| "Não foi possível substituir o arquivo selecionado")?;
 		} else {
 			// Atomic no-clobber publication: a file created meanwhile must survive.
 			platform::save::publish_new(&self.path, destination).map_err(|error| {
 				if error.kind() == std::io::ErrorKind::AlreadyExists {
-					"A file appeared at the destination; choose another name or confirm replacement"
+					"Apareceu um arquivo no destino; escolha outro nome ou confirme a substituição"
 				} else {
-					"Could not finish saving attachment; check folder permissions and disk space"
+					"Não foi possível terminar de salvar o anexo; confira as permissões da pasta e o espaço em disco"
 				}
 			})?;
 		}
@@ -533,14 +541,14 @@ async fn download(
 	publish: &impl Fn(Status),
 ) -> Result<(), &'static str> {
 	if expected > MAX_BYTES {
-		return Err("Attachment must be nonempty and at most 100 MiB");
+		return Err("O anexo não pode estar vazio e deve ter no máximo 100 MiB");
 	}
 	let metadata = fs::symlink_metadata(destination);
 	let existed = match metadata {
 		Ok(meta) if meta.is_file() && allow_replace => true,
-		Ok(_) => return Err("Destination exists or is not a regular file"),
+		Ok(_) => return Err("O destino já existe ou não é um arquivo comum"),
 		Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
-		Err(_) => return Err("Cannot access save destination"),
+		Err(_) => return Err("Não foi possível acessar o destino de salvamento"),
 	};
 	if cancelled.load(Ordering::Acquire) {
 		return Err("Cancelled");
@@ -551,14 +559,14 @@ async fn download(
 		response = client_core::fingerprint::discord_request(client.get(url.as_str()), url.as_str()).header(wreq::header::ACCEPT_ENCODING, "identity").send() => response.map_err(|_| "Attachment download failed")?,
 	};
 	if response.status() != wreq::StatusCode::OK {
-		return Err("Attachment unavailable; reload the conversation and try again");
+		return Err("Anexo indisponível; recarregue a conversa e tente novamente");
 	}
 	if response
 		.headers()
 		.get(wreq::header::CONTENT_ENCODING)
 		.is_some_and(|encoding| encoding != "identity")
 	{
-		return Err("Unexpected attachment encoding; reload the conversation");
+		return Err("Codificação inesperada do anexo; recarregue a conversa");
 	}
 	let expected = if expected == 0 {
 		// Only the validated embedded-image entry point supplies an unknown size.
@@ -574,7 +582,7 @@ async fn download(
 					.trim()
 					.eq_ignore_ascii_case("image/png")
 			}) {
-			return Err("Embedded image proxy did not return PNG");
+			return Err("O proxy da imagem incorporada não retornou PNG");
 		}
 		response
 			.headers()
@@ -582,10 +590,12 @@ async fn download(
 			.and_then(|value| value.to_str().ok())
 			.and_then(|value| value.parse::<u64>().ok())
 			.filter(|length| (1..=MAX_EMBED_BYTES).contains(length))
-			.ok_or("Embedded image needs a nonempty Content-Length of at most 16 MiB")?
+			.ok_or(
+				"A imagem incorporada precisa de um Content-Length não vazio de no máximo 16 MiB",
+			)?
 	} else if let Some(length) = response.content_length() {
 		if length == 0 || length > MAX_BYTES {
-			return Err("Attachment must be nonempty and at most 100 MiB");
+			return Err("O anexo não pode estar vazio e deve ter no máximo 100 MiB");
 		}
 		length
 	} else {
@@ -610,7 +620,7 @@ async fn download(
 				biased;
 				_ = wake_cancel.notified() => return Err("Cancelled"),
 				chunk = futures_util::StreamExt::next(&mut response_body) => {
-					chunk.transpose().map_err(|_| "Attachment transfer interrupted")?
+					chunk.transpose().map_err(|_| "Transferência do anexo interrompida")?
 				}
 			};
 			let Some(chunk) = chunk else {
@@ -618,9 +628,9 @@ async fn download(
 			};
 			received = received
 				.checked_add(chunk.len() as u64)
-				.ok_or("Attachment exceeds download limit")?;
+				.ok_or("O anexo excede o limite de download")?;
 			if received > expected || received > MAX_BYTES {
-				return Err("Attachment exceeds download limit");
+				return Err("O anexo excede o limite de download");
 			}
 			// wreq supplies transport chunks; split disk writes without retaining a file buffer.
 			for block in chunk.chunks(32 * 1024) {
@@ -632,7 +642,9 @@ async fn download(
 					.as_mut()
 					.expect("partial file")
 					.write_all(block)
-					.map_err(|_| "Could not write attachment; check available disk space")?;
+					.map_err(
+						|_| "Não foi possível gravar o anexo; confira o espaço livre em disco",
+					)?;
 			}
 			if repaint.elapsed() >= Duration::from_millis(100) {
 				publish(Status::Downloading {
@@ -643,7 +655,7 @@ async fn download(
 			}
 		}
 		if received != expected {
-			return Err("Attachment transfer incomplete");
+			return Err("Transferência do anexo incompleta");
 		}
 		if cancelled.load(Ordering::Acquire) {
 			return Err("Cancelled");
@@ -653,9 +665,9 @@ async fn download(
 	.await;
 	if cleanup_failed.load(Ordering::Acquire) {
 		Err(if result.is_ok() {
-			"Attachment saved, but its temporary file could not be removed"
+			"Anexo salvo, mas o arquivo temporário não pôde ser removido"
 		} else {
-			"Download stopped, but its temporary file could not be removed"
+			"Download interrompido, mas o arquivo temporário não pôde ser removido"
 		})
 	} else {
 		result
@@ -835,7 +847,7 @@ mod tests {
 		);
 		assert_eq!(
 			downloads.poll(),
-			&Status::Failed("Attachment download unavailable")
+			&Status::Failed("Download do anexo indisponível")
 		);
 		image.size = 1024;
 		image.media.url = Some("https://untrusted.example/image.png".into());
@@ -850,7 +862,7 @@ mod tests {
 		);
 		assert_eq!(
 			downloads.poll(),
-			&Status::Failed("Attachment download unavailable")
+			&Status::Failed("Download do anexo indisponível")
 		);
 		assert!(!downloads.is_active());
 	}
@@ -1386,7 +1398,7 @@ mod tests {
 				&|_| {},
 			)
 			.await,
-			Err("Attachment transfer incomplete")
+			Err("Transferência do anexo incompleta")
 		);
 		task.await.unwrap();
 		assert!(!destination.exists());
@@ -1406,7 +1418,7 @@ mod tests {
 				&|_| {},
 			)
 			.await,
-			Err("Attachment must be nonempty and at most 100 MiB")
+			Err("O anexo não pode estar vazio e deve ter no máximo 100 MiB")
 		);
 		task.await.unwrap();
 		assert!(!destination.exists());
@@ -1445,7 +1457,7 @@ mod tests {
 				&|_| {},
 			)
 			.await,
-			Err("Attachment must be nonempty and at most 100 MiB")
+			Err("O anexo não pode estar vazio e deve ter no máximo 100 MiB")
 		);
 		server.await.unwrap();
 		assert!(!destination.exists());

@@ -574,7 +574,8 @@ impl Bridge {
 					.map(|root| root.join("extensions"))
 			};
 			let Some(root) = root else {
-				messaging.extensions.status = "Application data directory is unavailable.".into();
+				messaging.extensions.status =
+					"A pasta de dados do aplicativo está indisponível.".into();
 				return;
 			};
 			self.host = Some(ExtensionHost::new(root));
@@ -639,7 +640,7 @@ impl Bridge {
 				messaging,
 			);
 			messaging.extensions.status =
-				"Result discarded because the conversation or draft changed.".into();
+				"Resultado descartado porque a conversa ou o rascunho mudou.".into();
 		}
 		while let Some((token, outcome)) = self.host.as_mut().unwrap().poll() {
 			let pending = self.pending.remove(&token);
@@ -693,7 +694,7 @@ impl Bridge {
 							entry.interface_tweaks.clear();
 						}
 						messaging.extensions.status = format!(
-							"{id} animation paused after a failed tick; disable and re-enable it to retry. {error}"
+							"Animação de {id} pausada após uma falha; desative e ative de novo para tentar outra vez. {error}"
 						);
 						continue;
 					}
@@ -711,8 +712,9 @@ impl Bridge {
 						self.entries(messaging);
 					}
 					if pending.as_ref().is_some_and(|pending| pending.catalog) {
-						messaging.extensions.status =
-							format!("Catalog refresh failed; keeping saved packages. {error}");
+						messaging.extensions.status = format!(
+							"Falha ao atualizar o catálogo; os pacotes salvos foram mantidos. {error}"
+						);
 					} else {
 						messaging.extensions.report_error(error);
 					}
@@ -792,8 +794,7 @@ impl Bridge {
 						cleanup_pending: false,
 					});
 					messaging.extensions.status =
-						"Package inspected. Review its source and capabilities before enabling."
-							.into();
+						"Pacote analisado. Revise a origem e as permissões antes de ativar.".into();
 				}
 				Ok(Event::ThemeSelected {
 					id,
@@ -837,7 +838,7 @@ impl Bridge {
 					self.imported = None;
 					self.apply_theme(ctx);
 					self.entries(messaging);
-					messaging.extensions.status = "Extension enabled.".into();
+					messaging.extensions.status = "Extensão ativada.".into();
 				}
 				Ok(Event::Disabled(id)) => {
 					self.ticks.remove(&id);
@@ -854,9 +855,10 @@ impl Bridge {
 					// The gallery reports the outcome; an open theme editor is a different task.
 					if !messaging.extensions.editing_theme() {
 						messaging.extensions.status = if theme {
-							"Theme removed.".into()
+							"Tema removido.".into()
 						} else {
-							"Disabled. Downloaded code and extension data were removed.".into()
+							"Desativada. O código baixado e os dados da extensão foram removidos."
+								.into()
 						};
 					}
 				}
@@ -970,7 +972,7 @@ impl Bridge {
 					local_theme,
 					preview,
 				),
-				Ok(Event::ThemeExported) => messaging.extensions.status = "Theme exported.".into(),
+				Ok(Event::ThemeExported) => messaging.extensions.status = "Tema exportado.".into(),
 				Ok(Event::LoggedOut | Event::Preview { .. }) => {}
 			}
 		}
@@ -990,7 +992,8 @@ impl Bridge {
 				}
 				Err(mpsc::TryRecvError::Disconnected) => {
 					self.picker = None;
-					messaging.extensions.status = "Extension file selection ended.".into();
+					messaging.extensions.status =
+						"Seleção do arquivo da extensão encerrada.".into();
 				}
 				Err(mpsc::TryRecvError::Empty) => {}
 			}
@@ -1026,7 +1029,7 @@ impl Bridge {
 					self.theme_picker = None;
 					messaging
 						.extensions
-						.report_error("Theme file selection ended.".into());
+						.report_error("Seleção do arquivo do tema encerrada.".into());
 				}
 				Err(mpsc::TryRecvError::Empty) => {}
 			}
@@ -1073,7 +1076,7 @@ impl Bridge {
 									.map(|(bytes, image)| Some((bytes, Arc::new(image))))
 							})
 							.await
-							.unwrap_or_else(|_| Err("Background image worker failed.".into()))
+							.unwrap_or_else(|_| Err("Falha ao processar a imagem de fundo.".into()))
 						} else {
 							Ok(None)
 						};
@@ -1093,7 +1096,7 @@ impl Bridge {
 									.map(|(bytes, image)| Some((bytes, Arc::new(image))))
 							})
 							.await
-							.unwrap_or_else(|_| Err("Cover image worker failed.".into()))
+							.unwrap_or_else(|_| Err("Falha ao processar a imagem de capa.".into()))
 						} else {
 							Ok(None)
 						};
@@ -1189,7 +1192,7 @@ impl Bridge {
 						);
 					} else {
 						messaging.extensions.status =
-							"Refresh the catalog or import this package again.".into();
+							"Atualize o catálogo ou importe este pacote de novo.".into();
 					}
 				}
 				ExtensionRequest::Disable { id } => {
@@ -1333,7 +1336,7 @@ impl Bridge {
 			.any(|image| image.resolution().iter().any(|side| *side > max_texture))
 		{
 			messaging.extensions.status = format!(
-				"This device supports background images up to {max_texture} pixels per edge. Choose a smaller image."
+				"Este dispositivo aceita imagens de fundo de até {max_texture} pixels por lado. Escolha uma imagem menor."
 			);
 		}
 		messaging.extensions.busy = self.picker.is_some()
@@ -1371,7 +1374,8 @@ impl Bridge {
 		});
 		if std::mem::take(&mut self.message_events_dropped) {
 			messaging.extensions.status =
-				"Some plugin events were skipped because the event queue was full.".into();
+				"Alguns eventos de plugins foram ignorados porque a fila de eventos estava cheia."
+					.into();
 		}
 		if !self.message_events.is_empty() {
 			let wait = self.message_event_at.map_or(Duration::ZERO, |at| {
@@ -1529,7 +1533,7 @@ impl Bridge {
 					Err(error) => {
 						self.ticks.get_mut(&id).unwrap().paused = true;
 						messaging.extensions.status = format!(
-							"{id} animation paused because its tick could not start; disable and re-enable it to retry. {error}"
+							"Animação de {id} pausada porque não pôde começar; desative e ative de novo para tentar outra vez. {error}"
 						);
 					}
 				}

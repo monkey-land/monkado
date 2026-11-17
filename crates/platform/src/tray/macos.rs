@@ -87,7 +87,8 @@ impl Tray {
 		window: Arc<winit::window::Window>,
 		wake: impl Fn() + 'static,
 	) -> Result<Self, &'static str> {
-		let mtm = MainThreadMarker::new().ok_or("The menu bar icon requires the main thread.")?;
+		let mtm =
+			MainThreadMarker::new().ok_or("O ícone da barra de menus exige a thread principal.")?;
 		let target = Target::alloc(mtm).set_ivars(State {
 			window,
 			events: Events::default(),
@@ -107,7 +108,7 @@ impl Tray {
 		let button = tray
 			.item
 			.button(mtm)
-			.ok_or("The macOS menu bar is unavailable.")?;
+			.ok_or("A barra de menus do macOS está indisponível.")?;
 		let image = NSImage::initWithData(NSImage::alloc(), &NSData::with_bytes(MARK));
 		if let Some(image) = image {
 			image.setTemplate(true);

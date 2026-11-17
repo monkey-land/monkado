@@ -314,32 +314,32 @@ fn relative(delta: time::Duration) -> String {
 	let months = (days + 15) / 30;
 	let years = (days + 182) / 365;
 	let amount = if seconds < 45 {
-		"a few seconds".to_owned()
+		"alguns segundos".to_owned()
 	} else if seconds < 90 {
-		"a minute".to_owned()
+		"um minuto".to_owned()
 	} else if minutes < 45 {
-		format!("{minutes} minutes")
+		format!("{minutes} minutos")
 	} else if minutes < 90 {
-		"an hour".to_owned()
+		"uma hora".to_owned()
 	} else if hours < 22 {
-		format!("{hours} hours")
+		format!("{hours} horas")
 	} else if hours < 36 {
-		"a day".to_owned()
+		"um dia".to_owned()
 	} else if days < 26 {
-		format!("{days} days")
+		format!("{days} dias")
 	} else if days < 46 {
-		"a month".to_owned()
+		"um mês".to_owned()
 	} else if days < 320 {
-		format!("{months} months")
+		format!("{months} meses")
 	} else if days < 548 {
-		"a year".to_owned()
+		"um ano".to_owned()
 	} else {
-		format!("{years} years")
+		format!("{years} anos")
 	};
 	if ahead {
-		format!("in {amount}")
+		format!("em {amount}")
 	} else {
-		format!("{amount} ago")
+		format!("há {amount}")
 	}
 }
 

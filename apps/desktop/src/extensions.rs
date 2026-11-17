@@ -397,7 +397,9 @@ impl ExtensionHost {
 			self.cancel();
 		}
 		if self.queue.len() >= MAX_QUEUE {
-			return Err("Extensions are busy; try again after the current operation".into());
+			return Err(
+				"As extensões estão ocupadas; tente de novo depois da operação atual".into(),
+			);
 		}
 		validate_job(&job)?;
 		self.context = Some(context.clone());
@@ -426,7 +428,10 @@ impl ExtensionHost {
 			Err(mpsc::TryRecvError::Disconnected) => {
 				self.active = None;
 				self.start_next();
-				Some((token, Err("Extension worker stopped unexpectedly".into())))
+				Some((
+					token,
+					Err("O gerenciador de extensões parou inesperadamente".into()),
+				))
 			}
 		}
 	}
@@ -487,7 +492,7 @@ impl Gate {
 		if self.epoch == self.generation.load(Ordering::Acquire) {
 			Ok(())
 		} else {
-			Err("Extension operation cancelled".into())
+			Err("Operação de extensão cancelada".into())
 		}
 	}
 }
@@ -530,15 +535,15 @@ impl Stored {
 			if output.preserve_deleted_messages
 				&& !self.grants.contains(&Capability::DeletedMessages)
 			{
-				return Err("Deleted message access was not granted".into());
+				return Err("O acesso a mensagens apagadas não foi concedido".into());
 			}
 			if output.image_sharing && !self.grants.contains(&Capability::ImageSharing) {
-				return Err("Image sharing access was not granted".into());
+				return Err("O acesso ao compartilhamento de imagens não foi concedido".into());
 			}
 			if output.interface_tweaks.is_some()
 				&& !self.grants.contains(&Capability::InterfaceTweaks)
 			{
-				return Err("Interface tweaks were not granted".into());
+				return Err("Os ajustes de interface não foram concedidos".into());
 			}
 			Ok(output)
 		});
@@ -661,7 +666,7 @@ fn validate_job(job: &Job) -> Result<(), String> {
 							.sum::<usize>(),
 					) > 256 * 1024
 			{
-				return Err("Plugin input exceeds 256 KiB".into());
+				return Err("A entrada do plugin excede 256 KiB".into());
 			}
 		}
 		Job::Preview { id, preview, .. } => {
@@ -673,20 +678,20 @@ fn validate_job(job: &Job) -> Result<(), String> {
 		}
 		Job::SaveTheme { package } | Job::ExportTheme { package, .. } => {
 			if package.manifest.kind != ExtensionKind::Theme {
-				return Err("Theme editor only accepts themes".into());
+				return Err("O editor de temas só aceita temas".into());
 			}
 			package.validate().map_err(|error| error.to_string())?;
 			if let Job::ExportTheme { path, .. } = job
 				&& path.as_os_str().len() > 4096
 			{
-				return Err("Export path is too long".into());
+				return Err("O caminho de exportação é longo demais".into());
 			}
 		}
 		Job::Enable { grants, .. } if grants.len() > extensions::MAX_CAPABILITIES => {
 			return Err("Invalid plugin grants".into());
 		}
 		Job::InspectImport { path } if path.as_os_str().len() > 4096 => {
-			return Err("Import path is too long".into());
+			return Err("O caminho de importação é longo demais".into());
 		}
 		_ => {}
 	}
@@ -702,7 +707,7 @@ fn run(root: &Path, job: Job, gate: &Gate) -> Result<Event, String> {
 			valid_id(&id)?;
 			let directory = root.join("themes").join(&id);
 			if directory.with_extension("disabled").exists() {
-				return Err("Theme cleanup is pending".into());
+				return Err("A limpeza do tema está pendente".into());
 			}
 			let (package, local_theme) = if directory.exists() {
 				let stored = read_stored(&directory.join("package.json"))?;
@@ -714,9 +719,9 @@ fn run(root: &Path, job: Job, gate: &Gate) -> Result<Event, String> {
 						matches!(&starter.source, InstallSource::Bundled { manifest, .. }
 						if manifest.id == id && manifest.kind == ExtensionKind::Theme)
 					})
-					.ok_or("Theme is not available locally")?;
+					.ok_or("O tema não está disponível localmente")?;
 				let InstallSource::Bundled { bytes, .. } = starter.source else {
-					return Err("Theme is not bundled".into());
+					return Err("O tema não vem incluído".into());
 				};
 				(
 					extensions::parse_package(bytes).map_err(|error| error.to_string())?,
@@ -724,7 +729,7 @@ fn run(root: &Path, job: Job, gate: &Gate) -> Result<Event, String> {
 				)
 			};
 			if package.manifest.id != id || package.manifest.kind != ExtensionKind::Theme {
-				return Err("Theme does not match the requested package".into());
+				return Err("O tema não corresponde ao pacote solicitado".into());
 			}
 			let image = package_background(&package)?;
 			let cover = package_cover(&package)?;
@@ -742,9 +747,7 @@ fn run(root: &Path, job: Job, gate: &Gate) -> Result<Event, String> {
 			let _ = package_cover(&package)?;
 			let directory = root.join("themes").join(&package.manifest.id);
 			if directory.exists() && !read_stored(&directory.join("package.json"))?.local_theme {
-				return Err(
-					"This theme belongs to another package; duplicate it before saving".into(),
-				);
+				return Err("Este tema pertence a outro pacote; duplique-o antes de salvar".into());
 			}
 			let stored = Stored {
 				package: *package,
@@ -774,7 +777,7 @@ fn run(root: &Path, job: Job, gate: &Gate) -> Result<Event, String> {
 					|| stored.package.manifest.kind != ExtensionKind::Theme
 					|| parent.join(id).with_extension("disabled").exists()
 				{
-					return Err("Theme is not installed".into());
+					return Err("O tema não está instalado".into());
 				}
 				background_image = package_background(&stored.package)?;
 				atomic_write(&parent.join("active.json"), id.as_bytes(), gate)?;
@@ -837,7 +840,7 @@ fn run(root: &Path, job: Job, gate: &Gate) -> Result<Event, String> {
 			)?
 			.join(&id);
 			if directory.with_extension("disabled").exists() {
-				return Err("Plugin is disabled".into());
+				return Err("O plugin está desativado".into());
 			}
 			let stored = read_stored(&directory.join("package.json"))?;
 			if stored.package.manifest.id != id
@@ -857,7 +860,7 @@ fn run(root: &Path, job: Job, gate: &Gate) -> Result<Event, String> {
 				|| invocation.menu_target.is_some()
 					&& !stored.grants.contains(&Capability::ContextMenus)
 			{
-				return Err("Plugin access was not granted".into());
+				return Err("O acesso do plugin não foi concedido".into());
 			}
 			if let Some(app) = &invocation.app {
 				let mut granted = stored.package.manifest.clone();
@@ -869,33 +872,35 @@ fn run(root: &Path, job: Job, gate: &Gate) -> Result<Event, String> {
 			{
 				Some(
 					String::from_utf8(read_bounded(&directory.join("data.json"), MAX_STORAGE)?)
-						.map_err(|_| "Plugin data is invalid")?,
+						.map_err(|_| "Os dados do plugin são inválidos")?,
 				)
 			} else {
 				None
 			};
 			if !trim_extended_input(&mut invocation, extensions::MAX_IO_BYTES) {
-				return Err("Plugin input exceeds 256 KiB".into());
+				return Err("A entrada do plugin excede 256 KiB".into());
 			}
 			gate.check()?;
 			let mut output =
 				extensions::invoke(&stored.package, &invocation).map_err(|e| e.to_string())?;
 			gate.check()?;
 			if output.api_proxy.is_some() && !stored.grants.contains(&Capability::ApiProxy) {
-				return Err("API proxy access was not granted".into());
+				return Err("O acesso ao proxy da API não foi concedido".into());
 			}
 			if output.rich_presence.is_some() && !stored.grants.contains(&Capability::RichPresence)
 			{
-				return Err("Rich presence access was not granted".into());
+				return Err("O acesso à Rich Presence não foi concedido".into());
 			}
 			if output.interface_tweaks.is_some()
 				&& !stored.grants.contains(&Capability::InterfaceTweaks)
 			{
-				return Err("Interface tweaks were not granted".into());
+				return Err("Os ajustes de interface não foram concedidos".into());
 			}
 			if let Some(data) = output.storage.take() {
 				if !stored.grants.contains(&Capability::Storage) || data.len() > MAX_STORAGE {
-					return Err("Plugin data exceeds its granted storage budget".into());
+					return Err(
+						"Os dados do plugin excedem o espaço de armazenamento concedido".into(),
+					);
 				}
 				atomic_write(&directory.join("data.json"), data.as_bytes(), gate)?;
 			}
@@ -942,7 +947,7 @@ fn enable(
 				Duration::from_secs(60),
 			)?;
 			if bytes.len() as u64 != entry.download_bytes {
-				return Err("Extension download size changed".into());
+				return Err("O tamanho do download da extensão mudou".into());
 			}
 			(bytes, entry.manifest, entry.sha256, true)
 		}
@@ -953,11 +958,11 @@ fn enable(
 		} => (read_bounded(&path, MAX_PACKAGE)?, manifest, sha256, false),
 	};
 	if !digest(&bytes).eq_ignore_ascii_case(&sha256) {
-		return Err("Extension package checksum changed; inspect the release again".into());
+		return Err("O checksum do pacote da extensão mudou; analise a versão de novo".into());
 	}
 	let package = extensions::parse_package(&bytes).map_err(|e| e.to_string())?;
 	if package.manifest != manifest {
-		return Err("Package does not match the reviewed manifest".into());
+		return Err("O pacote não corresponde ao manifesto revisado".into());
 	}
 	if reviewed {
 		let path = manifest_scope(root, &package.manifest, account)?
@@ -966,7 +971,10 @@ fn enable(
 		if path.exists() {
 			let existing = read_stored(&path)?;
 			if existing.local_theme || !existing.reviewed {
-				return Err("A catalog update cannot replace a local or imported package".into());
+				return Err(
+					"Uma atualização do catálogo não pode substituir um pacote local ou importado"
+						.into(),
+				);
 			}
 		}
 	}
@@ -983,12 +991,12 @@ fn enable(
 
 fn encode_theme(package: &Package) -> Result<Vec<u8>, String> {
 	if package.manifest.kind != ExtensionKind::Theme {
-		return Err("Theme editor only accepts themes".into());
+		return Err("O editor de temas só aceita temas".into());
 	}
 	package.validate().map_err(|error| error.to_string())?;
 	let bytes = serde_json::to_vec(package).map_err(|_| "Cannot encode theme package")?;
 	if bytes.len() > MAX_PACKAGE {
-		return Err("Theme package exceeds 16 MiB".into());
+		return Err("O pacote do tema excede 16 MiB".into());
 	}
 	Ok(bytes)
 }
@@ -1003,11 +1011,11 @@ fn install_stored(
 	let parent = manifest_scope(root, &stored.package.manifest, account)?;
 	let directory = parent.join(&stored.package.manifest.id);
 	if parent.with_extension("disabled").exists() {
-		return Err("Account extension cleanup is incomplete; reopen Extensions to retry".into());
+		return Err("A limpeza das extensões da conta está incompleta; abra Extensões de novo para tentar outra vez".into());
 	}
 	if !directory.exists() && count_directories(&parent)? >= MAX_PER_SCOPE {
 		return Err(
-			"Disable an extension first; each scope allows eight installed extensions".into(),
+			"Desative uma extensão primeiro; cada escopo permite oito extensões instaladas".into(),
 		);
 	}
 	if stored.package.manifest.kind == ExtensionKind::Plugin
@@ -1015,7 +1023,9 @@ fn install_stored(
 		&& !parent.exists()
 		&& count_directories(&root.join("accounts"))? >= MAX_ACCOUNTS
 	{
-		return Err("Extension storage is full; log out an old account first".into());
+		return Err(
+			"O armazenamento de extensões está cheio; saia de uma conta antiga primeiro".into(),
+		);
 	}
 	let updating_theme = stored.reviewed
 		&& stored.package.manifest.kind == ExtensionKind::Theme
@@ -1033,7 +1043,7 @@ fn install_stored(
 	}
 	let record = serde_json::to_vec(&stored).map_err(|_| "Cannot encode extension package")?;
 	if record.len() > MAX_RECORD {
-		return Err("Extension package exceeds storage budget".into());
+		return Err("O pacote da extensão excede o espaço de armazenamento".into());
 	}
 	gate.check()?;
 	fs::create_dir_all(&directory).map_err(|_| "Cannot create extension directory")?;
@@ -1056,7 +1066,9 @@ fn validate_grants(manifest: &Manifest, grants: &[Capability]) -> Result<(), Str
 			.iter()
 			.any(|cap| !grants.contains(cap))
 	{
-		return Err("Confirm every requested capability before enabling this extension".into());
+		return Err(
+			"Confirme todas as permissões solicitadas antes de ativar esta extensão".into(),
+		);
 	}
 	Ok(())
 }
@@ -1074,7 +1086,7 @@ fn manifest_scope(
 		return Ok(root.join("proxy-plugins"));
 	}
 	if manifest.kind == ExtensionKind::Plugin && account.is_none() {
-		return Err("Select an account before enabling plugins".into());
+		return Err("Selecione uma conta antes de ativar plugins".into());
 	}
 	scope(root, manifest.kind, account)
 }
@@ -1145,7 +1157,7 @@ fn load(
 				.is_dir()
 			{
 				if installed.len() >= MAX_PER_SCOPE * 3 {
-					return Err("Too many installed extensions".into());
+					return Err("Extensões instaladas demais".into());
 				}
 				let id = entry.file_name().to_string_lossy().into_owned();
 				valid_id(&id)?;
@@ -1157,7 +1169,7 @@ fn load(
 				let stored = read_stored(&package_path).and_then(|stored| {
 					if entry.path().with_extension("disabled").exists() {
 						return Err(cleanup_error.clone().unwrap_or_else(|| {
-							"Extension is disabled; cleanup needs retrying".into()
+							"A extensão está desativada; a limpeza precisa ser repetida".into()
 						}));
 					}
 					if stored.package.manifest.id != id
@@ -1239,7 +1251,7 @@ fn activation_storage(stored: &Stored, directory: &Path) -> Result<Option<String
 	if stored.grants.contains(&Capability::Storage) && path.exists() {
 		String::from_utf8(read_bounded(&path, MAX_STORAGE)?)
 			.map(Some)
-			.map_err(|_| "Plugin data is invalid".into())
+			.map_err(|_| "Os dados do plugin são inválidos".into())
 	} else {
 		Ok(None)
 	}
@@ -1340,14 +1352,14 @@ fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>, String> {
 		.map_err(|_| "Cannot inspect extension file")?
 		.is_file()
 	{
-		return Err("Extension package must be a regular file".into());
+		return Err("O pacote da extensão deve ser um arquivo comum".into());
 	}
 	let mut bytes = Vec::new();
 	file.take(limit as u64 + 1)
 		.read_to_end(&mut bytes)
 		.map_err(|_| "Cannot read extension file")?;
 	if bytes.len() > limit {
-		return Err("Extension file exceeds its byte budget".into());
+		return Err("O arquivo da extensão excede o limite de tamanho".into());
 	}
 	Ok(bytes)
 }
@@ -1355,20 +1367,22 @@ fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>, String> {
 fn export_theme(path: &Path, bytes: &[u8], gate: &Gate) -> Result<(), String> {
 	gate.check()?;
 	let mut nonce = [0; 16];
-	getrandom::fill(&mut nonce).map_err(|_| "Cannot prepare theme export")?;
+	getrandom::fill(&mut nonce).map_err(|_| "Não foi possível preparar a exportação do tema")?;
 	let temporary = path.with_extension(format!("{}.partial", digest(&nonce)));
 	let mut file = OpenOptions::new()
 		.write(true)
 		.create_new(true)
 		.open(&temporary)
-		.map_err(|_| "Cannot create theme export")?;
+		.map_err(|_| "Não foi possível criar a exportação do tema")?;
 	let result = (|| {
 		file.write_all(bytes)
-			.map_err(|_| "Cannot write theme export")?;
-		file.sync_all().map_err(|_| "Cannot finish theme export")?;
+			.map_err(|_| "Não foi possível gravar a exportação do tema")?;
+		file.sync_all()
+			.map_err(|_| "Não foi possível concluir a exportação do tema")?;
 		drop(file);
 		gate.check()?;
-		fs::rename(&temporary, path).map_err(|_| "Cannot replace theme export".to_owned())
+		fs::rename(&temporary, path)
+			.map_err(|_| "Não foi possível substituir a exportação do tema".to_owned())
 	})();
 	if result.is_err() {
 		let _ = remove_file(&temporary);
@@ -1408,7 +1422,9 @@ fn remove_file(path: &Path) -> Result<(), String> {
 	match fs::remove_file(path) {
 		Ok(()) => Ok(()),
 		Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-		Err(_) => Err("Extension cleanup failed; retry or reopen Extensions".into()),
+		Err(_) => {
+			Err("Falha na limpeza da extensão; tente de novo ou abra Extensões outra vez".into())
+		}
 	}
 }
 
@@ -1421,7 +1437,8 @@ fn remove_owned_directory(path: &Path) -> Result<(), String> {
 		}
 		Ok(_) => {}
 	}
-	fs::remove_dir_all(path).map_err(|_| "Extension cleanup failed; it will retry on launch".into())
+	fs::remove_dir_all(path)
+		.map_err(|_| "Falha na limpeza da extensão; será repetida ao abrir o app".into())
 }
 
 fn load_preview(preview: &Preview, gate: &Gate) -> Option<eframe::egui::ColorImage> {
@@ -1494,10 +1511,12 @@ pub fn read_cover(path: &Path) -> Result<(Vec<u8>, eframe::egui::ColorImage), St
 
 fn decode_cover(bytes: &[u8]) -> Result<eframe::egui::ColorImage, String> {
 	if bytes.len() > extensions::MAX_BACKGROUND_BYTES {
-		return Err("Cover image exceeds 2 MiB".into());
+		return Err("A imagem de capa excede 2 MiB".into());
 	}
 	let image = decode_static_image(bytes, 4_000_000)
-		.ok_or("Choose a static PNG or JPEG within 4096 pixels per edge and 4 million pixels")?
+		.ok_or(
+			"Escolha um PNG ou JPEG estático com até 4096 pixels por lado e 4 milhões de pixels",
+		)?
 		.thumbnail(640, 360)
 		.into_rgba8();
 	Ok(eframe::egui::ColorImage::from_rgba_unmultiplied(
@@ -1516,10 +1535,12 @@ fn package_cover(package: &Package) -> Result<Option<Arc<eframe::egui::ColorImag
 
 pub fn decode_background(bytes: &[u8]) -> Result<eframe::egui::ColorImage, String> {
 	if bytes.len() > extensions::MAX_BACKGROUND_BYTES {
-		return Err("Background image exceeds 2 MiB".into());
+		return Err("A imagem de fundo excede 2 MiB".into());
 	}
 	let image = decode_static_image(bytes, 4_000_000)
-		.ok_or("Choose a static PNG or JPEG within 4096 pixels per edge and 4 million pixels")?
+		.ok_or(
+			"Escolha um PNG ou JPEG estático com até 4096 pixels por lado e 4 milhões de pixels",
+		)?
 		.into_rgba8();
 	Ok(eframe::egui::ColorImage::from_rgba_unmultiplied(
 		[image.width() as usize, image.height() as usize],
@@ -1587,12 +1608,12 @@ fn download(raw: &str, limit: usize, gate: &Gate, timeout: Duration) -> Result<V
 	tokio::runtime::Builder::new_current_thread()
 		.enable_all()
 		.build()
-		.map_err(|_| "Extension downloader unavailable")?
+		.map_err(|_| "Download de extensões indisponível")?
 		.block_on(async {
 			tokio::select! {
 				biased;
-				_ = gate.wake_cancel.notified() => Err("Extension operation cancelled".into()),
-				result = tokio::time::timeout(timeout, download_https(raw, limit, gate)) => result.map_err(|_| "Extension download timed out")?,
+				_ = gate.wake_cancel.notified() => Err("Operação de extensão cancelada".into()),
+				result = tokio::time::timeout(timeout, download_https(raw, limit, gate)) => result.map_err(|_| "O download da extensão demorou demais")?,
 			}
 		})
 }
@@ -1608,7 +1629,7 @@ async fn download_https(raw: &str, limit: usize, gate: &Gate) -> Result<Vec<u8>,
 			|| url.port_or_known_default() != Some(443)
 			|| !host.contains('.')
 		{
-			return Err("Extensions require credential-free public HTTPS URLs".into());
+			return Err("Extensões exigem URLs HTTPS públicas sem credenciais".into());
 		}
 		let addresses: Vec<_> = tokio::net::lookup_host((host, 443))
 			.await
@@ -1616,7 +1637,7 @@ async fn download_https(raw: &str, limit: usize, gate: &Gate) -> Result<Vec<u8>,
 			.take(16)
 			.collect();
 		if addresses.is_empty() || addresses.iter().any(|address| !public_ip(address.ip())) {
-			return Err("Extension downloads cannot access private networks".into());
+			return Err("Downloads de extensões não podem acessar redes privadas".into());
 		}
 		// Pin the validated DNS result; redirects receive a fresh validation and client.
 		let client = wreq::Client::builder()
@@ -1626,13 +1647,13 @@ async fn download_https(raw: &str, limit: usize, gate: &Gate) -> Result<Vec<u8>,
 			.resolve_to_addrs(host.to_owned(), addresses.iter().copied())
 			.timeout(Duration::from_secs(30))
 			.build()
-			.map_err(|_| "Extension downloader unavailable")?;
+			.map_err(|_| "Download de extensões indisponível")?;
 		let response = client
 			.get(url.as_str())
 			.header(wreq::header::ACCEPT_ENCODING, "identity")
 			.send()
 			.await
-			.map_err(|_| "Extension download failed")?;
+			.map_err(|_| "Falha no download da extensão")?;
 		if response.status().is_redirection() {
 			let location = response
 				.headers()
@@ -1646,7 +1667,8 @@ async fn download_https(raw: &str, limit: usize, gate: &Gate) -> Result<Vec<u8>,
 		}
 		if response.status() != wreq::StatusCode::OK {
 			return Err(
-				"Extension download unavailable; refresh the catalog or use a local package".into(),
+				"Download da extensão indisponível; atualize o catálogo ou use um pacote local"
+					.into(),
 			);
 		}
 		if response
@@ -1657,24 +1679,26 @@ async fn download_https(raw: &str, limit: usize, gate: &Gate) -> Result<Vec<u8>,
 				.get(wreq::header::CONTENT_ENCODING)
 				.is_some_and(|encoding| encoding != "identity")
 		{
-			return Err("Extension download size or encoding is unsupported".into());
+			return Err(
+				"O tamanho ou a codificação do download da extensão não é suportado".into(),
+			);
 		}
 		let mut bytes = Vec::new();
 		let mut response_body = std::pin::pin!(response.bytes_stream());
 		while let Some(chunk) = futures_util::StreamExt::next(&mut response_body)
 			.await
 			.transpose()
-			.map_err(|_| "Extension download interrupted")?
+			.map_err(|_| "Download da extensão interrompido")?
 		{
 			gate.check()?;
 			if bytes.len().saturating_add(chunk.len()) > limit {
-				return Err("Extension download exceeds its byte budget".into());
+				return Err("O download da extensão excede o limite de tamanho".into());
 			}
 			bytes.extend_from_slice(&chunk);
 		}
 		return Ok(bytes);
 	}
-	Err("Too many extension download redirects".into())
+	Err("Redirecionamentos demais no download da extensão".into())
 }
 
 fn public_ip(ip: IpAddr) -> bool {

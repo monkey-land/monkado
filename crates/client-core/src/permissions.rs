@@ -392,7 +392,7 @@ impl Permissions {
 			}
 		}
 		if !next.valid() {
-			return Err("Permission metadata exceeds safe capacity");
+			return Err("Os metadados de permissões excedem a capacidade segura");
 		}
 		next.decision_limit = (MAX_BYTES.saturating_sub(next.bytes()) / DECISION_BYTES)
 			.clamp(MIN_DECISIONS, MAX_DECISIONS);

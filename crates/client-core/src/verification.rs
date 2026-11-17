@@ -58,7 +58,7 @@ impl State {
 					.is_some_and(|(id, _)| id == request)
 				{
 					self.release_message_challenge(
-						"Verification cancelled; the message was not sent",
+						"Verificação cancelada; a mensagem não foi enviada",
 					);
 				}
 			}
@@ -74,7 +74,9 @@ impl State {
 			.as_ref()
 			.is_some_and(|pending| pending.at.elapsed() >= captcha::LIFETIME)
 		{
-			self.release_message_challenge("Verification expired; retry the message");
+			self.release_message_challenge(
+				"A verificação expirou; tente enviar a mensagem de novo",
+			);
 		}
 	}
 	/// The challenged message, while its optimistic row is still waiting to be sent.
@@ -107,15 +109,14 @@ impl State {
 				reply,
 				challenge,
 			});
-			self.status = "Verify to send this message";
+			self.status = "Verifique para enviar esta mensagem";
 		} else if let Some(p) = self
 			.pending
 			.iter_mut()
 			.find(|p| p.nonce == nonce && p.delivery == Delivery::Sending)
 		{
 			p.delivery = Delivery::Rejected;
-			self.status =
-				"Discord requires verification for this message; retry it after the current check";
+			self.status = "O Discord exige verificação para esta mensagem; tente de novo após a verificação atual";
 		}
 	}
 	/// Builds the one explicit resend that carries the user's solution.

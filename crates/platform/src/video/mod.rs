@@ -51,7 +51,7 @@ pub fn check_live_dimensions(width: u32, height: u32) -> Result<(), &'static str
 		|| height > MAX_LIVE_DIMENSION
 		|| u64::from(width) * u64::from(height) > MAX_LIVE_PIXELS
 	{
-		return Err("Live playback supports videos up to 4K (3840×2160).");
+		return Err("A reprodução ao vivo suporta vídeos de até 4K (3840×2160).");
 	}
 	Ok(())
 }
@@ -76,15 +76,15 @@ pub const MAX_BYTES: usize = 16 * 1024 * 1024;
 /// Largest decoded RGB frame: 4K at four bytes per pixel, plus a decoder's aligned surface
 /// padding.
 pub const MAX_FRAME_BYTES: usize = 40 * 1024 * 1024;
-pub const UNSUPPORTED: &str = "This video format or codec is not supported on this system.";
-pub const INVALID: &str = "The video could not be decoded safely.";
+pub const UNSUPPORTED: &str = "Este formato ou codec de vídeo não é suportado neste sistema.";
+pub const INVALID: &str = "Não foi possível decodificar o vídeo com segurança.";
 /// A live decoder queue is full; the access unit was not accepted but the decoder is healthy.
-pub const BUSY: &str = "The video decoder is falling behind.";
-pub const TOO_LARGE: &str = "This video could not be scaled for inline playback.";
-pub const TOO_LONG: &str = "Videos longer than two hours are not supported.";
+pub const BUSY: &str = "O decodificador de vídeo está ficando para trás.";
+pub const TOO_LARGE: &str = "Não foi possível redimensionar este vídeo para reprodução no chat.";
+pub const TOO_LONG: &str = "Vídeos com mais de duas horas não são suportados.";
 /// The system has no decoder for the video track; installing one fixes playback.
-pub const MISSING_HEVC: &str = "This video uses H.265 (HEVC), and no H.265 decoder is installed. Install one for GStreamer (for example gst-libav with a full FFmpeg) to play it here.";
-pub const MISSING_DECODER: &str = "No decoder for this video's codec is installed. Install the matching GStreamer plugin to play it here.";
+pub const MISSING_HEVC: &str = "Este vídeo usa H.265 (HEVC) e nenhum decodificador H.265 está instalado. Instale um para o GStreamer (por exemplo, gst-libav com um FFmpeg completo) para reproduzi-lo aqui.";
+pub const MISSING_DECODER: &str = "Nenhum decodificador para o codec deste vídeo está instalado. Instale o plugin do GStreamer correspondente para reproduzi-lo aqui.";
 
 pub trait ReadSeek: Read + Seek + Send {}
 impl<T: Read + Seek + Send> ReadSeek for T {}

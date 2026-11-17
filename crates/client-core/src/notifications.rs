@@ -310,7 +310,7 @@ impl State {
 		let preferences = &mut self.notification_preferences;
 		if !preferences.settings.contains_key(&Some(guild)) && preferences.settings.len() >= MAX_NAV
 		{
-			return Err("Notification settings exceed safe capacity");
+			return Err("As configurações de notificação excedem a capacidade segura");
 		}
 		let setting = preferences.settings.entry(Some(guild)).or_insert(Setting {
 			guild: Some(guild),
@@ -355,7 +355,7 @@ impl State {
 			self.notification_preferences.complete = false;
 			self.startup_warnings.notifications = true;
 			self.read_state.activity.clear_notifications();
-			return Err("Notification settings exceed safe byte capacity");
+			return Err("As configurações de notificação excedem a capacidade segura em bytes");
 		}
 		Ok(())
 	}
@@ -447,7 +447,7 @@ impl State {
 			&& let Some(until) = until
 		{
 			if setting.channel_mute_until.len() >= MAX_NAV {
-				return Err("Mute timers exceed safe capacity");
+				return Err("Os temporizadores de silenciamento excedem a capacidade segura");
 			}
 			setting.channel_mute_until.push((channel, until));
 		}
@@ -464,7 +464,7 @@ impl State {
 		let preferences = &mut self.notification_preferences;
 		let existing = preferences.settings.get(&Some(guild));
 		if existing.is_none() && preferences.settings.len() >= MAX_NAV {
-			return Err("Notification settings exceed safe capacity");
+			return Err("As configurações de notificação excedem a capacidade segura");
 		}
 		if !existing.is_some_and(|s| s.channels.iter().any(|(id, ..)| *id == channel))
 			&& preferences
@@ -474,7 +474,7 @@ impl State {
 				.sum::<usize>()
 				>= MAX_NAV
 		{
-			return Err("Notification settings exceed safe capacity");
+			return Err("As configurações de notificação excedem a capacidade segura");
 		}
 		let setting = preferences
 			.settings
@@ -511,7 +511,7 @@ impl State {
 		let preferences = &mut self.notification_preferences;
 		let existing = preferences.settings.get(&Some(guild));
 		if existing.is_none() && preferences.settings.len() >= MAX_NAV {
-			return Err("Notification settings exceed safe capacity");
+			return Err("As configurações de notificação excedem a capacidade segura");
 		}
 		let added = write
 			.channels
@@ -526,7 +526,7 @@ impl State {
 			.saturating_add(added)
 			> MAX_NAV
 		{
-			return Err("Notification settings exceed safe capacity");
+			return Err("As configurações de notificação excedem a capacidade segura");
 		}
 		let setting = preferences
 			.settings
@@ -574,7 +574,7 @@ impl State {
 		let preferences = &mut self.notification_preferences;
 		if !preferences.settings.contains_key(&Some(guild)) && preferences.settings.len() >= MAX_NAV
 		{
-			return Err("Notification settings exceed safe capacity");
+			return Err("As configurações de notificação excedem a capacidade segura");
 		}
 		let setting = preferences
 			.settings
@@ -657,7 +657,7 @@ impl State {
 				.sum::<usize>()
 				>= MAX_NAV
 		{
-			return Err("Notification settings exceed safe capacity");
+			return Err("As configurações de notificação excedem a capacidade segura");
 		}
 		let setting = self
 			.notification_preferences
@@ -848,7 +848,7 @@ impl State {
 		self.read_state.activity.clear_notifications();
 		if event.bytes() > MAX_SETTINGS_BYTES {
 			self.notification_preferences = Preferences::default();
-			return Err("Notification settings exceed safe byte capacity");
+			return Err("As configurações de notificação excedem a capacidade segura em bytes");
 		}
 		match event {
 			Event::Presence(dnd) => {
@@ -906,7 +906,7 @@ impl State {
 					}) {
 					self.notification_preferences = Preferences::default();
 					return Err(
-						"Notification settings exceed safe capacity or contain duplicate IDs",
+						"As configurações de notificação excedem a capacidade segura ou contêm IDs duplicados",
 					);
 				}
 				self.observe_server_notification_settings(&entries);
@@ -1042,19 +1042,19 @@ impl State {
 					.and_then(|member| member.nick.as_deref().filter(|nick| !nick.is_empty()))
 					.or_else(|| user.map(|user| self.user_display_name(user)))
 					.or_else(|| member.map(|member| member.user.name.as_str()))
-					.unwrap_or("Unknown user");
+					.unwrap_or("Usuário desconhecido");
 				("@", name, len)
 			} else if let Some((id, len)) = model::role_mention_prefix(text) {
 				let name = guild
 					.and_then(|guild| self.guild_roles(guild))
 					.and_then(|roles| roles.iter().find(|role| role.id == id))
-					.map_or("Unknown role", |role| role.name.as_str());
+					.map_or("Cargo desconhecido", |role| role.name.as_str());
 				("@", name, len)
 			} else if let Some((id, len)) = model::channel_mention_prefix(text) {
 				let name = self
 					.channel(id)
 					.filter(|_| self.can_view(id))
-					.map_or("Unknown channel", |channel| channel.name.as_str());
+					.map_or("Canal desconhecido", |channel| channel.name.as_str());
 				("#", name, len)
 			} else {
 				let len = text.chars().next().unwrap().len_utf8();
@@ -1154,23 +1154,23 @@ impl State {
 		}
 		let sender = alert_text(self.message_author_name(message), 80, 256);
 		let sender = if sender.is_empty() {
-			"Unknown sender".to_owned()
+			"Remetente desconhecido".to_owned()
 		} else {
 			sender
 		};
 		let display = message.display_text();
 		let preview = if display.trim().is_empty() {
 			if !message.attachments.is_empty() {
-				"Sent an attachment".to_owned()
+				"Enviou um anexo".to_owned()
 			} else if !message.embeds.is_empty() {
-				"Sent an embed".to_owned()
+				"Enviou um embed".to_owned()
 			} else {
-				"Sent a message".to_owned()
+				"Enviou uma mensagem".to_owned()
 			}
 		} else {
 			let text = self.alert_preview(message, &display);
 			if text.is_empty() {
-				"Sent a message".to_owned()
+				"Enviou uma mensagem".to_owned()
 			} else {
 				text
 			}
@@ -1181,15 +1181,14 @@ impl State {
 			sender,
 			preview,
 			avatar_key: message.author.avatar_key(),
-			call_invite: crate::voice_invites::parse(&message.content)
-				.filter(|(guild, call)| {
-					self.channel(message.channel)
-						.is_some_and(|channel| channel.guild.is_none())
-						&& self.channel(*call).is_some_and(|channel| {
-							channel.guild == Some(*guild)
-								&& crate::voice_invites::is_voice(channel.kind)
-						})
-				}),
+			call_invite: crate::voice_invites::parse(&message.content).filter(|(guild, call)| {
+				self.channel(message.channel)
+					.is_some_and(|channel| channel.guild.is_none())
+					&& self.channel(*call).is_some_and(|channel| {
+						channel.guild == Some(*guild)
+							&& crate::voice_invites::is_voice(channel.kind)
+					})
+			}),
 			direct,
 			conversation: self
 				.channel(message.channel)

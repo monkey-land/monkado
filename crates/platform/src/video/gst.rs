@@ -24,7 +24,7 @@ const MAX_CHUNK: usize = 1024 * 1024;
 const AUDIO_RATE: u32 = 48_000;
 const AUDIO_CHANNELS: usize = 2;
 const WAIT: gst::ClockTime = gst::ClockTime::from_seconds(20);
-const SEEK_FAILED: &str = "This video cannot seek to that position.";
+const SEEK_FAILED: &str = "Não é possível avançar este vídeo para essa posição.";
 
 /// Bytes shared with the `appsrc` callbacks, which run on GStreamer's streaming threads.
 struct Shared {

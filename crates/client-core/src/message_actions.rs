@@ -87,7 +87,7 @@ impl State {
 		if self.message_actions.edits.len() + self.message_actions.failed_edits.len() >= 8
 			|| self.message_actions.edit_pending(channel, message)
 		{
-			self.status = "Wait for the previous message edit to finish";
+			self.status = "Aguarde a edição anterior da mensagem terminar";
 			return None;
 		}
 		let current = self
@@ -104,7 +104,7 @@ impl State {
 			.patch(content_patch(channel, message, content.to_owned()))
 			.is_err()
 		{
-			self.status = "Edit could not be applied; reload this conversation";
+			self.status = "Não foi possível aplicar a edição; recarregue esta conversa";
 			return None;
 		}
 		self.message_actions.sequence = self.message_actions.sequence.wrapping_add(1);
@@ -172,7 +172,8 @@ impl State {
 				if failure.ends_session() {
 					self.fail(failure);
 				} else {
-					self.status = "Message edit failed; your edit was kept for retry";
+					self.status =
+						"Falha ao editar a mensagem; sua edição foi mantida para tentar de novo";
 				}
 			}
 		}
@@ -187,7 +188,7 @@ impl State {
 				.filter(|p| p.pending)
 				.count() >= 8
 		{
-			self.status = "Wait for the previous pin action to finish";
+			self.status = "Aguarde a ação de fixar anterior terminar";
 			return None;
 		}
 		let previous = self.is_pinned(channel, message);
@@ -239,7 +240,7 @@ impl State {
 			if failure.ends_session() {
 				self.fail(failure);
 			} else {
-				self.status = "Pin action failed; the previous state was restored";
+				self.status = "Falha ao fixar; o estado anterior foi restaurado";
 			}
 		} else {
 			if !pinned

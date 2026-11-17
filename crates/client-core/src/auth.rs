@@ -20,12 +20,12 @@ pub enum Failure {
 	#[error("Verification challenge unsupported; complete it in an official flow")]
 	Challenged,
 	#[error(
-		"Discord restricted this account; authenticated traffic stopped; check the official client"
+		"O Discord restringiu esta conta; o tráfego autenticado foi interrompido; verifique o cliente oficial"
 	)]
 	AccountRestricted,
 	#[error("Discord blocked this client request; connection stopped; check the official client")]
 	ServiceBlocked,
-	#[error("Permission denied")]
+	#[error("Permissão negada")]
 	Forbidden,
 	#[error("Rate limited; wait for the service cooldown before retrying")]
 	RateLimited,
@@ -56,22 +56,26 @@ impl Failure {
 	}
 	pub fn label(self) -> &'static str {
 		match self {
-			Self::Expired => "Session expired · reconnect explicitly; drafts remain in RAM",
-			Self::Challenged => "Security challenge · unsupported here; connection stopped",
-			Self::Forbidden => "Permission denied",
+			Self::Expired => {
+				"Sessão expirada · reconecte manualmente; os rascunhos continuam na memória"
+			}
+			Self::Challenged => "Desafio de segurança · não suportado aqui; conexão interrompida",
+			Self::Forbidden => "Permissão negada",
 			Self::AccountRestricted => {
-				"Discord requires account attention · connection stopped; check the official client"
+				"O Discord exige atenção na conta · conexão interrompida; verifique o cliente oficial"
 			}
 			Self::ServiceBlocked => {
-				"Discord blocked this request · connection stopped; check the official client"
+				"O Discord bloqueou esta solicitação · conexão interrompida; verifique o cliente oficial"
 			}
-			Self::RateLimited => "Rate limited · wait before retrying",
-			Self::Network => "Connection failed",
-			Self::Ambiguous => "Outcome unknown · check the official client before retrying",
-			Self::Protocol => "Unsupported service response",
+			Self::RateLimited => "Limite de requisições · aguarde antes de tentar de novo",
+			Self::Network => "Falha na conexão",
+			Self::Ambiguous => {
+				"Resultado desconhecido · verifique o cliente oficial antes de tentar de novo"
+			}
+			Self::Protocol => "Resposta do serviço não suportada",
 			Self::ProtocolAt(stage) | Self::CapacityAt(stage) => stage,
-			Self::Capacity => "Safe capacity exceeded · connection stopped",
-			Self::InvalidCredential => "Invalid session input or bot account rejected",
+			Self::Capacity => "Capacidade segura excedida · conexão interrompida",
+			Self::InvalidCredential => "Dados de sessão inválidos ou conta de bot rejeitada",
 		}
 	}
 	pub fn ends_session(self) -> bool {

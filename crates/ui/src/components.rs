@@ -615,7 +615,7 @@ fn component_label(c: &Component) -> String {
 		.filter(|emoji| emoji.id.is_none())
 		.and_then(|emoji| emoji.name.as_deref())
 		.unwrap_or_default();
-	let label = c.label.as_deref().unwrap_or("Button");
+	let label = c.label.as_deref().unwrap_or("Botão");
 	if emoji.is_empty() {
 		label.to_owned()
 	} else {

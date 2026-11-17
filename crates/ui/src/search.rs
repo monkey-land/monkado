@@ -1792,7 +1792,7 @@ impl SearchUi {
 									ui.with_layout(
 										egui::Layout::right_to_left(egui::Align::Center),
 										|ui| {
-											let mut jump = Chip::text("Jump");
+											let mut jump = Chip::text("Ir");
 											jump.height = 24.0;
 											if chip(ui, jump).clicked() {
 												*target = Some(hit.id);
@@ -1905,7 +1905,7 @@ pub struct MediaUi<'a> {
 	pub video: &'a mut crate::video::VideoUi,
 }
 
-/// Compact raised control used by the results header, pager and hover "Jump" action.
+/// Compact raised control used by the results header, pager and hover "Ir" action.
 struct Chip<'a> {
 	icon: Option<icons::Icon>,
 	label: Option<&'a str>,

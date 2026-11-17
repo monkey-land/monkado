@@ -1429,7 +1429,7 @@ pub fn window_controls(ui: &mut egui::Ui) {
 			(response, rect, color)
 		};
 
-	let (close, rect, color) = caption(ui, "Close", true);
+	let (close, rect, color) = caption(ui, "Fechar", true);
 	let c = rect.center();
 	let stroke = Stroke::new(1.0, color);
 	ui.painter().line_segment(
@@ -1444,7 +1444,8 @@ pub fn window_controls(ui: &mut egui::Ui) {
 		ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
 	}
 
-	let (toggle, rect, color) = caption(ui, if maximized { "Restore" } else { "Maximize" }, false);
+	let (toggle, rect, color) =
+		caption(ui, if maximized { "Restaurar" } else { "Maximizar" }, false);
 	let c = rect.center();
 	let stroke = Stroke::new(1.0, color);
 	if maximized {
@@ -1476,7 +1477,7 @@ pub fn window_controls(ui: &mut egui::Ui) {
 			.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
 	}
 
-	let (minimize, rect, color) = caption(ui, "Minimize", false);
+	let (minimize, rect, color) = caption(ui, "Minimizar", false);
 	let c = rect.center();
 	let stroke = Stroke::new(1.0, color);
 	ui.painter().line_segment(
@@ -1519,7 +1520,7 @@ fn gtk_window_controls(ui: &mut egui::Ui) {
 		};
 		(response, rect, color)
 	};
-	let (close, rect, color) = button(ui, "Close");
+	let (close, rect, color) = button(ui, "Fechar");
 	let (c, stroke) = (rect.center(), Stroke::new(1.6, color));
 	ui.painter().line_segment(
 		[c + egui::vec2(-3.5, -3.5), c + egui::vec2(3.5, 3.5)],
@@ -1532,7 +1533,7 @@ fn gtk_window_controls(ui: &mut egui::Ui) {
 	if close.clicked() {
 		ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
 	}
-	let (toggle, rect, color) = button(ui, if maximized { "Restore" } else { "Maximize" });
+	let (toggle, rect, color) = button(ui, if maximized { "Restaurar" } else { "Maximizar" });
 	let (c, stroke) = (rect.center(), Stroke::new(1.6, color));
 	if maximized {
 		// The back window shows only where the front one does not cover it; the button fill
@@ -1558,7 +1559,7 @@ fn gtk_window_controls(ui: &mut egui::Ui) {
 		ui.ctx()
 			.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
 	}
-	let (minimize, rect, color) = button(ui, "Minimize");
+	let (minimize, rect, color) = button(ui, "Minimizar");
 	let c = rect.center();
 	ui.painter().line_segment(
 		[c + egui::vec2(-4.0, 3.0), c + egui::vec2(4.0, 3.0)],

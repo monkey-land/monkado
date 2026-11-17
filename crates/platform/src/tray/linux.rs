@@ -47,7 +47,7 @@ impl Tray {
 		restore: impl Fn() + Send + Sync + 'static,
 	) -> Result<Self, &'static str> {
 		let runtime = tokio::runtime::Handle::try_current()
-			.map_err(|_| "The tray requires the application runtime.")?;
+			.map_err(|_| "A bandeja exige o runtime do aplicativo.")?;
 		let events = Arc::new(Events {
 			bits: AtomicU8::new(0),
 			availability: AtomicU8::new(0),

@@ -2559,10 +2559,8 @@ impl MessagingUi {
 										call.phase,
 										client_core::voice::Phase::Connected
 											| client_core::voice::Phase::Waiting
-									) && !call.muted
-										&& !call.deafened
-										&& !call.server_muted
-										&& !call.server_deafened
+									) && !call.muted && !call.deafened
+										&& !call.server_muted && !call.server_deafened
 								}) && self.voice_speaking.contains(&user.id);
 								if speaking {
 									ui.painter().circle_stroke(

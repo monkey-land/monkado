@@ -33,8 +33,8 @@ const MAX_BYTES: usize = 16 * 1024 * 1024;
 const MAX_SECONDS: f64 = 2.0 * 60.0 * 60.0;
 const VIDEO: u32 = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
 const ALL: u32 = MF_SOURCE_READER_ALL_STREAMS.0 as u32;
-const UNSUPPORTED: &str = "This video format or codec is not supported by Windows.";
-const INVALID: &str = "The video could not be decoded safely.";
+const UNSUPPORTED: &str = "Este formato ou codec de vídeo não é suportado pelo Windows.";
+const INVALID: &str = "Não foi possível decodificar o vídeo com segurança.";
 
 use super::{Color, Info, Layout, MAX_FRAME_BYTES, Picture, ReadSeek, Sample};
 
@@ -366,7 +366,7 @@ impl Decoder {
 				.map_err(|_| INVALID)?;
 			let duration = u64::try_from(&duration).map_err(|_| INVALID)? as f64 / 10_000_000.0;
 			if duration <= 0.0 || duration > MAX_SECONDS {
-				return Err("Videos longer than two hours are not supported.");
+				return Err("Vídeos com mais de duas horas não são suportados.");
 			}
 			let (display_width, display_height) = if rotation == 90 || rotation == 270 {
 				(height, width)
@@ -414,7 +414,7 @@ impl Decoder {
 			}
 			self.reader
 				.SetCurrentPosition(&GUID::zeroed(), &position)
-				.map_err(|_| "This video cannot seek to that position.")?;
+				.map_err(|_| "Não é possível avançar este vídeo para essa posição.")?;
 		}
 		self.video_done = false;
 		self.audio_done = self.audio_index.is_none();

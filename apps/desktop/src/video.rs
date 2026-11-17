@@ -175,15 +175,12 @@ impl Video {
 		demo: bool,
 	) -> Result<(), &'static str> {
 		if !attachment.is_video() || attachment.size == 0 || attachment.size > 100 * 1024 * 1024 {
-			return Err("Video preview limit: 100 MiB");
+			return Err("Limite da prévia de vídeo: 100 MiB");
 		}
 		let url = if demo {
 			None
 		} else {
-			Some(
-				crate::downloads::original_url(&attachment)
-					.ok_or("Video attachment unavailable")?,
-			)
+			Some(crate::downloads::original_url(&attachment).ok_or("Anexo de vídeo indisponível")?)
 		};
 		if self.requests.is_none() {
 			let (sender, mut receiver) = tokio::sync::watch::channel::<Option<Request>>(None);
@@ -208,12 +205,12 @@ impl Video {
 						}
 					}
 				})
-				.map_err(|_| "Could not start video worker")?;
+				.map_err(|_| "Não foi possível iniciar o reprodutor de vídeo")?;
 			self.requests = Some(sender);
 		}
 		let requests = self.requests.as_ref().expect("worker created");
 		if requests.is_closed() {
-			return Err("Video worker stopped; restart Monkado");
+			return Err("O reprodutor de vídeo parou; reinicie o Monkado");
 		}
 		let session = Arc::new(Session::new(volume));
 		requests.send_replace(Some(Request {
@@ -546,7 +543,7 @@ fn play_decoded(
 				continue 'seek;
 			}
 			if failed.load(Ordering::Acquire) {
-				return Err("Video audio output stopped");
+				return Err("A saída de áudio do vídeo parou");
 			}
 			let now = Instant::now();
 			let elapsed = now.duration_since(last_tick).as_secs_f64();
@@ -615,7 +612,9 @@ fn play_decoded(
 				continue;
 			}
 			if now.duration_since(last_progress) > Duration::from_secs(15) {
-				return Err("Video buffering stalled; retry or download to play externally");
+				return Err(
+					"O carregamento do vídeo travou; tente de novo ou baixe para reproduzir fora do app",
+				);
 			}
 			if let Some((samples, offset)) = &mut pending_audio {
 				let output = output.as_mut().ok_or("Unexpected video audio track")?;

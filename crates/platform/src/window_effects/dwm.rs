@@ -106,7 +106,10 @@ fn set_custom_caption(hwnd: HWND, enabled: bool) -> Result<(), String> {
 				.map_err(|error| error.to_string())?;
 			if !SetWindowSubclass(hwnd, Some(custom_caption), 0, 0).as_bool() {
 				let _ = RemovePropW(hwnd, REQUESTED_MENU);
-				return Err("Could not install the custom-caption subclass.".to_owned());
+				return Err(
+					"Não foi possível instalar a subclasse da barra de título personalizada."
+						.to_owned(),
+				);
 			}
 			// Let the callback mask the initial request too, without recording our own mask.
 			style
@@ -126,7 +129,7 @@ fn set_custom_caption(hwnd: HWND, enabled: bool) -> Result<(), String> {
 
 pub fn extend_frame(window: &Window, extended: bool) -> Result<(), String> {
 	let Ok(RawWindowHandle::Win32(handle)) = window.window_handle().map(|h| h.as_raw()) else {
-		return Err("Expected a Win32 window.".to_owned());
+		return Err("Era esperada uma janela Win32.".to_owned());
 	};
 	// -1 on every side extends the frame over the full client area ("sheet of glass").
 	let inset = if extended { -1 } else { 0 };

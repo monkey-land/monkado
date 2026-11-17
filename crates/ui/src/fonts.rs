@@ -21,12 +21,13 @@ impl CustomFont {
 	pub fn new(mut name: String, mut bytes: Vec<u8>) -> Result<Self, &'static str> {
 		use skrifa::{MetadataProvider, raw::TableProvider};
 		if bytes.is_empty() || bytes.len() > MAX_CUSTOM_FONT_BYTES {
-			return Err("Choose a font up to 32 MiB.");
+			return Err("Escolha uma fonte de até 32 MiB.");
 		}
 		if name.is_empty() || name.len() > 128 || name.chars().any(char::is_control) {
-			return Err("The font name is invalid.");
+			return Err("O nome da fonte é inválido.");
 		}
-		let font = skrifa::FontRef::new(&bytes).map_err(|_| "Choose a valid TTF or OTF font.")?;
+		let font =
+			skrifa::FontRef::new(&bytes).map_err(|_| "Escolha uma fonte TTF ou OTF válida.")?;
 		if font.head().map_or(true, |head| head.units_per_em() == 0)
 			|| font.hhea().is_err()
 			|| font.maxp().is_err()
@@ -34,7 +35,7 @@ impl CustomFont {
 			|| font.charmap().mappings().next().is_none()
 			|| font.outline_glyphs().format().is_none()
 		{
-			return Err("This font is missing readable text or outlines.");
+			return Err("Esta fonte não tem texto ou contornos legíveis.");
 		}
 		bytes.shrink_to_fit();
 		name.shrink_to_fit();
@@ -52,7 +53,7 @@ impl CustomFont {
 /// table directory, so the saved copy restores without a face index.
 pub fn standalone_face(data: &[u8], index: u32) -> Result<Vec<u8>, &'static str> {
 	use skrifa::raw::TableProvider as _;
-	const INVALID: &str = "This font cannot be read.";
+	const INVALID: &str = "Não é possível ler esta fonte.";
 	let font = skrifa::FontRef::from_index(data, index).map_err(|_| INVALID)?;
 	let _ = font.head().map_err(|_| INVALID)?;
 	let records = font.table_directory().table_records();
@@ -64,7 +65,7 @@ pub fn standalone_face(data: &[u8], index: u32) -> Result<Vec<u8>, &'static str>
 		size.checked_add((record.length() as usize).next_multiple_of(4))
 	});
 	if size.is_none_or(|size| size > MAX_CUSTOM_FONT_BYTES) {
-		return Err("Choose a font up to 32 MiB.");
+		return Err("Escolha uma fonte de até 32 MiB.");
 	}
 	let count = records.len() as u16;
 	let selector = 15 - count.leading_zeros() as u16;

@@ -95,7 +95,7 @@ impl StickersUi {
 					),
 				});
 			}
-			Ok(Some(_)) => self.error = Some("Prepared sticker exceeds 512 KB"),
+			Ok(Some(_)) => self.error = Some("A figurinha preparada excede 512 KB"),
 			Ok(None) => {}
 			Err(error) => self.error = Some(error),
 		}
@@ -432,13 +432,13 @@ impl StickersUi {
 		};
 		let (title, subtitle, danger) = match dialog {
 			Dialog::Edit { .. } => (
-				"Edit sticker",
-				"Update the sticker name, description and related emoji.".to_owned(),
+				"Editar figurinha",
+				"Atualize o nome, a descrição e o emoji relacionado da figurinha.".to_owned(),
 				false,
 			),
 			Dialog::Delete { name, .. } => (
-				"Delete sticker?",
-				format!("Removing {name} cannot be undone."),
+				"Excluir figurinha?",
+				format!("A remoção de {name} não pode ser desfeita."),
 				true,
 			),
 		};

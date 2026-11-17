@@ -134,7 +134,9 @@ impl RolesUi {
 				self.error = None;
 			}
 			Ok(None) => {}
-			Ok(Some(_)) => self.error = Some("The prepared role icon exceeds its image limits."),
+			Ok(Some(_)) => {
+				self.error = Some("O ícone de cargo preparado excede os limites de imagem.")
+			}
 			Err(error) => self.error = Some(error),
 		}
 	}
@@ -261,7 +263,7 @@ impl RolesUi {
 					state,
 					guild,
 					Action::Create(Edit {
-						name: Some("new role".into()),
+						name: Some("novo cargo".into()),
 						..Edit::default()
 					}),
 					commands,
@@ -356,7 +358,7 @@ impl RolesUi {
 							state,
 							guild,
 							Action::Create(Edit {
-								name: Some("new role".into()),
+								name: Some("novo cargo".into()),
 								..Edit::default()
 							}),
 							commands,
@@ -615,8 +617,9 @@ impl RolesUi {
 		if let Some(action) = action
 			&& !Self::dispatch(state, guild, action, commands)
 		{
-			self.error =
-				Some("This role cannot be moved. Reload the roles and check your permissions.");
+			self.error = Some(
+				"Este cargo não pode ser movido. Recarregue os cargos e verifique suas permissões.",
+			);
 		}
 	}
 	fn editor(
@@ -722,7 +725,7 @@ impl RolesUi {
 					&mut self.tab,
 					Tab::Members,
 					&format!(
-						"Manage Members ({})",
+						"Gerenciar membros ({})",
 						draft
 							.member_count
 							.map_or_else(|| "?".into(), |count| count.to_string())
@@ -779,7 +782,7 @@ impl RolesUi {
 				.char_limit(100),
 		)
 		.labelled_by(label.id);
-		section(ui, "Role Style");
+		section(ui, "Estilo do cargo");
 		let enhanced = state.can_use_enhanced_role_colors(guild);
 		let style = if draft.colors.tertiary.is_some() {
 			2
@@ -792,7 +795,7 @@ impl RolesUi {
 			/ if enhanced || style != 0 { 3.0 } else { 1.0 })
 		.min(180.0);
 		ui.horizontal(|ui| {
-			for (choice, name) in [(0, "Solid"), (1, "Gradient"), (2, "Holographic")] {
+			for (choice, name) in [(0, "Sólido"), (1, "Gradiente"), (2, "Holográfico")] {
 				if choice != 0 && !enhanced && choice != style {
 					continue;
 				}
@@ -909,7 +912,7 @@ impl RolesUi {
 				}
 			}
 		});
-		section(ui, "Role color");
+		section(ui, "Cor do cargo");
 		ui.weak(crate::i18n::translate(
 			"server-roles-display-members-use-the-color-of-their-highest-role-on-the",
 		));
@@ -1005,7 +1008,7 @@ impl RolesUi {
 			});
 		}
 		if state.can_edit_role_icon(guild, draft.id) {
-			section(ui, "Role icon");
+			section(ui, "Ícone do cargo");
 			ui.weak(crate::i18n::translate(
 				"server-roles-display-upload-an-image-under-256-kib-or-choose-a-unicode",
 			));
@@ -1071,7 +1074,7 @@ impl RolesUi {
 									state
 										.user
 										.as_ref()
-										.map_or("Preview", |user| user.name.as_str()),
+										.map_or("Prévia", |user| user.name.as_str()),
 									draft.colors,
 									14.0,
 								);
@@ -1095,7 +1098,7 @@ impl RolesUi {
 										Some(format!("role-icon-{}-{hash}", draft.id)),
 										18.0,
 										state.demo,
-										"Role icon",
+										"Ícone do cargo",
 									);
 								}
 							});
@@ -1153,7 +1156,7 @@ impl RolesUi {
 				Self::dispatch(state, guild, Action::Edit { id: draft.id, edit }, commands);
 			if !self.submitted {
 				self.error = Some(
-					"Could not save this role. Check the name, permissions, and your role hierarchy.",
+					"Não foi possível salvar este cargo. Verifique o nome, as permissões e a hierarquia dos seus cargos.",
 				);
 			}
 		}
@@ -1231,7 +1234,7 @@ impl RolesUi {
 				self.error = None;
 			} else {
 				self.error = Some(
-					"Role members could not be loaded. Reload or change the search to try again.",
+					"Não foi possível carregar os membros do cargo. Recarregue ou altere a busca para tentar novamente.",
 				);
 			}
 		}
@@ -1325,12 +1328,12 @@ impl RolesUi {
 		if let Some(target) = self.switch_to {
 			match dialog::Confirm::new(
 				"discard-role-draft",
-				"Discard role changes?",
-				"Your unsaved changes to this role will be lost.",
+				"Descartar alterações do cargo?",
+				"Suas alterações não salvas neste cargo serão perdidas.",
 			)
 			.danger()
-			.confirm_label("Discard Changes")
-			.cancel_label("Keep Editing")
+			.confirm_label("Descartar alterações")
+			.cancel_label("Continuar editando")
 			.enabled(!state.server_admin.saving)
 			.show(ctx)
 			{
@@ -1348,14 +1351,16 @@ impl RolesUi {
 				.roles
 				.as_ref()
 				.and_then(|catalog| catalog.items.iter().find(|known| known.id == role))
-				.map_or("this role", |role| role.name.as_str());
+				.map_or("este cargo", |role| role.name.as_str());
 			let mut confirm = dialog::Confirm::new(
 				"delete-server-role",
-				"Delete role?",
-				format!("Members will lose every permission {name} grants. This cannot be undone."),
+				"Excluir cargo?",
+				format!(
+					"Os membros perderão todas as permissões que {name} concede. Isso não pode ser desfeito."
+				),
 			)
 			.danger()
-			.confirm_label("Delete Role")
+			.confirm_label("Excluir cargo")
 			.enabled(
 				!state.server_admin.pending
 					&& !state.server_admin.needs_refresh

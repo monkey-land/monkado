@@ -211,12 +211,12 @@ impl State {
 					// then opens once that read admits it. Never guess a parent or open a DM.
 					return match self.start_link_resolution(guild, channel, message) {
 						Some(command) => Ok(Some(command)),
-						None => Err("This chat is unavailable"),
+						None => Err("Este chat está indisponível"),
 					};
 				}
 			}
 		}
-		let target = self.channel(channel).ok_or("This chat is unavailable")?;
+		let target = self.channel(channel).ok_or("Este chat está indisponível")?;
 		if target.guild != guild {
 			return Err("This chat does not belong to the linked server");
 		}
@@ -329,10 +329,10 @@ impl State {
 			.channel(parent)
 			.is_some_and(|parent| parent.guild == Some(view_guild))
 		{
-			Err("This chat is unavailable")
+			Err("Este chat está indisponível")
 		} else {
 			self.admit_archived_thread(channel)
-				.ok_or("This chat is unavailable")
+				.ok_or("Este chat está indisponível")
 		})
 	}
 
@@ -862,11 +862,11 @@ mod tests {
 		);
 		assert!(state.channel(thread).is_none());
 		assert!(state.resolve_pending_link().is_none());
-		assert_eq!(state.status, "This chat is unavailable");
+		assert_eq!(state.status, "Este chat está indisponível");
 		assert_eq!(state.selected, Some(Id(1)));
 		// A settled read is never retried by the frame poll.
 		assert!(state.resolve_pending_link().is_none());
-		assert_eq!(state.status, "This chat is unavailable");
+		assert_eq!(state.status, "Este chat está indisponível");
 		assert!(state.link_resolution.awaiting().is_none());
 	}
 

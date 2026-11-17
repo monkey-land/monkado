@@ -46,16 +46,16 @@ impl Admin {
 	}
 	pub fn queue_files(&mut self, paths: Vec<std::path::PathBuf>) {
 		if self.preparing() {
-			self.error =
-				Some("Wait for the current emoji images to finish preparing or uploading.");
+			self.error = Some(
+				"Aguarde as imagens de emoji atuais terminarem de ser preparadas ou enviadas.",
+			);
 			return;
 		}
 		if paths.len() > 10
 			|| paths.iter().any(|path| path.as_os_str().len() > 32768)
 			|| !self.uploads.is_empty()
 		{
-			self.error =
-				Some("Finish the current uploads first. Choose up to 10 images at a time.");
+			self.error = Some("Conclua os envios atuais primeiro. Escolha até 10 imagens por vez.");
 			return;
 		}
 		self.files = Some(paths);
@@ -66,8 +66,9 @@ impl Admin {
 		self.files.take()
 	}
 	pub fn navigation_error(&mut self) {
-		self.error =
-			Some("Save or discard your server settings changes before opening the conversation.");
+		self.error = Some(
+			"Salve ou descarte as alterações nas configurações do servidor antes de abrir a conversa.",
+		);
 	}
 	pub fn accept_files(
 		&mut self,
@@ -105,7 +106,9 @@ impl Admin {
 					})
 					.collect();
 			}
-			Ok(_) => self.error = Some("The selected images exceed the emoji upload limits."),
+			Ok(_) => {
+				self.error = Some("As imagens selecionadas excedem os limites de envio de emoji.")
+			}
 		}
 	}
 	pub fn load(&mut self, state: &mut State, guild: Id, members: bool) -> Option<Command> {
@@ -184,7 +187,7 @@ impl Admin {
 				} else {
 					self.uploading = false;
 					self.error = Some(
-						"This emoji cannot be uploaded. Check its name, available slots, and your permissions.",
+						"Não é possível enviar este emoji. Verifique o nome, os espaços disponíveis e suas permissões.",
 					);
 				}
 			} else {
@@ -1136,24 +1139,24 @@ impl Admin {
 		let ready = !state.server_admin.pending && !state.server_admin.needs_refresh;
 		let (title, subtitle) = match &*dialog {
 			Dialog::Rename { .. } => (
-				"Rename emoji".to_owned(),
-				"Names use letters, numbers and underscores.".to_owned(),
+				"Renomear emoji".to_owned(),
+				"Os nomes usam letras, números e sublinhados.".to_owned(),
 			),
 			Dialog::Delete { name, .. } => (
-				"Delete emoji?".to_owned(),
-				format!("Removing :{name}: cannot be undone."),
+				"Excluir emoji?".to_owned(),
+				format!("A remoção de :{name}: não pode ser desfeita."),
 			),
 			Dialog::Nickname { .. } => (
-				"Change nickname".to_owned(),
-				"Only affects how this member appears in this server.".to_owned(),
+				"Alterar apelido".to_owned(),
+				"Afeta apenas como este membro aparece neste servidor.".to_owned(),
 			),
 			Dialog::Kick { name, .. } => (
-				format!("Kick {name}?"),
-				"They can rejoin using a new invite.".to_owned(),
+				format!("Expulsar {name}?"),
+				"A pessoa poderá voltar usando um novo convite.".to_owned(),
 			),
 			Dialog::Prune { .. } => (
-				"Prune members".to_owned(),
-				"Removes inactive members who hold no additional roles.".to_owned(),
+				"Remover membros inativos".to_owned(),
+				"Remove membros inativos que não têm cargos adicionais.".to_owned(),
 			),
 		};
 		let destructive = matches!(
@@ -1225,7 +1228,7 @@ impl Admin {
 							crate::dialog::notice(
 								ui,
 								crate::dialog::Level::Warning,
-								&format!("{count} members would be removed."),
+								&format!("{count} membros seriam removidos."),
 							);
 						}
 					}
