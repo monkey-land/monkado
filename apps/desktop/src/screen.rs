@@ -92,8 +92,9 @@ pub(super) struct Screen {
 	viewers: Option<(Context, u16)>,
 	viewer_cue: bool,
 	share_cued: bool,
-	/// Monkado P2P track; when set, sharing publishes there and Discord never carries it.
-	p2p: Option<discord_voice::p2p::Track>,
+	/// Monkado P2P screen and share-audio tracks; when set, sharing publishes there and
+	/// Discord never carries it.
+	p2p: Option<(discord_voice::p2p::Track, discord_voice::p2p::Track)>,
 	/// The live share is on the P2P track, so stopping it needs no Discord acknowledgement.
 	p2p_live: bool,
 }
@@ -109,8 +110,8 @@ impl Screen {
 		self.status = "Screen sharing stopped".into();
 	}
 
-	pub fn use_p2p(&mut self, track: discord_voice::p2p::Track) {
-		self.p2p = Some(track);
+	pub fn use_p2p(&mut self, track: discord_voice::p2p::Track, audio: discord_voice::p2p::Track) {
+		self.p2p = Some((track, audio));
 	}
 
 	fn retire_live(&mut self) {
@@ -582,25 +583,21 @@ impl Screen {
 		}
 	}
 
-	/// Captures and encodes as for Discord, but publishes on the P2P track. Stream audio is
-	/// not carried there, so it is not captured.
+	/// Captures and encodes as for Discord, but publishes the picture and the requested
+	/// system audio on the P2P tracks.
 	fn start_p2p(
 		&mut self,
 		runtime: &Runtime,
 		context: Context,
 		settings: Settings,
-		track: discord_voice::p2p::Track,
+		(track, audio): (discord_voice::p2p::Track, discord_voice::p2p::Track),
 		ctx: &egui::Context,
 	) -> Result<(), &'static str> {
 		let wake = ctx.clone();
-		let settings = Settings {
-			audio: false,
-			..settings
-		};
 		let (worker, video) = Worker::start(settings, move || wake.request_repaint())?;
 		let (send, events) = watch::channel(Some(Notice::Status("Sharing your screen")));
 		let task = runtime.spawn(async move {
-			discord_voice::p2p::publish_screen(track, video).await;
+			discord_voice::p2p::publish_screen(track, audio, video).await;
 			drop(send);
 		});
 		self.status = "Sharing your screen".into();

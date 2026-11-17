@@ -104,14 +104,17 @@ impl Drop for Audio {
 	}
 }
 
-// Two capture strategies keep Monkado's own playback out of the shared audio:
+// A supervisor lists the applications that currently own audio sessions, skips Monkado's tree,
+// other call clients, audio proxies and the Windows audio service processes (where "Listen to
+// this device" microphone monitoring plays), plus anything those descend from, and runs one
+// include-mode loopback per remaining application, activating them in parallel and recycling
+// a lane that goes quiet while its application plays. A mixer sums their lanes into one 48 kHz
+// stereo stream. The whole output is never captured.
 //
-// * Windows build 20348+ activates one process loopback that excludes Monkado's process tree.
-// * Older builds (Windows 10) cannot exclude a tree, so a supervisor lists the applications
-//   that currently own audio sessions, skips Monkado's tree and anything Monkado descends from,
-//   and runs one include-mode loopback per remaining application, activating them in
-//   parallel and recycling a lane that goes quiet while its application plays. A mixer sums
-//   their lanes into the same 48 kHz stereo stream. The whole output is never captured.
+// Windows build 20348+ could exclude Monkado's tree from one loopback, but that mode takes a
+// single process: the official Discord client, an audio proxy such as NVIDIA Broadcast (which
+// replays the call it receives) and microphone monitoring would all leak into the share, so
+// viewers would hear themselves. Every build therefore uses the per-application mixer.
 //
 // WASAPI owns each packet until ReleaseBuffer. COM and capture objects stay on the worker
 // that created them.
@@ -159,8 +162,6 @@ mod native {
 		core::{HRESULT, Interface, PWSTR, Ref, Result, implement},
 	};
 
-	/// First Windows build whose process loopback can exclude a process tree.
-	const EXCLUDE_MIN_BUILD: u32 = 20348;
 	/// The mixer emits 10 ms of 48 kHz stereo per tick, like a WASAPI shared-mode period.
 	const MIX_TICK: Duration = Duration::from_millis(10);
 	/// Interleaved stereo samples in one mixer tick.
@@ -191,41 +192,6 @@ mod native {
 	const LANE_ACTIVATION_TIMEOUT: Duration = Duration::from_secs(10);
 	/// A playing application whose lane delivered nothing for this long gets a fresh capture.
 	const LANE_STALL: Duration = Duration::from_secs(4);
-
-	/// The `OSVERSIONINFOW` layout that `RtlGetVersion` fills.
-	#[repr(C)]
-	struct OsVersionInfo {
-		size: u32,
-		major: u32,
-		minor: u32,
-		build: u32,
-		platform: u32,
-		csd: [u16; 128],
-	}
-
-	#[link(name = "ntdll")]
-	unsafe extern "system" {
-		/// Fills `info` with the true OS version and returns an NTSTATUS, 0 on success.
-		fn RtlGetVersion(info: *mut OsVersionInfo) -> i32;
-	}
-
-	/// The real build number; unlike GetVersionEx it is not shimmed by application manifests.
-	fn build_number() -> u32 {
-		let mut info = OsVersionInfo {
-			size: size_of::<OsVersionInfo>() as u32,
-			major: 0,
-			minor: 0,
-			build: 0,
-			platform: 0,
-			csd: [0; 128],
-		};
-		// RtlGetVersion fills the structure and returns STATUS_SUCCESS (0).
-		if unsafe { RtlGetVersion(&mut info) } == 0 {
-			info.build
-		} else {
-			0
-		}
-	}
 
 	/// Records the first native error and stops the share's audio, so a mixer that is still
 	/// running cannot keep sending silence after capture has failed.
@@ -445,22 +411,54 @@ mod native {
 		lineage(pid, parents).contains(&ancestor)
 	}
 
-	/// Picks the processes to capture. Include mode takes a process and all its children, so:
-	/// Monkado and its children are never captured; a process that Monkado descends from is
-	/// skipped because its tree would carry Monkado's playback; and a process inside another
-	/// selected tree is left to that tree's capture, which avoids mixing it twice.
+	/// Executables whose audio never enters a share, compared without case: other Discord
+	/// clients playing the call, audio proxies that replay it (NVIDIA Broadcast renders the call
+	/// it receives), and Windows audio service hosts, where system effects and "Listen to this
+	/// device" microphone monitoring play.
+	const EXCLUDED_EXECUTABLES: [&str; 11] = [
+		"discord.exe",
+		"discordptb.exe",
+		"discordcanary.exe",
+		"discorddevelopment.exe",
+		"nvidia broadcast.exe",
+		"audiodg.exe",
+		"svchost.exe",
+		"csrss.exe",
+		"services.exe",
+		"wininit.exe",
+		"system",
+	];
+
+	fn excluded_executable(name: &str) -> bool {
+		EXCLUDED_EXECUTABLES
+			.iter()
+			.any(|excluded| name.eq_ignore_ascii_case(excluded))
+	}
+
+	/// Picks the processes to capture. Include mode takes a process and all its children, so
+	/// for each `excluded` process (Monkado first, then the excluded executables): it and its
+	/// children are never captured; a process that it descends from is skipped because that
+	/// tree would carry its playback; and a process inside another selected tree is left to
+	/// that tree's capture, which avoids mixing it twice.
 	///
-	/// Stale parent links can form a loop. A loop above Monkado excludes all of its members,
-	/// because none can be shown to be unrelated to Monkado. Anywhere else, two processes that
-	/// each appear inside the other are a loop and not a nesting, so both stay captured instead
-	/// of silently dropping each other.
-	fn select_roots(sessions: &[u32], ours: u32, parents: &HashMap<u32, u32>) -> Vec<u32> {
-		let ours_lineage = lineage(ours, parents);
+	/// Stale parent links can form a loop. A loop above an excluded process excludes all of its
+	/// members, because none can be shown to be unrelated to it. Anywhere else, two processes
+	/// that each appear inside the other are a loop and not a nesting, so both stay captured
+	/// instead of silently dropping each other.
+	fn select_roots(sessions: &[u32], excluded: &[u32], parents: &HashMap<u32, u32>) -> Vec<u32> {
+		let lineages: HashSet<u32> = excluded
+			.iter()
+			.flat_map(|&pid| lineage(pid, parents))
+			.collect();
 		let mut roots: Vec<u32> = sessions
 			.iter()
 			.copied()
 			.filter(|&pid| {
-				pid != 0 && !ours_lineage.contains(&pid) && !within_tree(pid, ours, parents)
+				pid != 0
+					&& !lineages.contains(&pid)
+					&& !excluded
+						.iter()
+						.any(|&blocked| within_tree(pid, blocked, parents))
 			})
 			.collect();
 		roots.sort_unstable();
@@ -623,9 +621,6 @@ mod native {
 		let result = if let Some(pid) = window_process.filter(|&pid| shareable_window(pid)) {
 			// A window share carries that application's audio and nothing else.
 			application_tree(input, started, pid)
-		} else if build_number() >= EXCLUDE_MIN_BUILD {
-			note_mode("exclude");
-			exclude_tree(input, started)
 		} else {
 			system_audio(input, started)
 		};
@@ -684,30 +679,14 @@ mod native {
 		Ok(())
 	}
 
-	/// One loopback of everything except Monkado's process tree (Windows build 20348+).
-	fn exclude_tree(input: &Samples, started: SyncSender<()>) -> Result<()> {
-		let mut started = Some(started);
-		while !input.stopped() {
-			capture(
-				input,
-				std::process::id(),
-				PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE,
-				&mut started,
-			)?;
-		}
-		Ok(())
-	}
-
-	/// Captures everything except Monkado on Windows 10 before build 20348, where Windows cannot
-	/// exclude a process tree. Each application is captured on its own, as Discord does, and the
-	/// lanes are mixed. There is no exclude probe: on these builds it can stall for many seconds
-	/// and leave abandoned requests queued in the audio service.
+	/// Captures every application except Monkado and the excluded ones. Each application is
+	/// captured on its own, as Discord does, and the lanes are mixed.
 	fn system_audio(input: &Samples, started: SyncSender<()>) -> Result<()> {
 		note_mode("per_application");
 		per_application(input, started)
 	}
 
-	/// Mixes one include-mode loopback per application (Windows 10 before build 20348).
+	/// Mixes one include-mode loopback per application.
 	fn per_application(input: &Samples, started: SyncSender<()>) -> Result<()> {
 		let lanes: Arc<Lanes> = Arc::new(Mutex::new(Vec::new()));
 		let halt = Arc::new(AtomicBool::new(false));
@@ -1138,14 +1117,16 @@ mod native {
 	/// could pick up Monkado's own audio.
 	fn applications(ours: u32, descendants: &mut HashSet<u32>) -> Result<HashMap<u32, bool>> {
 		let mut sessions = render_sessions()?;
-		let parents = process_parents()?;
+		let (parents, mut excluded) = process_table()?;
+		excluded.retain(|&pid| pid != ours);
+		excluded.insert(0, ours);
 		let mut engines: HashMap<u32, bool> = HashMap::new();
 		sessions.retain(|&(pid, _)| !*engines.entry(pid).or_insert_with(|| is_audio_engine(pid)));
 		// What Monkado started stays excluded after its parent exits and orphans it.
 		track_descendants(ours, &parents, descendants);
 		sessions.retain(|&(pid, _)| !descendants.contains(&pid));
 		let pids: Vec<u32> = sessions.iter().map(|&(pid, _)| pid).collect();
-		Ok(select_roots(&pids, ours, &parents)
+		Ok(select_roots(&pids, &excluded, &parents)
 			.into_iter()
 			.map(|root| {
 				// A tree is playing when any session inside it is.
@@ -1214,7 +1195,13 @@ mod native {
 	/// A snapshot of every process's parent id. A snapshot that cannot be taken or read in full
 	/// is an error, because a missing link could let Monkado's own audio through.
 	fn process_parents() -> Result<HashMap<u32, u32>> {
+		process_table().map(|(parents, _)| parents)
+	}
+
+	/// Every process's parent id, and the processes running an excluded executable.
+	fn process_table() -> Result<(HashMap<u32, u32>, Vec<u32>)> {
 		let mut parents = HashMap::new();
+		let mut excluded = Vec::new();
 		let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)? };
 		// The owned handle closes the snapshot on every path.
 		let snapshot = unsafe { OwnedHandle::from_raw_handle(snapshot.0) };
@@ -1225,6 +1212,11 @@ mod native {
 		unsafe { Process32FirstW(handle, &mut entry)? };
 		loop {
 			parents.insert(entry.th32ProcessID, entry.th32ParentProcessID);
+			let name = &entry.szExeFile;
+			let length = name.iter().position(|&c| c == 0).unwrap_or(name.len());
+			if excluded_executable(&String::from_utf16_lossy(&name[..length])) {
+				excluded.push(entry.th32ProcessID);
+			}
 			match unsafe { Process32NextW(handle, &mut entry) } {
 				Ok(()) => {}
 				// The list ends with ERROR_NO_MORE_FILES; any other error is a truncated snapshot.
@@ -1232,7 +1224,7 @@ mod native {
 				Err(error) => return Err(error),
 			}
 		}
-		Ok(parents)
+		Ok((parents, excluded))
 	}
 
 	/// Activates a process loopback audio client, waiting up to `ACTIVATION_TIMEOUT` and giving up early when the
@@ -1485,11 +1477,39 @@ mod native {
 			// 1 launcher -> 10 Monkado -> 11 webview; 2 browser -> 3 browser helper; 4 game.
 			let tree = parents(&[(10, 1), (11, 10), (3, 2), (2, 0), (4, 0), (1, 0)]);
 			// Monkado, its child, and the launcher Monkado descends from are all skipped.
-			assert_eq!(select_roots(&[10, 11, 1, 4, 0], 10, &tree), vec![4]);
+			assert_eq!(select_roots(&[10, 11, 1, 4, 0], &[10], &tree), vec![4]);
 			// A helper inside an already selected browser tree is not captured twice.
-			assert_eq!(select_roots(&[3, 2, 4], 10, &tree), vec![2, 4]);
+			assert_eq!(select_roots(&[3, 2, 4], &[10], &tree), vec![2, 4]);
 			// Without its parent selected, the helper is its own root.
-			assert_eq!(select_roots(&[3], 10, &tree), vec![3]);
+			assert_eq!(select_roots(&[3], &[10], &tree), vec![3]);
+		}
+
+		/// Another call client, an audio proxy replaying the call and the audio service that
+		/// plays microphone monitoring stay out, and so does a launcher whose tree holds one.
+		#[test]
+		fn application_capture_skips_excluded_clients_and_their_launchers() {
+			// 1 explorer -> 20 Discord -> 21 Discord helper; 1 -> 4 game; 30 Broadcast;
+			// 40 services -> 41 svchost -> 42 audiodg; 10 Monkado started by 2.
+			let tree = parents(&[
+				(1, 0),
+				(20, 1),
+				(21, 20),
+				(4, 1),
+				(30, 0),
+				(40, 0),
+				(41, 40),
+				(42, 41),
+				(10, 2),
+				(2, 0),
+			]);
+			let excluded = [10, 20, 30, 40, 41, 42];
+			assert_eq!(
+				select_roots(&[21, 1, 4, 30, 42, 10], &excluded, &tree),
+				vec![4]
+			);
+			assert!(excluded_executable("Discord.exe"));
+			assert!(excluded_executable("NVIDIA Broadcast.exe"));
+			assert!(!excluded_executable("game.exe"));
 		}
 
 		/// Stale parent ids can loop after id reuse. Unrelated applications in a loop must stay
@@ -1497,10 +1517,10 @@ mod native {
 		#[test]
 		fn stale_parent_cycles_neither_hang_nor_hide_applications() {
 			let tree = parents(&[(5, 6), (6, 5)]);
-			assert_eq!(select_roots(&[5, 6], 10, &tree), vec![5, 6]);
+			assert_eq!(select_roots(&[5, 6], &[10], &tree), vec![5, 6]);
 			// Monkado 10 descends from 1, which sits in a loop with 2: both are ancestors.
 			let tree = parents(&[(10, 1), (1, 2), (2, 1), (4, 0)]);
-			assert_eq!(select_roots(&[1, 2, 4], 10, &tree), vec![4]);
+			assert_eq!(select_roots(&[1, 2, 4], &[10], &tree), vec![4]);
 		}
 
 		/// A descendant of Monkado stays excluded after its parent exits and orphans it.
