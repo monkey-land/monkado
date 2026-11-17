@@ -15,7 +15,7 @@ SetCompressor /SOLID lzma
 
 !define PRODUCT_NAME "Monkado"
 !define PRODUCT_PUBLISHER "Monkado (based on Serein)"
-!define PRODUCT_WEB_SITE "https://github.com/monkey-land/Monkado"
+!define PRODUCT_WEB_SITE "https://github.com/monkey-land/monkado"
 !define APP_EXE "serein.exe"
 !define APP_ID "cz.viceverse.serein"
 

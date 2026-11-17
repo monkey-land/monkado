@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/monkey-land/Monkado/releases"><img src="https://img.shields.io/github/v/release/monkey-land/Monkado?label=vers%C3%A3o&color=blue" alt="Versão" /></a>
+  <a href="https://github.com/monkey-land/monkado/releases"><img src="https://img.shields.io/github/v/release/monkey-land/monkado?label=vers%C3%A3o&color=blue" alt="Versão" /></a>
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/licen%C3%A7a-MIT%20ou%20Apache--2.0-green.svg" alt="Licença" /></a>
   <img src="https://img.shields.io/badge/plataforma-Windows-informational.svg" alt="Windows" />
 </p>
@@ -24,7 +24,7 @@
 
 ## 📦 Baixar e instalar
 
-1. Vá em [**Releases**](https://github.com/monkey-land/Monkado/releases) e baixe o `monkado-<versão>-setup.exe`.
+1. Vá em [**Releases**](https://github.com/monkey-land/monkado/releases) e baixe o `monkado-<versão>-setup.exe`.
 2. Rode o instalador. Ele instala só para o seu usuário em `%LOCALAPPDATA%\Programs\Monkado`, sem pedir administrador.
 3. Abra o **Monkado** pelo Menu Iniciar e faça login com a sua conta do Discord (a tela de login é a oficial do Discord).
 
