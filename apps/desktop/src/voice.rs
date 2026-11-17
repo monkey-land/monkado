@@ -1504,13 +1504,18 @@ impl Voice {
 	pub fn use_p2p(
 		&mut self,
 		screen: &discord_voice::p2p::Track,
+		screen_audio: &discord_voice::p2p::Track,
 		camera: &discord_voice::p2p::Track,
 	) {
 		if self.p2p_camera.is_none() {
 			camera.set_keyframe_hook(Some(Arc::new(discord_voice::camera::request_keyframe)));
 			self.p2p_camera = Some(camera.clone());
-			self.screen.use_p2p(screen.clone());
+			self.screen.use_p2p(screen.clone(), screen_audio.clone());
 		}
+	}
+	/// The live call's stream-audio playout input, which changes on rejoin.
+	pub fn stream_audio(&self) -> Option<mpsc::SyncSender<discord_voice::PlaybackFrame>> {
+		self.live.as_ref().map(|live| live.stream_audio.clone())
 	}
 	/// Remote camera pictures of the live call, keyed by user, which the call tiles show.
 	pub fn remote_video(&self) -> Option<Arc<std::sync::Mutex<RemotePictures>>> {

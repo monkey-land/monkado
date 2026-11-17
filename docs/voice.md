@@ -589,12 +589,13 @@ are moved between outputs and no virtual device is installed.
 
 Windows uses native process loopback. Sharing a window captures only that window's
 application; Store app windows belong to ApplicationFrameHost, so they capture like a screen
-instead. The rest of this paragraph is about sharing a screen. On build 20348+ one capture uses
-`PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE`, excluding Monkado and its child
-processes across outputs. Older Windows 10 builds capture each application's audio session
-with `PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE`, skipping Monkado, its children and
-its ancestors, and mix the results; no exclude attempt is made on those builds, so audio starts
-as soon as the sessions are listed. Playing applications are captured first and idle ones start
+instead. The rest of this paragraph is about sharing a screen. Every build captures each
+application's audio session with `PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE` and mixes
+the results, skipping Monkado, the official Discord clients, NVIDIA Broadcast (which replays the
+call it receives), the Windows audio service hosts (`svchost.exe`, `audiodg.exe` and their
+parents, where "Listen to this device" microphone monitoring plays), their children and their
+ancestors. Exclude mode is not used: it accepts a single process tree, so those sources would
+reach viewers, who would hear themselves. Audio starts as soon as the sessions are listed. Playing applications are captured first and idle ones start
 once those are up, and one may take the lane of an idle one when all 16 are in use.
 Applications are activated in parallel, so one that is slow to start does not delay the others,
 and a lane that receives nothing for four seconds while its application is playing is restarted.

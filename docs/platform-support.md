@@ -464,9 +464,9 @@ Optional Linux stream audio uses native `libpulse` per-application monitoring on
 PulseAudio or PipeWire's PulseAudio server. Source builds need the libpulse development
 package (`libpulse-dev`, `pulseaudio-libs-devel`, `libpulse-devel` or Arch's `libpulse`).
 The existing Flatpak PulseAudio socket permission covers this access; the ScreenCast
-portal's PipeWire remote grants video only. Windows uses native process loopback: one
-exclude-Monkado capture on build 20348+ (Windows 11 / Server 2022), and per-application
-captures on older Windows 10 builds. Both exclude Monkado's playback. Sharing a window captures
+portal's PipeWire remote grants video only. Windows uses native process loopback with one
+capture per application on every build, excluding Monkado's playback, other Discord clients,
+NVIDIA Broadcast and the audio service hosts that play microphone monitoring. Sharing a window captures
 only that window's application, as Discord does; sharing a screen captures other applications. There is no whole-output fallback. Hardware
 exclusion and receiving sound in an official client remain unverified.
 

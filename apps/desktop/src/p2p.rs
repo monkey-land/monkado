@@ -23,6 +23,7 @@ pub(super) fn enabled() -> bool {
 const MAX_TAGS: usize = 128;
 
 type Cameras = Arc<Mutex<Option<Arc<Mutex<crate::voice::RemotePictures>>>>>;
+type StreamAudio = Arc<Mutex<Option<std::sync::mpsc::SyncSender<discord_voice::PlaybackFrame>>>>;
 
 struct Running {
 	channel: Id,
@@ -44,6 +45,7 @@ struct Peer {
 #[derive(Default)]
 pub(super) struct P2p {
 	screen: Track,
+	screen_audio: Track,
 	camera: Track,
 	running: Option<Running>,
 	tags: Vec<(Id, Id, [u8; 32])>,
@@ -53,6 +55,8 @@ pub(super) struct P2p {
 	textures: Vec<(Id, crate::gpu_video::VideoTexture)>,
 	/// Where peers' camera pictures go: the live call's remote pictures, which change on rejoin.
 	cameras: Cameras,
+	/// Where the watched peer's share audio goes: the live call's stream playout.
+	stream_audio: StreamAudio,
 	/// First time this device saw a Discord-only share live, for its elapsed-time label.
 	seen_live: Vec<(Id, Instant)>,
 }
@@ -87,9 +91,12 @@ impl P2p {
 			ui.voice_live_since.clear();
 			return;
 		}
-		voice.use_p2p(&self.screen, &self.camera);
+		voice.use_p2p(&self.screen, &self.screen_audio, &self.camera);
 		if let Ok(mut cameras) = self.cameras.lock() {
 			*cameras = voice.remote_video();
+		}
+		if let Ok(mut stream_audio) = self.stream_audio.lock() {
+			*stream_audio = voice.stream_audio();
 		}
 		let call = state
 			.voice
@@ -295,6 +302,13 @@ impl P2p {
 				wake.request_repaint();
 			}
 		});
+		let stream_audio = self.stream_audio.clone();
+		// Bounded playout queue: a full one drops the frame rather than blocking the mesh.
+		let audio_sink: discord_voice::p2p::AudioSink = Arc::new(move |samples| {
+			if let Some(send) = stream_audio.lock().ok().and_then(|send| send.clone()) {
+				let _ = send.try_send(samples.into());
+			}
+		});
 		let wake = ctx.clone();
 		let config = MeshConfig {
 			channel: channel.0,
@@ -302,8 +316,10 @@ impl P2p {
 			tag,
 			screen: self.screen.clone(),
 			camera: self.camera.clone(),
+			screen_audio: self.screen_audio.clone(),
 			screen_sink,
 			camera_sink,
+			audio_sink,
 			wake: Arc::new(move || wake.request_repaint()),
 		};
 		let Ok(mesh) = Mesh::start(runtime.handle(), config) else {

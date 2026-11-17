@@ -1093,9 +1093,11 @@ and Windows process loopback feed the existing stereo Opus/DAVE stream audio sen
 Both are opt-in and exclude Monkado's playback, including received call and stream audio.
 Other applications are included even for a single-window share, except on Windows, where a
 window share carries only that window's application. macOS ScreenCaptureKit
-continues excluding the current process. Windows uses native process-tree exclusion on build
-20348+ and per-application inclusion on older Windows 10 builds; a capture that fails reports
-its error visibly, without whole-output fallback.
+continues excluding the current process. Windows uses per-application inclusion on every
+build, also skipping other Discord clients, NVIDIA Broadcast and the Windows audio service
+hosts that play microphone monitoring; a capture that fails reports its error visibly,
+without whole-output fallback. Monkado-to-Monkado P2P screen shares carry the same audio as
+20 ms stereo Opus packets on their own P2P track (unofficial, Monkado peers only).
 Linux uses `pa_stream_set_monitor_stream` before connecting each recording stream,
 rejects Monkado/unknown application identities and disables recording-stream movement.
 Audio access is separate from portal-approved video, using the existing PulseAudio socket.

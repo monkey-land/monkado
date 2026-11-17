@@ -12,8 +12,10 @@
 //! Each connection carries a control stream (a hello with the dialer's user ID, then one
 //! five-byte status per change: media flags and the share's age in seconds) and one stream per subscribed track: the subscriber writes the
 //! track ID, then keyframe requests; the publisher writes length-prefixed H.264 access units.
+//! The shared screen's system audio is its own track of 20 ms stereo Opus packets, each
+//! marked as a keyframe; a screen viewer subscribes to it alongside the picture.
 use crate::{
-	screen::Video,
+	screen::{AudioChunk, MAX_AUDIO_SAMPLES, Video},
 	video_codec::Codec,
 	video_receive::{self, DecoderQueue, Encoded, Lost, MAX_FRAME_BYTES, VideoSink},
 };
@@ -21,6 +23,7 @@ use iroh::{
 	Endpoint, EndpointAddr, EndpointId, SecretKey,
 	endpoint::{Connection, Incoming, RecvStream, SendStream, presets},
 };
+use opus2::{Application, Bitrate, Channels, Encoder};
 use sha2::{Digest, Sha256};
 use std::{
 	collections::HashMap,
@@ -45,10 +48,25 @@ fn count(value: usize) -> diagnostics::Value {
 	diagnostics::Value::Unsigned(value as u64)
 }
 fn note(label: &'static str, fields: &[(&'static str, diagnostics::Value)]) {
-	diagnostics::record_fields(diagnostics::Category::Voice, diagnostics::Level::Info, label, fields);
+	diagnostics::record_fields(
+		diagnostics::Category::Voice,
+		diagnostics::Level::Info,
+		label,
+		fields,
+	);
 }
 const SCREEN: u8 = 1;
 const CAMERA: u8 = 2;
+const SCREEN_AUDIO: u8 = 3;
+/// 20 ms of 48 kHz interleaved stereo, one Opus packet.
+const AUDIO_FRAME: usize = 1920;
+/// At most 100 ms of captured audio waits for the encoder; older samples are dropped.
+const AUDIO_PENDING: usize = AUDIO_FRAME * 5;
+/// Largest Opus packet a 20 ms frame can produce.
+const MAX_AUDIO_PACKET: usize = 1275;
+const AUDIO_BITRATE: i32 = 128_000;
+/// Decoded 20 ms mono frames of the watched peer's share audio.
+pub type AudioSink = Arc<dyn Fn(crate::Frame) + Send + Sync>;
 /// Frames buffered per subscriber; a slower one skips to the next keyframe instead.
 const BACKLOG: usize = 8;
 const KEYFRAME_INTERVAL: Duration = Duration::from_millis(500);
@@ -136,9 +154,10 @@ impl Track {
 	}
 }
 
-/// Publishes the screen encoder's frames on `track` until capture stops or the future is
-/// dropped. The encoder only works while someone watches.
-pub async fn publish_screen(track: Track, mut video: Video) {
+/// Publishes the screen encoder's frames on `track`, and the captured system audio as Opus
+/// on `audio`, until capture stops or the future is dropped. The encoder only works while
+/// someone watches.
+pub async fn publish_screen(track: Track, audio: Track, mut video: Video) {
 	struct Offline(Track);
 	impl Drop for Offline {
 		fn drop(&mut self) {
@@ -152,6 +171,11 @@ pub async fn publish_screen(track: Track, mut video: Video) {
 	})));
 	track.set_live(true);
 	let _offline = Offline(track.clone());
+	let mut source = video.audio.take();
+	let mut encoder = source.as_ref().and_then(|_| ShareAudio::new());
+	if source.is_some() && encoder.is_none() {
+		note("p2p_audio_encoder_failed", &[]);
+	}
 	let mut tick = tokio::time::interval(STATUS_INTERVAL);
 	loop {
 		video.ready.store(track.has_viewers(), Ordering::Release);
@@ -160,7 +184,71 @@ pub async fn publish_screen(track: Track, mut video: Video) {
 				let Some(frame) = frame else { break };
 				track.publish(frame.data, frame.keyframe);
 			}
+			chunk = next_chunk(&mut source) => match (chunk, encoder.as_mut()) {
+				(None, _) => source = None,
+				(Some(chunk), Some(encoder)) => {
+					if chunk.epoch == video.audio_epoch.load(Ordering::Acquire) {
+						encoder.push(&chunk.samples, &audio);
+					}
+				}
+				(Some(_), None) => {}
+			},
 			_ = tick.tick() => {}
+		}
+	}
+}
+
+async fn next_chunk(
+	source: &mut Option<tokio::sync::mpsc::Receiver<AudioChunk>>,
+) -> Option<AudioChunk> {
+	match source {
+		Some(source) => source.recv().await,
+		None => std::future::pending().await,
+	}
+}
+
+/// Buffers captured stereo samples and publishes each complete 20 ms frame as Opus.
+struct ShareAudio {
+	encoder: Encoder,
+	pending: Vec<f32>,
+}
+impl ShareAudio {
+	fn new() -> Option<Self> {
+		let mut encoder = Encoder::new(48_000, Channels::Stereo, Application::Audio).ok()?;
+		encoder.set_bitrate(Bitrate::Bits(AUDIO_BITRATE)).ok()?;
+		Some(Self {
+			encoder,
+			pending: Vec::with_capacity(AUDIO_PENDING),
+		})
+	}
+	fn push(&mut self, chunk: &[f32], track: &Track) {
+		if !track.has_viewers() {
+			self.pending.clear();
+			return;
+		}
+		if chunk.is_empty()
+			|| chunk.len() > MAX_AUDIO_SAMPLES
+			|| !chunk.len().is_multiple_of(2)
+			|| !chunk.iter().all(|sample| sample.is_finite())
+		{
+			return;
+		}
+		let chunk = &chunk[chunk.len().saturating_sub(AUDIO_PENDING)..];
+		let excess = (self.pending.len() + chunk.len()).saturating_sub(AUDIO_PENDING);
+		self.pending.drain(..excess);
+		self.pending
+			.extend(chunk.iter().map(|sample| sample.clamp(-1.0, 1.0)));
+		let mut packet = [0u8; MAX_AUDIO_PACKET];
+		while self.pending.len() >= AUDIO_FRAME {
+			let encoded = self
+				.encoder
+				.encode_float(&self.pending[..AUDIO_FRAME], &mut packet);
+			self.pending.drain(..AUDIO_FRAME);
+			if let Ok(length) = encoded
+				&& length > 0
+			{
+				track.publish(packet[..length].to_vec(), true);
+			}
 		}
 	}
 }
@@ -206,10 +294,14 @@ pub struct MeshConfig {
 	pub tag: [u8; 32],
 	pub screen: Track,
 	pub camera: Track,
+	/// Opus packets of this device's shared system audio.
+	pub screen_audio: Track,
 	/// Decoded screen pictures of the watched peers, tagged with each user ID.
 	pub screen_sink: VideoSink,
 	/// Decoded camera pictures, tagged with each peer's user ID.
 	pub camera_sink: VideoSink,
+	/// Decoded share audio of the watched peer.
+	pub audio_sink: AudioSink,
 	pub wake: Arc<dyn Fn() + Send + Sync>,
 }
 impl Mesh {
@@ -228,6 +320,8 @@ impl Mesh {
 			user: config.user,
 			screen: config.screen,
 			camera: config.camera,
+			screen_audio: config.screen_audio,
+			audio_sink: config.audio_sink,
 			decoders: [
 				(Arc::new(Mutex::new(screen_decoder)), screen_lost),
 				(Arc::new(Mutex::new(camera_decoder)), camera_lost),
@@ -270,6 +364,8 @@ struct Shared {
 	user: u64,
 	screen: Track,
 	camera: Track,
+	screen_audio: Track,
+	audio_sink: AudioSink,
 	/// Screen and camera decoder threads with their broken-decoder reports.
 	decoders: [(Decoder, Lost); 2],
 	updates: std::sync::mpsc::Sender<Update>,
@@ -297,6 +393,7 @@ impl Shared {
 		match id {
 			SCREEN => Some(&self.screen),
 			CAMERA => Some(&self.camera),
+			SCREEN_AUDIO => Some(&self.screen_audio),
 			_ => None,
 		}
 	}
@@ -330,7 +427,8 @@ struct Link {
 	dialer: EndpointId,
 	status: u8,
 	task: JoinHandle<()>,
-	subscriptions: [Option<JoinHandle<()>>; 2],
+	/// Screen, camera and screen audio.
+	subscriptions: [Option<JoinHandle<()>>; 3],
 }
 impl Drop for Link {
 	fn drop(&mut self) {
@@ -447,7 +545,7 @@ async fn run(shared: Arc<Shared>, key: SecretKey, mut control: mpsc::UnboundedRe
 						dialer,
 						status: 0,
 						task,
-						subscriptions: [None, None],
+						subscriptions: [None, None, None],
 					}) && old.status != 0 {
 						shared.emit(Update::gone(user));
 					}
@@ -591,6 +689,20 @@ fn subscribe(shared: &Arc<Shared>, user: u64, link: &mut Link, watching: &[u64])
 			}
 		}
 	}
+	// Share audio follows the first watched screen only: several shares mixed into one
+	// playout queue would garble each other. A peer without audio simply sends nothing.
+	let audio = wanted[0] && watching.first() == Some(&user);
+	let running = link.subscriptions[2]
+		.as_ref()
+		.is_some_and(|task| !task.is_finished());
+	if audio && !running {
+		link.subscriptions[2] = Some(tokio::spawn(receive_audio(
+			link.connection.clone(),
+			shared.audio_sink.clone(),
+		)));
+	} else if !audio && let Some(task) = link.subscriptions[2].take() {
+		task.abort();
+	}
 }
 
 /// One link: exchanges status messages on the control stream and serves the peer's track
@@ -627,7 +739,7 @@ async fn serve(
 			}
 			stream = connection.accept_bi() => {
 				let Ok((send, recv)) = stream else { break };
-				if subscribers.len() < 4 {
+				if subscribers.len() < 6 {
 					subscribers.spawn(publish(shared.clone(), send, recv));
 				}
 			}
@@ -749,6 +861,44 @@ fn parse_status(message: [u8; 5], now: Instant) -> Option<(u8, Option<Instant>)>
 	Some((message[0], since))
 }
 
+/// Subscribes to a peer's share audio and hands each decoded 20 ms mono frame to `sink`.
+async fn receive_audio(connection: Connection, sink: AudioSink) {
+	let _ = receive_audio_frames(connection, &sink).await;
+}
+async fn receive_audio_frames(
+	connection: Connection,
+	sink: &AudioSink,
+) -> Result<(), &'static str> {
+	const ENDED: &str = "The P2P audio stream ended";
+	let mut decoder = opus2::Decoder::new(48_000, Channels::Mono).map_err(|_| "decoder")?;
+	let (mut send, mut recv) = connection.open_bi().await.map_err(|_| ENDED)?;
+	send.write_all(&[SCREEN_AUDIO]).await.map_err(|_| ENDED)?;
+	let mut header = [0u8; 5];
+	let mut packet = [0u8; MAX_AUDIO_PACKET];
+	loop {
+		recv.read_exact(&mut header).await.map_err(|_| ENDED)?;
+		let length = parse_audio_header(header)?;
+		recv.read_exact(&mut packet[..length])
+			.await
+			.map_err(|_| ENDED)?;
+		let mut frame: crate::Frame = [0.0; 960];
+		// A corrupt packet is skipped; the playout bridge absorbs the gap.
+		if decoder
+			.decode_float(&packet[..length], &mut frame, false)
+			.ok() == Some(frame.len())
+		{
+			sink(frame);
+		}
+	}
+}
+
+fn parse_audio_header(header: [u8; 5]) -> Result<usize, &'static str> {
+	match parse_header(header)? {
+		(true, length) if length <= MAX_AUDIO_PACKET => Ok(length),
+		_ => Err("The peer sent an invalid audio packet"),
+	}
+}
+
 fn parse_header(header: [u8; 5]) -> Result<(bool, usize), &'static str> {
 	let length = u32::from_be_bytes([header[1], header[2], header[3], header[4]]) as usize;
 	if length == 0 || length > MAX_FRAME_BYTES || header[0] > 1 {
@@ -784,8 +934,10 @@ mod tests {
 					tag: [user as u8; 32],
 					screen: Track::default(),
 					camera: camera.clone(),
+					screen_audio: Track::default(),
 					screen_sink: Arc::new(|_| {}),
 					camera_sink: Arc::new(|_| {}),
+					audio_sink: Arc::new(|_| {}),
 					wake: Arc::new(|| {}),
 				},
 			)
@@ -838,5 +990,35 @@ mod tests {
 		assert!(parse_header([0, 0, 0, 0, 0]).is_err());
 		assert!(parse_header([2, 0, 0, 0, 9]).is_err());
 		assert!(parse_header([0, 0xff, 0xff, 0xff, 0xff]).is_err());
+		// Audio packets are always keyframes and never longer than one Opus packet.
+		assert_eq!(parse_audio_header([1, 0, 0, 0x04, 0xfb]), Ok(1275));
+		assert!(parse_audio_header([1, 0, 0, 0x04, 0xfc]).is_err());
+		assert!(parse_audio_header([0, 0, 0, 0, 9]).is_err());
+	}
+
+	/// Captured system audio becomes Opus packets only while a peer subscribes, and a
+	/// malformed capture chunk is ignored instead of poisoning the buffer.
+	#[test]
+	fn share_audio_encodes_whole_frames_for_viewers_only() {
+		let track = Track::default();
+		let mut audio = ShareAudio::new().unwrap();
+		audio.push(&[0.1; AUDIO_FRAME], &track);
+		assert!(audio.pending.is_empty(), "nothing buffers without viewers");
+		let mut viewer = track.0.frames.subscribe();
+		audio.push(&[f32::NAN; AUDIO_FRAME], &track);
+		audio.push(&[0.1; AUDIO_FRAME + 2], &track);
+		let frame = viewer.try_recv().unwrap();
+		assert!(frame.keyframe && frame.data.len() <= MAX_AUDIO_PACKET);
+		assert!(
+			viewer.try_recv().is_err(),
+			"one 20 ms frame, two samples left over"
+		);
+		assert_eq!(audio.pending.len(), 2);
+		let mut decoder = opus2::Decoder::new(48_000, Channels::Mono).unwrap();
+		let mut pcm = [0.0; 960];
+		assert_eq!(
+			decoder.decode_float(&frame.data, &mut pcm, false).ok(),
+			Some(960)
+		);
 	}
 }
