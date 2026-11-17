@@ -8,9 +8,9 @@ use objc2_foundation::{
 };
 use std::{cell::RefCell, sync::Arc};
 
-/// Serein's own mark, rasterized from `assets/brand/serein-mark.svg` as a menu bar template:
+/// Monkado's own mark, rasterized from `assets/brand/monkado-mark.svg` as a menu bar template:
 /// only its alpha matters, so macOS tints it for light, dark and highlighted menu bars.
-const MARK: &[u8] = include_bytes!("../../../../assets/brand/serein-tray.png");
+const MARK: &[u8] = include_bytes!("../../../../assets/brand/monkado-tray.png");
 /// Menu bar images are measured in points; the render is larger so Retina scales stay sharp.
 const MARK_POINTS: f64 = 15.0;
 
@@ -24,7 +24,7 @@ define_class!(
 	// SAFETY: NSObject has no subclassing requirements. All state and callbacks stay on
 	// the main thread, and the target lives until every menu item is disconnected.
 	#[unsafe(super = NSObject)]
-	#[name = "SereinTrayTarget"]
+	#[name = "MonkadoTrayTarget"]
 	#[thread_kind = MainThreadOnly]
 	#[ivars = State]
 	struct Target;
@@ -33,12 +33,12 @@ define_class!(
 	unsafe impl NSObjectProtocol for Target {}
 
 	impl Target {
-		#[unsafe(method(showSerein:))]
+		#[unsafe(method(showMonkado:))]
 		fn show(&self, _sender: &NSMenuItem) {
 			self.emit(Event::Show);
 		}
 
-		#[unsafe(method(quitSerein:))]
+		#[unsafe(method(quitMonkado:))]
 		fn quit(&self, _sender: &NSMenuItem) {
 			self.emit(Event::Quit);
 		}
@@ -114,9 +114,9 @@ impl Tray {
 			image.setSize(NSSize::new(MARK_POINTS, MARK_POINTS));
 			button.setImage(Some(&image));
 		} else {
-			button.setTitle(ns_string!("Serein"));
+			button.setTitle(ns_string!("Monkado"));
 		}
-		button.setToolTip(Some(ns_string!("Serein")));
+		button.setToolTip(Some(ns_string!("Monkado")));
 		tray.fill(mtm);
 		tray.item.setMenu(Some(&tray.menu));
 		Ok(tray)
@@ -139,8 +139,8 @@ impl Tray {
 					enabled,
 				} => {
 					let action = match event {
-						Event::Show => sel!(showSerein:),
-						Event::Quit => sel!(quitSerein:),
+						Event::Show => sel!(showMonkado:),
+						Event::Quit => sel!(quitMonkado:),
 						Event::ToggleMute => sel!(toggleMute:),
 						Event::ToggleDeafen => sel!(toggleDeafen:),
 						Event::Disconnect => sel!(disconnectCall:),

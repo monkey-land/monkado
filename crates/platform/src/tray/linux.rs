@@ -59,7 +59,7 @@ impl Tray {
 		let worker_events = events.clone();
 		runtime.spawn(async move {
 			let Ok(icon) = image::load_from_memory_with_format(
-				include_bytes!("../../../../assets/brand/serein-tray.png"),
+				include_bytes!("../../../../assets/brand/monkado-tray.png"),
 				image::ImageFormat::Png,
 			) else {
 				worker_events.push(Event::Unavailable);
@@ -77,7 +77,7 @@ impl Tray {
 				pixel.rotate_right(1); // StatusNotifier pixmaps use ARGB, not RGBA.
 			}
 			// Flatpak exports `{FLATPAK_ID}-symbolic` into the host theme. A native
-			// package exports `serein-symbolic`. Anything else leaves the name empty
+			// package exports `monkado-symbolic`. Anything else leaves the name empty
 			// so the host uses the pixmap: Quickshell prefers IconName and substitutes
 			// an opaque missing icon when the name is absent, and Omarchy then masks
 			// every `*-symbolic` icon into a solid square.
@@ -188,7 +188,7 @@ impl Tray {
 
 /// Symbolic icon name; GNOME's AppIndicator extension and Plasma recolor these to match the
 /// panel, so the tray mark follows the shell's own foreground colour like a native icon.
-const ICON_NAME: &str = "serein-symbolic";
+const ICON_NAME: &str = "monkado-symbolic";
 
 /// Name advertised on the StatusNotifier item.
 ///
@@ -266,13 +266,13 @@ fn write_symbolic_icon(icon_name: &str) -> Option<String> {
 	let base = std::env::var_os("XDG_RUNTIME_DIR")
 		.map(std::path::PathBuf::from)
 		.filter(|path| path.is_absolute())?;
-	let directory = base.join("serein-tray-icons");
+	let directory = base.join("monkado-tray-icons");
 	std::fs::DirBuilder::new()
 		.recursive(true)
 		.mode(0o700)
 		.create(&directory)
 		.ok()?;
-	let svg = recolorable_svg(include_str!("../../../../assets/brand/serein-mark.svg"));
+	let svg = recolorable_svg(include_str!("../../../../assets/brand/monkado-mark.svg"));
 	std::fs::write(directory.join(format!("{icon_name}.svg")), svg).ok()?;
 	directory.to_str().map(str::to_owned)
 }
@@ -303,10 +303,10 @@ struct Item {
 
 impl ksni::Tray for Item {
 	fn id(&self) -> String {
-		"serein".into()
+		"monkado".into()
 	}
 	fn title(&self) -> String {
-		"Serein".into()
+		"Monkado".into()
 	}
 	fn icon_name(&self) -> String {
 		// Empty when no host theme icon exists. The pixmap then carries the mark.
@@ -379,13 +379,13 @@ mod tests {
 	#[test]
 	fn flatpak_id_selects_the_exported_symbolic_icon() {
 		assert_eq!(
-			symbolic_icon_name(Some("cz.viceverse.serein"), false).as_deref(),
-			Some("cz.viceverse.serein-symbolic")
+			symbolic_icon_name(Some("land.monkey.monkado"), false).as_deref(),
+			Some("land.monkey.monkado-symbolic")
 		);
 		// An installed native icon must not replace a valid Flatpak id.
 		assert_eq!(
-			symbolic_icon_name(Some("cz.viceverse.serein"), true).as_deref(),
-			Some("cz.viceverse.serein-symbolic")
+			symbolic_icon_name(Some("land.monkey.monkado"), true).as_deref(),
+			Some("land.monkey.monkado-symbolic")
 		);
 	}
 
@@ -412,7 +412,7 @@ mod tests {
 		assert_eq!(symbolic_icon_name(None, false), None);
 		assert_eq!(
 			symbolic_icon_name(None, true).as_deref(),
-			Some("serein-symbolic")
+			Some("monkado-symbolic")
 		);
 	}
 }

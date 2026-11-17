@@ -177,12 +177,12 @@ pub struct State {
 	pub ring_error: Option<(Id, u64, &'static str)>,
 	pub roster: Vec<RosterEntry>,
 	pub preview: Option<StreamPreview>,
-	/// Media Serein peers announced over P2P, outside Discord's voice state. Bounded by the
+	/// Media Monkado peers announced over P2P, outside Discord's voice state. Bounded by the
 	/// call's participant limit and replaced as a whole by the desktop.
 	pub p2p: Vec<P2pMedia>,
 	sequence: u64,
 }
-/// Screen share and camera a Serein peer announced over P2P (unofficial; Discord never sees it).
+/// Screen share and camera a Monkado peer announced over P2P (unofficial; Discord never sees it).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct P2pMedia {
 	pub user: Id,
@@ -346,7 +346,7 @@ pub enum Event {
 		streaming: bool,
 	},
 	/// SHA-256 of a participant's voice session ID, which only clients that receive this
-	/// call's voice states learn. Serein P2P derives each peer's address from it.
+	/// call's voice states learn. Monkado P2P derives each peer's address from it.
 	PeerSession {
 		channel: Id,
 		user: Id,

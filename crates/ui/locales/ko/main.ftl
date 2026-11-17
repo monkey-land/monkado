@@ -224,7 +224,7 @@ account-menu-custom-status-editor-clear-after = 상태 지우기
 # Context: custom_status_editor
 account-menu-custom-status-editor-no-custom-status = 사용자 지정 상태 없음
 # Context: custom_status_editor
-account-menu-custom-status-editor-serein-clears-it = Monkado이 상태를 지웁니다
+account-menu-custom-status-editor-monkado-clears-it = Monkado이 상태를 지웁니다
 # Context: custom_status_editor
 account-menu-custom-status-editor-status-text = 상태 메시지
 # Context: custom_status_editor
@@ -1682,7 +1682,7 @@ main-restoring-checking-your-saved-login = 저장된 로그인 확인 중
 # Context: restoring
 main-restoring-connecting-to-discord = Discord에 연결 중
 # Context: restoring_screen
-main-restoring-screen-serein = Monkado
+main-restoring-screen-monkado = Monkado
 # Context: restoring_screen
 main-restoring-screen-use-a-different-account = 다른 계정 사용
 # Context: restoring_screen
@@ -1692,7 +1692,7 @@ main-sign-in-accounts-saved-accounts = 저장된 계정
 # Context: sign_in_consent
 main-sign-in-consent-passwords-and-2fa-stay-on-discord-s-own-login-page = 비밀번호와 2단계 인증은 Discord 로그인 페이지 안에서만 처리됩니다. 세션 토큰만 운영체제 자격 증명 저장소에 보관합니다.
 # Context: sign_in_disclosures
-main-sign-in-disclosures-about-serein = Monkado 정보
+main-sign-in-disclosures-about-monkado = Monkado 정보
 # Context: sign_in_disclosures
 main-sign-in-disclosures-connect-with-this-token = 이 토큰으로 연결
 # Context: sign_in_disclosures
@@ -1710,7 +1710,7 @@ main-sign-in-header-sign-in-with-your-discord-account-to-get-started = Discord �
 # Context: sign_in_header
 main-sign-in-header-welcome-back = 다시 만나서 반가워요
 # Context: sign_in_header
-main-sign-in-header-welcome-to-serein = Monkado에 오신 것을 환영합니다
+main-sign-in-header-welcome-to-monkado = Monkado에 오신 것을 환영합니다
 # Context: sign_in_preview
 main-sign-in-status-copy-failure-details = 실패 세부 정보 복사
 main-sign-in-preview-explore-the-offline-preview = 오프라인 미리보기 둘러보기
@@ -1719,7 +1719,7 @@ main-sign-in-preview-sample-conversations-no-discord-connection = 예시 대화,
 # Context: sign_in_screen
 main-sign-in-screen-independent-and-open-source-not-affiliated-with-discord = 독립 오픈 소스 프로젝트 · Discord와 무관합니다
 # Context: sign_in_screen
-main-sign-in-screen-serein = Monkado
+main-sign-in-screen-monkado = Monkado
 # Context: ui
 main-ui-cancel = 취소
 # Context: ui
@@ -2320,7 +2320,7 @@ screen-body-refresh = 새로고침
 # Context: body
 screen-body-screen-or-window = 화면 또는 창
 # Context: body
-screen-body-send-what-your-mac-plays-along-with-the-screen-serein = Mac에서 재생되는 소리를 화면과 함께 전송합니다. Monkado의 통화 소리는 제외합니다.
+screen-body-send-what-your-mac-plays-along-with-the-screen-monkado = Mac에서 재생되는 소리를 화면과 함께 전송합니다. Monkado의 통화 소리는 제외합니다.
 # Context: body
 screen-body-share-sound-from-other-apps-even-when-sharing-one-window = 창 하나만 공유할 때도 다른 앱의 소리를 공유합니다. Monkado의 소리는 제외합니다.
 # Context: body
@@ -3530,7 +3530,7 @@ settings-appearance-settings-primary-color = 기본 색상
 # Context: appearance_settings
 settings-appearance-settings-reset = 초기화
 # Context: appearance_settings
-settings-appearance-settings-restart-serein-after-changing-this-themes-can-customize-effects-while = 변경 후 Monkado을 다시 시작하세요. 테마가 활성화되어 있으면 효과를 사용자 지정할 수 있습니다.
+settings-appearance-settings-restart-monkado-after-changing-this-themes-can-customize-effects-while = 변경 후 Monkado을 다시 시작하세요. 테마가 활성화되어 있으면 효과를 사용자 지정할 수 있습니다.
 # Context: appearance_settings
 settings-appearance-settings-the-active-theme-brings-its-own-accent-it-takes-over = 활성 테마의 강조색이 테마를 사용하는 동안 적용됩니다.
 # Context: appearance_settings
@@ -3571,7 +3571,7 @@ settings-storage-page-messages-and-drafts-are-cached-on-this-device-inside-bound
 # Context: storage_page
 settings-storage-page-removes-cached-messages-and-media-drafts-and-your-login-stay = 캐시된 메시지와 미디어를 제거합니다. 임시 메시지와 로그인은 유지됩니다.
 # Context: storage_page
-settings-storage-page-serein-does-not-collect-telemetry-or-upload-diagnostics-discord-retains = Monkado은 원격 측정 데이터를 수집하거나 진단 정보를 업로드하지 않습니다. Discord는 자체 정책에 따라 서비스 측 데이터를 보관합니다.
+settings-storage-page-monkado-does-not-collect-telemetry-or-upload-diagnostics-discord-retains = Monkado은 원격 측정 데이터를 수집하거나 진단 정보를 업로드하지 않습니다. Discord는 자체 정책에 따라 서비스 측 데이터를 보관합니다.
 # Context: storage_page
 settings-storage-page-your-privacy = 개인정보 보호
 # Context: cosmetic_settings
@@ -4049,7 +4049,7 @@ updates-update-settings-release-channel = 릴리스 채널
 # Context: update_settings
 updates-update-settings-restart-to-update = 다시 시작해 업데이트
 # Context: update_settings
-updates-update-settings-serein-was-installed-via-your-distribution-run-this-in-a = 배포판을 통해 Monkado이 설치되었습니다. 터미널에서 이 명령어를 실행해 업데이트하세요.
+updates-update-settings-monkado-was-installed-via-your-distribution-run-this-in-a = 배포판을 통해 Monkado이 설치되었습니다. 터미널에서 이 명령어를 실행해 업데이트하세요.
 # Context: update_settings
 updates-update-settings-save-diagnostics = 진단 정보 저장
 # Context: update_settings

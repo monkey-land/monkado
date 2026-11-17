@@ -20,8 +20,8 @@ const SIGNAL_TIMEOUT: Duration = Duration::from_secs(30);
 /// Names why a share ended, under the same opt-in variable as the voice reports. A share
 /// that stops by itself otherwise leaves only the latest status, which the stop overwrites.
 fn note(event: &str, reason: &str) {
-	if std::env::var_os("SEREIN_VOICE_DIAGNOSTICS").is_some_and(|value| value == "1") {
-		eprintln!("[Serein voice Screen] {event}={reason}");
+	if std::env::var_os("MONKADO_VOICE_DIAGNOSTICS").is_some_and(|value| value == "1") {
+		eprintln!("[Monkado voice Screen] {event}={reason}");
 	}
 }
 
@@ -92,7 +92,7 @@ pub(super) struct Screen {
 	viewers: Option<(Context, u16)>,
 	viewer_cue: bool,
 	share_cued: bool,
-	/// Serein P2P track; when set, sharing publishes there and Discord never carries it.
+	/// Monkado P2P track; when set, sharing publishes there and Discord never carries it.
 	p2p: Option<discord_voice::p2p::Track>,
 	/// The live share is on the P2P track, so stopping it needs no Discord acknowledgement.
 	p2p_live: bool,

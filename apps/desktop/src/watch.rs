@@ -235,7 +235,7 @@ impl Watch {
 	) -> Option<Command> {
 		let wanted = state.voice.active.as_ref().and_then(|active| {
 			let streamer = active.watching?;
-			// A Serein P2P share never reaches Discord; the P2P mesh shows it instead.
+			// A Monkado P2P share never reaches Discord; the P2P mesh shows it instead.
 			if state
 				.voice
 				.p2p

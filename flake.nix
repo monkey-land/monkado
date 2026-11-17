@@ -27,13 +27,13 @@
                 system,
                 ...
             }: {
-                packages.serein = pkgs.callPackage ./packaging/nix/package.nix {};
-                packages.default = config.packages.serein;
+                packages.monkado = pkgs.callPackage ./packaging/nix/package.nix {};
+                packages.default = config.packages.monkado;
 
                 devShells.default = pkgs.mkShell {
-                    name = "serein-dev";
+                    name = "monkado-dev";
 
-                    inputsFrom = [config.packages.serein];
+                    inputsFrom = [config.packages.monkado];
                 };
             };
         };

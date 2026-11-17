@@ -62,7 +62,7 @@ pub struct AppPreferences {
 	/// Keep the home list's message requests section collapsed after a restart.
 	pub message_requests_collapsed: bool,
 	pub hide_window_decorations: bool,
-	/// Linux: replace the system title bar with Serein's own GTK 4 style header bar.
+	/// Linux: replace the system title bar with Monkado's own GTK 4 style header bar.
 	/// On by default, including for saved preferences from before the setting existed.
 	pub custom_title_bar: bool,
 	pub primary_color: Option<[u8; 3]>,
@@ -246,15 +246,15 @@ fn resolve_data_dir(configured: Option<OsString>, default: Option<PathBuf>) -> R
 	}
 }
 
-/// Keeps source-build data persistent but separate from installed Serein data.
+/// Keeps source-build data persistent but separate from installed Monkado data.
 fn default_data_dir() -> Option<PathBuf> {
 	#[cfg(feature = "development-data")]
 	{
-		dirs::data_local_dir().map(|root| root.join("serein-development"))
+		dirs::data_local_dir().map(|root| root.join("monkado-development"))
 	}
 	#[cfg(not(feature = "development-data"))]
 	{
-		dirs::data_local_dir().map(|root| root.join("serein"))
+		dirs::data_local_dir().map(|root| root.join("monkado"))
 	}
 }
 
@@ -277,7 +277,7 @@ fn create_data_dir(root: &Path) -> Result<()> {
 
 /// Shared root for local application data. Developers may select an isolated absolute path.
 pub fn data_dir() -> std::result::Result<PathBuf, StoreError> {
-	resolve_data_dir(std::env::var_os("SEREIN_DATA_DIR"), default_data_dir())
+	resolve_data_dir(std::env::var_os("MONKADO_DATA_DIR"), default_data_dir())
 }
 
 /// Reject excess entries during parsing, before allocating a whole malformed array.
@@ -1711,7 +1711,7 @@ mod tests {
 			resolve_data_dir(None, Some(default.clone())),
 			Ok(default.clone())
 		);
-		let configured = default.join("serein-development");
+		let configured = default.join("monkado-development");
 		assert_eq!(
 			resolve_data_dir(Some(configured.clone().into_os_string()), None),
 			Ok(configured)
@@ -1732,7 +1732,7 @@ mod tests {
 	fn existing_data_directory_permissions_are_preserved() {
 		use std::os::unix::fs::PermissionsExt;
 		let root = std::env::temp_dir().join(format!(
-			"serein-existing-permissions-{}-{}",
+			"monkado-existing-permissions-{}-{}",
 			std::process::id(),
 			std::time::SystemTime::now()
 				.duration_since(std::time::UNIX_EPOCH)
@@ -1883,7 +1883,7 @@ mod tests {
 	fn switcher_roster_orders_by_last_use_prunes_and_clears_with_the_account() {
 		use super::{Id, LocalStore};
 		let path =
-			std::env::temp_dir().join(format!("serein-accounts-{}.sqlite", std::process::id()));
+			std::env::temp_dir().join(format!("monkado-accounts-{}.sqlite", std::process::id()));
 		let _ = std::fs::remove_file(&path);
 		let mut store = LocalStore::open(&path).unwrap();
 		let entry = |id: u64| model::SavedAccount {
@@ -1987,7 +1987,7 @@ mod tests {
 	fn roster_upgrade_keeps_existing_accounts_switchable_without_rewriting_their_entries() {
 		use super::{Id, LocalStore};
 		let path = std::env::temp_dir().join(format!(
-			"serein-roster-upgrade-{}.sqlite",
+			"monkado-roster-upgrade-{}.sqlite",
 			std::process::id()
 		));
 		let _ = std::fs::remove_file(&path);
@@ -2019,7 +2019,7 @@ mod tests {
 	#[test]
 	fn forwarded_snapshot_survives_cache_reopen_and_upgrade() {
 		let path =
-			std::env::temp_dir().join(format!("serein-forwarded-{}.sqlite", std::process::id()));
+			std::env::temp_dir().join(format!("monkado-forwarded-{}.sqlite", std::process::id()));
 		let _ = std::fs::remove_file(&path);
 		let store = LocalStore::open(&path).unwrap();
 		store.0.execute("INSERT INTO messages(account,channel,id,author,name,content,edited,unsupported) VALUES('1','2','100','4','Synthetic','snapshot text',0,0)", []).unwrap();
@@ -2148,7 +2148,7 @@ mod tests {
 	fn emoticon_conversion_defaults_off_and_persists_across_reopens() {
 		let legacy: AppPreferences = serde_json::from_str("{}").unwrap();
 		assert!(!legacy.convert_emoticons);
-		let root = std::env::temp_dir().join(format!("serein-emoticons-{}", std::process::id()));
+		let root = std::env::temp_dir().join(format!("monkado-emoticons-{}", std::process::id()));
 		std::fs::create_dir(&root).unwrap();
 		let path = root.join("preferences.sqlite3");
 		for enabled in [true, false] {
@@ -2170,7 +2170,7 @@ mod tests {
 		let legacy: AppPreferences = serde_json::from_str("{}").unwrap();
 		assert!(!legacy.message_requests_collapsed);
 		let root =
-			std::env::temp_dir().join(format!("serein-message-requests-{}", std::process::id()));
+			std::env::temp_dir().join(format!("monkado-message-requests-{}", std::process::id()));
 		std::fs::create_dir(&root).unwrap();
 		let path = root.join("preferences.sqlite3");
 		for collapsed in [true, false] {
@@ -2389,7 +2389,7 @@ mod tests {
 	#[test]
 	fn reply_deletion_schema_migrates_reopens_and_rejects_invalid_markers() {
 		let root = std::env::temp_dir().join(format!(
-			"serein-synthetic-reply-schema-{}",
+			"monkado-synthetic-reply-schema-{}",
 			std::process::id()
 		));
 		std::fs::create_dir_all(&root).unwrap();
@@ -2468,7 +2468,7 @@ mod tests {
 	#[test]
 	fn divergent_schema_seven_and_eight_preserve_union_after_reopen() {
 		let root = std::env::temp_dir().join(format!(
-			"serein-synthetic-union-schema-{}",
+			"monkado-synthetic-union-schema-{}",
 			std::process::id()
 		));
 		std::fs::create_dir_all(&root).unwrap();
@@ -2556,7 +2556,7 @@ mod tests {
 	#[test]
 	fn union_migration_failure_rolls_back_columns_and_schema_version() {
 		let root = std::env::temp_dir().join(format!(
-			"serein-synthetic-union-rollback-{}",
+			"monkado-synthetic-union-rollback-{}",
 			std::process::id()
 		));
 		std::fs::create_dir_all(&root).unwrap();
@@ -2624,7 +2624,7 @@ mod tests {
 	#[test]
 	fn minimize_to_tray_is_bounded_opt_out_surviving_restart_and_logout() {
 		let root = std::env::temp_dir().join(format!(
-			"serein-synthetic-minimize-to-tray-{}",
+			"monkado-synthetic-minimize-to-tray-{}",
 			std::process::id()
 		));
 		std::fs::create_dir_all(&root).unwrap();
@@ -2700,7 +2700,7 @@ mod tests {
 	#[test]
 	fn game_activity_defaults_migrates_reopens_and_survives_logout() {
 		let root = std::env::temp_dir().join(format!(
-			"serein-synthetic-game-activity-{}",
+			"monkado-synthetic-game-activity-{}",
 			std::process::id()
 		));
 		std::fs::create_dir_all(&root).unwrap();
@@ -2775,7 +2775,7 @@ mod tests {
 	#[test]
 	fn schema_seven_reading_preferences_migrate_reopen_reset_and_survive_logout() {
 		let root = std::env::temp_dir().join(format!(
-			"serein-synthetic-reading-preferences-{}",
+			"monkado-synthetic-reading-preferences-{}",
 			std::process::id()
 		));
 		std::fs::create_dir_all(&root).unwrap();
@@ -3183,7 +3183,7 @@ mod tests {
 	#[test]
 	fn known_deletions_survive_reopen_and_preserve_other_channels_accounts_and_drafts() {
 		let root =
-			std::env::temp_dir().join(format!("serein-synthetic-deletions-{}", std::process::id()));
+			std::env::temp_dir().join(format!("monkado-synthetic-deletions-{}", std::process::id()));
 		std::fs::create_dir_all(&root).unwrap();
 		let path = root.join("test.sqlite3");
 		let mut store = LocalStore::open(&path).unwrap();
@@ -3223,7 +3223,7 @@ mod tests {
 	#[test]
 	fn schema_six_marker_migration_preserves_rows_and_rejects_invalid_bits() {
 		let root = std::env::temp_dir().join(format!(
-			"serein-synthetic-content-markers-{}",
+			"monkado-synthetic-content-markers-{}",
 			std::process::id()
 		));
 		std::fs::create_dir_all(&root).unwrap();
@@ -3369,7 +3369,7 @@ mod tests {
 	#[test]
 	fn schema_four_attachment_migration_reopen_and_limits() {
 		let root = std::env::temp_dir().join(format!(
-			"serein-synthetic-attachments-{}",
+			"monkado-synthetic-attachments-{}",
 			std::process::id()
 		));
 		std::fs::create_dir_all(&root).unwrap();
@@ -3477,7 +3477,7 @@ mod tests {
 	#[test]
 	fn account_isolation_draft_reopen_eviction_and_logout() {
 		let root =
-			std::env::temp_dir().join(format!("serein-synthetic-store-{}", std::process::id()));
+			std::env::temp_dir().join(format!("monkado-synthetic-store-{}", std::process::id()));
 		std::fs::create_dir_all(&root).unwrap();
 		let path = root.join("test.sqlite3");
 		let legacy = Connection::open(&path).unwrap();

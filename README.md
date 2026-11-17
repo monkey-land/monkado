@@ -47,7 +47,7 @@ As versões prontas ficam em [**Releases**](https://github.com/monkey-land/monka
 | Formato | Arquivo | Detalhes |
 |---|---|---|
 | **Instalador (recomendado)** | `monkado-<versão>-setup.exe` | Instala só para o seu usuário, sem pedir administrador, com atalho no Menu Iniciar |
-| **Portátil** | `monkado-<versão>-Windows-X64.zip` | Extraia em qualquer pasta e abra o `serein.exe` |
+| **Portátil** | `monkado-<versão>-Windows-X64.zip` | Extraia em qualquer pasta e abra o `monkado.exe` |
 
 #### Instalador
 1. Baixe e rode o `monkado-<versão>-setup.exe`.
@@ -59,7 +59,7 @@ As versões prontas ficam em [**Releases**](https://github.com/monkey-land/monka
 > Como o executável não é assinado, o Windows SmartScreen pode mostrar um aviso na primeira vez. Clique em **Mais informações → Executar assim mesmo**.
 
 #### Portátil
-Extraia o `.zip` onde quiser e abra o `serein.exe`. Para ativar as notificações nativas do Windows, rode na mesma pasta:
+Extraia o `.zip` onde quiser e abra o `monkado.exe`. Para ativar as notificações nativas do Windows, rode na mesma pasta:
 ```powershell
 powershell -File .\install-notifications.ps1
 ```
@@ -85,7 +85,7 @@ O Discord bloqueia vídeo vindo de clientes não oficiais. Por isso o Monkado ma
 
 **Limitações:** só funciona entre quem usa o Monkado; quem está no Discord oficial não vê. Cada pessoa assistindo recebe a própria cópia do vídeo, então com muita gente o upload de quem compartilha pesa.
 
-Para desligar o P2P, abra o app com a variável de ambiente `SEREIN_P2P=0`.
+Para desligar o P2P, abra o app com a variável de ambiente `MONKADO_P2P=0`.
 
 ---
 
@@ -223,7 +223,7 @@ cargo run --locked --features demo -- --demo
 cargo run --locked
 ```
 
-Builds de desenvolvimento guardam os dados numa pasta separada (`serein-development`), isolada da versão instalada. Use `SEREIN_DATA_DIR` com um caminho absoluto para separar mais cópias.
+Builds de desenvolvimento guardam os dados numa pasta separada (`monkado-development`), isolada da versão instalada. Use `MONKADO_DATA_DIR` com um caminho absoluto para separar mais cópias.
 
 ### Comandos úteis
 

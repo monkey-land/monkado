@@ -1,4 +1,4 @@
-//! Desktop ownership of this device's Serein P2P presence in the current call
+//! Desktop ownership of this device's Monkado P2P presence in the current call
 //! (`discord_voice::p2p`). Peers' shares and cameras appear through the ordinary call UI:
 //! the live badge, camera tiles and the stream stage. Pictures are never stored.
 use client_core::{
@@ -11,9 +11,9 @@ use model::Id;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 
-/// `SEREIN_P2P=0` turns P2P off entirely: screen share and camera go to Discord as upstream.
+/// `MONKADO_P2P=0` turns P2P off entirely: screen share and camera go to Discord as upstream.
 pub(super) fn enabled() -> bool {
-	std::env::var_os("SEREIN_P2P").is_none_or(|value| value != "0")
+	std::env::var_os("MONKADO_P2P").is_none_or(|value| value != "0")
 }
 
 /// Voice session tags kept across calls; one call needs at most its 64 participants.

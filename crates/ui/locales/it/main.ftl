@@ -221,7 +221,7 @@ account-menu-custom-status-editor-clear-after = Cancella dopo
 # Context: custom_status_editor
 account-menu-custom-status-editor-no-custom-status = Nessuno stato personalizzato
 # Context: custom_status_editor
-account-menu-custom-status-editor-serein-clears-it = Monkado lo cancella
+account-menu-custom-status-editor-monkado-clears-it = Monkado lo cancella
 # Context: custom_status_editor
 account-menu-custom-status-editor-status-text = Testo dello stato
 # Context: custom_status_editor
@@ -1648,7 +1648,7 @@ main-restoring-checking-your-saved-login = Controllo del login salvato
 # Context: restoring
 main-restoring-connecting-to-discord = Connessione a Discord
 # Context: restoring_screen
-main-restoring-screen-serein = Sereno
+main-restoring-screen-monkado = Sereno
 # Context: restoring_screen
 main-restoring-screen-use-a-different-account = Utilizza un account diverso
 # Context: restoring_screen
@@ -1658,7 +1658,7 @@ main-sign-in-accounts-saved-accounts = Account salvati
 # Context: sign_in_consent
 main-sign-in-consent-passwords-and-2fa-stay-on-discord-s-own-login-page = Le password e la 2FA rimangono sulla pagina di accesso di Discord; viene conservato solo il token della sessione, nell'archivio delle credenziali del sistema operativo.
 # Context: sign_in_disclosures
-main-sign-in-disclosures-about-serein = A proposito di Monkado
+main-sign-in-disclosures-about-monkado = A proposito di Monkado
 # Context: sign_in_disclosures
 main-sign-in-disclosures-connect-with-this-token = Connettiti con questo token
 # Context: sign_in_disclosures
@@ -1676,7 +1676,7 @@ main-sign-in-header-sign-in-with-your-discord-account-to-get-started = Accedi co
 # Context: sign_in_header
 main-sign-in-header-welcome-back = Bentornato
 # Context: sign_in_header
-main-sign-in-header-welcome-to-serein = Benvenuti a Monkado
+main-sign-in-header-welcome-to-monkado = Benvenuti a Monkado
 # Context: sign_in_preview
 main-sign-in-status-copy-failure-details = Copia i dettagli dell’errore
 main-sign-in-preview-explore-the-offline-preview = Esplora l'anteprima offline
@@ -1685,7 +1685,7 @@ main-sign-in-preview-sample-conversations-no-discord-connection = Conversazioni 
 # Context: sign_in_screen
 main-sign-in-screen-independent-and-open-source-not-affiliated-with-discord = Indipendente e open source. Non affiliato con Discord.
 # Context: sign_in_screen
-main-sign-in-screen-serein = Sereno
+main-sign-in-screen-monkado = Sereno
 # Context: ui
 main-ui-cancel = Cancellare
 # Context: ui
@@ -2284,7 +2284,7 @@ screen-body-refresh = Aggiorna
 # Context: body
 screen-body-screen-or-window = Schermo o finestra
 # Context: body
-screen-body-send-what-your-mac-plays-along-with-the-screen-serein = Invia ciò che il tuo Mac riproduce insieme allo schermo. L'audio della chiamata di Monkado viene escluso.
+screen-body-send-what-your-mac-plays-along-with-the-screen-monkado = Invia ciò che il tuo Mac riproduce insieme allo schermo. L'audio della chiamata di Monkado viene escluso.
 # Context: body
 screen-body-share-sound-from-other-apps-even-when-sharing-one-window = Condividi l'audio da altre app, anche quando condividi una finestra. L'audio di Monkado è omesso.
 # Context: body
@@ -3497,7 +3497,7 @@ settings-appearance-settings-primary-color = Colore primario
 # Context: appearance_settings
 settings-appearance-settings-reset = Reset
 # Context: appearance_settings
-settings-appearance-settings-restart-serein-after-changing-this-themes-can-customize-effects-while = Riavvia Monkado dopo averlo modificato. I temi possono personalizzare gli effetti mentre sono abilitati.
+settings-appearance-settings-restart-monkado-after-changing-this-themes-can-customize-effects-while = Riavvia Monkado dopo averlo modificato. I temi possono personalizzare gli effetti mentre sono abilitati.
 # Context: appearance_settings
 settings-appearance-settings-the-active-theme-brings-its-own-accent-it-takes-over = Il tema attivo porta il proprio accento; prende il sopravvento mentre il tema è in uso.
 # Context: appearance_settings
@@ -3538,7 +3538,7 @@ settings-storage-page-messages-and-drafts-are-cached-on-this-device-inside-bound
 # Context: storage_page
 settings-storage-page-removes-cached-messages-and-media-drafts-and-your-login-stay = Rimuove i messaggi e i contenuti multimediali memorizzati nella cache. Le bozze e il tuo login rimangono.
 # Context: storage_page
-settings-storage-page-serein-does-not-collect-telemetry-or-upload-diagnostics-discord-retains = Monkado non raccoglie dati di telemetria né carica dati diagnostici. Discord conserva i dati sul lato servizio secondo le proprie politiche.
+settings-storage-page-monkado-does-not-collect-telemetry-or-upload-diagnostics-discord-retains = Monkado non raccoglie dati di telemetria né carica dati diagnostici. Discord conserva i dati sul lato servizio secondo le proprie politiche.
 # Context: storage_page
 settings-storage-page-your-privacy = La tua privacy
 # Context: cosmetic_settings
@@ -4023,7 +4023,7 @@ updates-update-settings-release-channel = Canale di rilascio
 # Context: update_settings
 updates-update-settings-restart-to-update = Riavvia per aggiornare
 # Context: update_settings
-updates-update-settings-serein-was-installed-via-your-distribution-run-this-in-a = Monkado è stato installato tramite la tua distribuzione. Eseguilo in un terminale per aggiornare.
+updates-update-settings-monkado-was-installed-via-your-distribution-run-this-in-a = Monkado è stato installato tramite la tua distribuzione. Eseguilo in un terminale per aggiornare.
 # Context: update_settings
 updates-update-settings-save-diagnostics = Salva diagnostica
 # Context: update_settings

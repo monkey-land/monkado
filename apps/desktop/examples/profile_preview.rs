@@ -597,42 +597,42 @@ fn extension_fixture(
 	),
 	Box<dyn std::error::Error>,
 > {
-	let external = std::env::var_os("SEREIN_PREVIEW_PACKAGE")
+	let external = std::env::var_os("MONKADO_PREVIEW_PACKAGE")
 		.map(std::fs::read)
 		.transpose()?;
 	let bytes: &[u8] = match id {
 		"custom-rpc" | "api-proxy" => external
 			.as_deref()
-			.ok_or("Set SEREIN_PREVIEW_PACKAGE to the external plugin package")?,
-		"serein-ocean" => {
-			include_bytes!("../../../extensions/themes/ocean.serein-extension")
+			.ok_or("Set MONKADO_PREVIEW_PACKAGE to the external plugin package")?,
+		"monkado-ocean" => {
+			include_bytes!("../../../extensions/themes/ocean.monkado-extension")
 		}
 		"message-delete-protector" => include_bytes!(
-			"../../../extensions/plugins/packages/message-delete-protector.serein-extension"
+			"../../../extensions/plugins/packages/message-delete-protector.monkado-extension"
 		),
-		"serein-midnight" => {
-			include_bytes!("../../../extensions/themes/midnight.serein-extension")
+		"monkado-midnight" => {
+			include_bytes!("../../../extensions/themes/midnight.monkado-extension")
 		}
-		"serein-rose" => {
-			include_bytes!("../../../extensions/themes/rose.serein-extension")
+		"monkado-rose" => {
+			include_bytes!("../../../extensions/themes/rose.monkado-extension")
 		}
-		"serein-forest" => {
-			include_bytes!("../../../extensions/themes/forest.serein-extension")
+		"monkado-forest" => {
+			include_bytes!("../../../extensions/themes/forest.monkado-extension")
 		}
-		"serein-latte" => {
-			include_bytes!("../../../extensions/themes/latte.serein-extension")
+		"monkado-latte" => {
+			include_bytes!("../../../extensions/themes/latte.monkado-extension")
 		}
 		"golden-theme" => {
-			include_bytes!("../../../extensions/themes/golden.serein-extension")
+			include_bytes!("../../../extensions/themes/golden.monkado-extension")
 		}
 		"black-theme" => {
-			include_bytes!("../../../extensions/themes/katana.serein-extension")
+			include_bytes!("../../../extensions/themes/katana.monkado-extension")
 		}
 		"obsidian-theme" => {
-			include_bytes!("../../../extensions/themes/obsidian.serein-extension")
+			include_bytes!("../../../extensions/themes/obsidian.monkado-extension")
 		}
 		"teal-theme" => {
-			include_bytes!("../../../extensions/themes/teal.serein-extension")
+			include_bytes!("../../../extensions/themes/teal.monkado-extension")
 		}
 		_ => return Err("Unknown fixture extension".into()),
 	};
@@ -677,27 +677,27 @@ fn seed_catalog(extensions: &mut ui::ExtensionUi, themes: bool) {
 	if themes {
 		let packages: [(&[u8], &str); 6] = [
 			(
-				include_bytes!("../../../extensions/themes/ocean.serein-extension"),
+				include_bytes!("../../../extensions/themes/ocean.monkado-extension"),
 				"",
 			),
 			(
-				include_bytes!("../../../extensions/themes/obsidian.serein-extension"),
+				include_bytes!("../../../extensions/themes/obsidian.monkado-extension"),
 				"Obsidian violet surfaces and lavender accents.",
 			),
 			(
-				include_bytes!("../../../extensions/themes/forest.serein-extension"),
+				include_bytes!("../../../extensions/themes/forest.monkado-extension"),
 				"Calm forest greens and fresh leafy accents.",
 			),
 			(
-				include_bytes!("../../../extensions/themes/latte.serein-extension"),
+				include_bytes!("../../../extensions/themes/latte.monkado-extension"),
 				"Warm coffee tones and a creamy caramel accent.",
 			),
 			(
-				include_bytes!("../../../extensions/themes/rose.serein-extension"),
+				include_bytes!("../../../extensions/themes/rose.monkado-extension"),
 				"Soft rose accents.",
 			),
 			(
-				include_bytes!("../../../extensions/themes/midnight.serein-extension"),
+				include_bytes!("../../../extensions/themes/midnight.monkado-extension"),
 				"Deep, quiet surfaces.",
 			),
 		];
@@ -762,7 +762,7 @@ fn seed_catalog(extensions: &mut ui::ExtensionUi, themes: bool) {
 	);
 	let previews = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extensions/previews");
 	{
-		let (id, filename) = ("serein-ocean", "ocean.png");
+		let (id, filename) = ("monkado-ocean", "ocean.png");
 		let image = image::open(previews.join(filename))
 			.expect("valid fixture preview")
 			.to_rgba8();
@@ -929,7 +929,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let saved = Arc::new(AtomicBool::new(false));
 	let completed = saved.clone();
 	eframe::run_native(
-		"Serein · offline profile preview",
+		"Monkado · offline profile preview",
 		eframe::NativeOptions {
 			viewport: egui::ViewportBuilder::default()
 				.with_inner_size([width, height])
@@ -1443,7 +1443,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 					if theme_preview {
 						prime_extension_chat(&mut state);
 						let package = extensions::parse_package(include_bytes!(
-							"../../../extensions/themes/katana.serein-extension"
+							"../../../extensions/themes/katana.monkado-extension"
 						))?;
 						messaging.extensions.receive_theme_edit(
 							Box::new(package),
@@ -1455,7 +1455,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 					}
 					if let Some(tab) = &theme_editor {
 						let mut package = extensions::parse_package(include_bytes!(
-							"../../../extensions/themes/ocean.serein-extension"
+							"../../../extensions/themes/ocean.monkado-extension"
 						))
 						.expect("valid theme fixture");
 						package.manifest.name = "My ocean".into();

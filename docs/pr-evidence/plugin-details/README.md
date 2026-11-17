@@ -1,6 +1,6 @@
 # Plugin details and native settings — synthetic native evidence
 
-Both captures use `target/debug/serein --demo --demo-settings=extensions`, C.UTF-8 locale and
+Both captures use `target/debug/monkado --demo --demo-settings=extensions`, C.UTF-8 locale and
 1120×760 crops from separate isolated Xvfb displays with separate synthetic HOME directories.
 `before.png` was captured from main; `after.png` was captured after clicking the visible **Details**
 button for API Proxy with an X11 input event. No account data, proxy address, credential or third-party

@@ -1,5 +1,5 @@
-; Serein Windows Installer Script (NSIS Modern UI 2)
-; Installs per-user to $LOCALAPPDATA\Programs\Serein without elevation
+; Monkado Windows Installer Script (NSIS Modern UI 2)
+; Installs per-user to $LOCALAPPDATA\Programs\Monkado without elevation
 ; Preserves write permissions for seamless in-app autoupdates
 
 Unicode True
@@ -14,10 +14,10 @@ SetCompressor /SOLID lzma
 !include "Win\Propkey.nsh"
 
 !define PRODUCT_NAME "Monkado"
-!define PRODUCT_PUBLISHER "Monkado (based on Serein)"
+!define PRODUCT_PUBLISHER "Monkado (based on Monkado)"
 !define PRODUCT_WEB_SITE "https://github.com/monkey-land/monkado"
-!define APP_EXE "serein.exe"
-!define APP_ID "cz.viceverse.serein"
+!define APP_EXE "monkado.exe"
+!define APP_ID "land.monkey.monkado"
 
 !ifndef VERSION
   !define VERSION "0.1.0"
@@ -44,18 +44,18 @@ OutFile "${OUTPUT_DIR}\monkado-${VERSION}-setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\Monkado"
 InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" "InstallLocation"
 
-!if /FileExists "packaging\windows\Serein.ico"
-  !define MUI_ICON "packaging\windows\Serein.ico"
-  !define MUI_UNICON "packaging\windows\Serein.ico"
-!else if /FileExists "${__FILEDIR__}\Serein.ico"
-  !define MUI_ICON "${__FILEDIR__}\Serein.ico"
-  !define MUI_UNICON "${__FILEDIR__}\Serein.ico"
-!else if /FileExists "Serein.ico"
-  !define MUI_ICON "Serein.ico"
-  !define MUI_UNICON "Serein.ico"
+!if /FileExists "packaging\windows\Monkado.ico"
+  !define MUI_ICON "packaging\windows\Monkado.ico"
+  !define MUI_UNICON "packaging\windows\Monkado.ico"
+!else if /FileExists "${__FILEDIR__}\Monkado.ico"
+  !define MUI_ICON "${__FILEDIR__}\Monkado.ico"
+  !define MUI_UNICON "${__FILEDIR__}\Monkado.ico"
+!else if /FileExists "Monkado.ico"
+  !define MUI_ICON "Monkado.ico"
+  !define MUI_UNICON "Monkado.ico"
 !else
-  !define MUI_ICON "${__FILEDIR__}\Serein.ico"
-  !define MUI_UNICON "${__FILEDIR__}\Serein.ico"
+  !define MUI_ICON "${__FILEDIR__}\Monkado.ico"
+  !define MUI_UNICON "${__FILEDIR__}\Monkado.ico"
 !endif
 
 !define MUI_ABORTWARNING
@@ -83,8 +83,8 @@ InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRO
 !endif
 
 ; Returns 0 when absent, 1 when running, 2 when the snapshot cannot be checked.
-!macro SereinProcessCheck PREFIX
-Function ${PREFIX}CheckSereinRunning
+!macro MonkadoProcessCheck PREFIX
+Function ${PREFIX}CheckMonkadoRunning
   System::Store "s"
   StrCpy $R0 2
   System::Call 'kernel32::CreateToolhelp32Snapshot(i 2, i 0) p .r0'
@@ -117,8 +117,8 @@ Function ${PREFIX}CheckSereinRunning
   System::Store "l"
 FunctionEnd
 !macroend
-!insertmacro SereinProcessCheck ""
-!insertmacro SereinProcessCheck "un."
+!insertmacro MonkadoProcessCheck ""
+!insertmacro MonkadoProcessCheck "un."
 
 Function RegisterNotificationShortcut
   System::Store "s"
@@ -161,7 +161,7 @@ Function .onInit
   ${EndIf}
 
   ${Do}
-    Call CheckSereinRunning
+    Call CheckMonkadoRunning
     Pop $0
     ${If} $0 == 2
       MessageBox MB_OK|MB_ICONSTOP "Cannot check whether ${PRODUCT_NAME} is running. Setup cannot continue safely." /SD IDOK
@@ -233,7 +233,7 @@ Function un.onInit
   ${EndIf}
 
   ${Do}
-    Call un.CheckSereinRunning
+    Call un.CheckMonkadoRunning
     Pop $0
     ${If} $0 == 2
       MessageBox MB_OK|MB_ICONSTOP "Cannot check whether ${PRODUCT_NAME} is running. Uninstall cannot continue safely." /SD IDOK

@@ -364,7 +364,7 @@ struct Rejoin {
 
 #[derive(Default)]
 pub struct Voice {
-	/// Serein P2P camera track; when set, the camera publishes there instead of to Discord.
+	/// Monkado P2P camera track; when set, the camera publishes there instead of to Discord.
 	p2p_camera: Option<discord_voice::p2p::Track>,
 	camera_test: Option<CameraTest>,
 	mic_preview: Option<MicPreview>,
@@ -1486,7 +1486,7 @@ impl Voice {
 		self.watch
 			.poll(runtime, state, ui, ctx, watched, stream_audio)
 	}
-	/// Routes the share dialog and the camera to Serein P2P tracks instead of Discord.
+	/// Routes the share dialog and the camera to Monkado P2P tracks instead of Discord.
 	pub fn use_p2p(
 		&mut self,
 		screen: &discord_voice::p2p::Track,

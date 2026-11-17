@@ -222,7 +222,7 @@ account-menu-custom-status-editor-clear-after = Очистить после
 # Context: custom_status_editor
 account-menu-custom-status-editor-no-custom-status = Нет индивидуального статуса
 # Context: custom_status_editor
-account-menu-custom-status-editor-serein-clears-it = Серейн очищает это
+account-menu-custom-status-editor-monkado-clears-it = Серейн очищает это
 # Context: custom_status_editor
 account-menu-custom-status-editor-status-text = Текст статуса
 # Context: custom_status_editor
@@ -1649,7 +1649,7 @@ main-restoring-checking-your-saved-login = Проверка сохраненно
 # Context: restoring
 main-restoring-connecting-to-discord = Подключение к Дискорду
 # Context: restoring_screen
-main-restoring-screen-serein = Серейн
+main-restoring-screen-monkado = Серейн
 # Context: restoring_screen
 main-restoring-screen-use-a-different-account = Использовать другую учетную запись
 # Context: restoring_screen
@@ -1659,7 +1659,7 @@ main-sign-in-accounts-saved-accounts = Сохраненные аккаунты
 # Context: sign_in_consent
 main-sign-in-consent-passwords-and-2fa-stay-on-discord-s-own-login-page = Пароли и 2FA остаются на собственной странице входа в Discord; в хранилище учетных данных вашей ОС сохраняется только токен сеанса.
 # Context: sign_in_disclosures
-main-sign-in-disclosures-about-serein = О Серейн
+main-sign-in-disclosures-about-monkado = О Серейн
 # Context: sign_in_disclosures
 main-sign-in-disclosures-connect-with-this-token = Подключиться с помощью этого токена
 # Context: sign_in_disclosures
@@ -1677,7 +1677,7 @@ main-sign-in-header-sign-in-with-your-discord-account-to-get-started = Войд�
 # Context: sign_in_header
 main-sign-in-header-welcome-back = Добро пожаловать
 # Context: sign_in_header
-main-sign-in-header-welcome-to-serein = Добро пожаловать в Серейн
+main-sign-in-header-welcome-to-monkado = Добро пожаловать в Серейн
 # Context: sign_in_preview
 main-sign-in-status-copy-failure-details = Копировать сведения об ошибке
 main-sign-in-preview-explore-the-offline-preview = Ознакомьтесь с предварительной версией в автономном режиме
@@ -1686,7 +1686,7 @@ main-sign-in-preview-sample-conversations-no-discord-connection = Примеры
 # Context: sign_in_screen
 main-sign-in-screen-independent-and-open-source-not-affiliated-with-discord = Независимый и открытый исходный код. Не связан с Discord.
 # Context: sign_in_screen
-main-sign-in-screen-serein = Серейн
+main-sign-in-screen-monkado = Серейн
 # Context: ui
 main-ui-cancel = Отмена
 # Context: ui
@@ -2285,7 +2285,7 @@ screen-body-refresh = Обновить
 # Context: body
 screen-body-screen-or-window = Экран или окно
 # Context: body
-screen-body-send-what-your-mac-plays-along-with-the-screen-serein = Отправьте то, что ваш Mac воспроизводит вместе с экраном. Звук звонка Серейн не учитывается.
+screen-body-send-what-your-mac-plays-along-with-the-screen-monkado = Отправьте то, что ваш Mac воспроизводит вместе с экраном. Звук звонка Серейн не учитывается.
 # Context: body
 screen-body-share-sound-from-other-apps-even-when-sharing-one-window = Делитесь звуком из других приложений, даже если вы делитесь одним окном. Собственный звук Серейн не учитывается.
 # Context: body
@@ -3498,7 +3498,7 @@ settings-appearance-settings-primary-color = Основной цвет
 # Context: appearance_settings
 settings-appearance-settings-reset = Сбросить
 # Context: appearance_settings
-settings-appearance-settings-restart-serein-after-changing-this-themes-can-customize-effects-while = Перезапустите Sein после изменения. Когда темы включены, можно настраивать эффекты.
+settings-appearance-settings-restart-monkado-after-changing-this-themes-can-customize-effects-while = Перезапустите Sein после изменения. Когда темы включены, можно настраивать эффекты.
 # Context: appearance_settings
 settings-appearance-settings-the-active-theme-brings-its-own-accent-it-takes-over = Активная тема вносит свой акцент; он вступает во владение, пока используется тема.
 # Context: appearance_settings
@@ -3539,7 +3539,7 @@ settings-storage-page-messages-and-drafts-are-cached-on-this-device-inside-bound
 # Context: storage_page
 settings-storage-page-removes-cached-messages-and-media-drafts-and-your-login-stay = Удаляет кэшированные сообщения и медиа. Черновики и ваш логин остаются.
 # Context: storage_page
-settings-storage-page-serein-does-not-collect-telemetry-or-upload-diagnostics-discord-retains = Monkado не собирает телеметрию и не загружает диагностические данные. Discord сохраняет данные на стороне сервиса в соответствии со своей собственной политикой.
+settings-storage-page-monkado-does-not-collect-telemetry-or-upload-diagnostics-discord-retains = Monkado не собирает телеметрию и не загружает диагностические данные. Discord сохраняет данные на стороне сервиса в соответствии со своей собственной политикой.
 # Context: storage_page
 settings-storage-page-your-privacy = Ваша конфиденциальность
 # Context: cosmetic_settings
@@ -4027,7 +4027,7 @@ updates-update-settings-release-channel = Ветка релизов
 # Context: update_settings
 updates-update-settings-restart-to-update = Перезапустите, чтобы обновить
 # Context: update_settings
-updates-update-settings-serein-was-installed-via-your-distribution-run-this-in-a = Monkado был установлен через пакетный менеджер. Используйте эту команду для обновления.
+updates-update-settings-monkado-was-installed-via-your-distribution-run-this-in-a = Monkado был установлен через пакетный менеджер. Используйте эту команду для обновления.
 # Context: update_settings
 updates-update-settings-save-diagnostics = Сохранить диагностику
 # Context: update_settings

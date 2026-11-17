@@ -1,6 +1,6 @@
-//! Serein-to-Serein screen share and camera over P2P, outside Discord's media servers.
+//! Monkado-to-Monkado screen share and camera over P2P, outside Discord's media servers.
 //!
-//! Unofficial. Discord refuses camera and Go Live video from unofficial clients, so Serein
+//! Unofficial. Discord refuses camera and Go Live video from unofficial clients, so Monkado
 //! clients in the same call form a small mesh of iroh QUIC connections: direct after NAT hole
 //! punching, otherwise through n0's public relay, end-to-end encrypted by QUIC TLS either way.
 //!
@@ -38,7 +38,7 @@ use tokio::{
 	task::{JoinHandle, JoinSet},
 };
 
-const ALPN: &[u8] = b"serein/p2p/1";
+const ALPN: &[u8] = b"monkado/p2p/1";
 
 /// Opt-in log line with fixed text and counts only; no IDs or addresses.
 fn count(value: usize) -> diagnostics::Value {
@@ -62,7 +62,7 @@ const MAX_PEERS: usize = 64;
 /// Endpoint key of `user` in `channel`, from the SHA-256 of their voice session ID.
 pub fn secret_key(channel: u64, user: u64, tag: &[u8; 32]) -> SecretKey {
 	let digest = Sha256::new()
-		.chain_update(b"serein-p2p/1")
+		.chain_update(b"monkado-p2p/1")
 		.chain_update(channel.to_le_bytes())
 		.chain_update(user.to_le_bytes())
 		.chain_update(tag)

@@ -12,7 +12,7 @@ relationship write or Discord request was used.
   dependent ignored-author option.
 
 The captures were taken while this work was based on the fork's `main`. It has since been rebased
-onto `ViceVerse-cz/Serein:main` at `29a390ce`, and the surrounding Chat settings page has not
+onto `ViceVerse-cz/Monkado:main` at `29a390ce`, and the surrounding Chat settings page has not
 changed in that range, so the images still show the same controls and layout; they were not
 re-captured after the rebase.
 
@@ -30,4 +30,4 @@ identity are untouched. The behavior is an original native adaptation of Equicor
 
 The pre-rebase implementation passed `cargo xtask check` with **1,659 passed, 0 failed, 14
 ignored**. The rebased branch passed `cargo check` for the affected crates and the focused
-`local-store`, `serein` and `ui` tests.
+`local-store`, `monkado` and `ui` tests.

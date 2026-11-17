@@ -224,7 +224,7 @@ account-menu-custom-status-editor-clear-after = Po vymazání
 # Context: custom_status_editor
 account-menu-custom-status-editor-no-custom-status = Žádný vlastní stav
 # Context: custom_status_editor
-account-menu-custom-status-editor-serein-clears-it = Monkado jej vymaže
+account-menu-custom-status-editor-monkado-clears-it = Monkado jej vymaže
 # Context: custom_status_editor
 account-menu-custom-status-editor-status-text = Stavový text
 # Context: custom_status_editor
@@ -1676,7 +1676,7 @@ main-restoring-checking-your-saved-login = Kontrola uložených přihlašovacíc
 # Context: restoring
 main-restoring-connecting-to-discord = Připojování k Discordu
 # Context: restoring_screen
-main-restoring-screen-serein = Monkado
+main-restoring-screen-monkado = Monkado
 # Context: restoring_screen
 main-restoring-screen-use-a-different-account = Použijte jiný účet
 # Context: restoring_screen
@@ -1686,7 +1686,7 @@ main-sign-in-accounts-saved-accounts = Uložené účty
 # Context: sign_in_consent
 main-sign-in-consent-passwords-and-2fa-stay-on-discord-s-own-login-page = Hesla a 2FA zůstávají na vlastní přihlašovací stránce Discordu; ve vašem úložišti pověření OS je zachován pouze token relace.
 # Context: sign_in_disclosures
-main-sign-in-disclosures-about-serein = O Monkado
+main-sign-in-disclosures-about-monkado = O Monkado
 # Context: sign_in_disclosures
 main-sign-in-disclosures-connect-with-this-token = Spojte se s tímto tokenem
 # Context: sign_in_disclosures
@@ -1704,7 +1704,7 @@ main-sign-in-header-sign-in-with-your-discord-account-to-get-started = Chcete-li
 # Context: sign_in_header
 main-sign-in-header-welcome-back = Vítejte zpět
 # Context: sign_in_header
-main-sign-in-header-welcome-to-serein = Vítejte v destinaci Monkado
+main-sign-in-header-welcome-to-monkado = Vítejte v destinaci Monkado
 # Context: sign_in_preview
 main-sign-in-status-copy-failure-details = Kopírovat podrobnosti o chybě
 main-sign-in-preview-explore-the-offline-preview = Prozkoumejte offline náhled
@@ -1713,7 +1713,7 @@ main-sign-in-preview-sample-conversations-no-discord-connection = Ukázkové roz
 # Context: sign_in_screen
 main-sign-in-screen-independent-and-open-source-not-affiliated-with-discord = Nezávislý a otevřený zdroj. Není spojen s Discordem.
 # Context: sign_in_screen
-main-sign-in-screen-serein = Monkado
+main-sign-in-screen-monkado = Monkado
 # Context: ui
 main-ui-cancel = Zrušit
 # Context: ui
@@ -2312,7 +2312,7 @@ screen-body-refresh = Obnovit
 # Context: body
 screen-body-screen-or-window = Obrazovka nebo okno
 # Context: body
-screen-body-send-what-your-mac-plays-along-with-the-screen-serein = Odesílejte, co váš Mac hraje, spolu s obrazovkou. Monkado vlastní zvuk hovoru je vynechán.
+screen-body-send-what-your-mac-plays-along-with-the-screen-monkado = Odesílejte, co váš Mac hraje, spolu s obrazovkou. Monkado vlastní zvuk hovoru je vynechán.
 # Context: body
 screen-body-share-sound-from-other-apps-even-when-sharing-one-window = Sdílejte zvuk z jiných aplikací, i když sdílíte jedno okno. Monkado vlastní zvuk je vynechán.
 # Context: body
@@ -3527,7 +3527,7 @@ settings-appearance-settings-primary-color = Základní barva
 # Context: appearance_settings
 settings-appearance-settings-reset = Resetovat
 # Context: appearance_settings
-settings-appearance-settings-restart-serein-after-changing-this-themes-can-customize-effects-while = Po změně restartujte Monkado. Motivy mohou upravovat efekty, když jsou povoleny.
+settings-appearance-settings-restart-monkado-after-changing-this-themes-can-customize-effects-while = Po změně restartujte Monkado. Motivy mohou upravovat efekty, když jsou povoleny.
 # Context: appearance_settings
 settings-appearance-settings-the-active-theme-brings-its-own-accent-it-takes-over = Aktivní téma přináší svůj vlastní akcent; přebírá to, když se téma používá.
 # Context: appearance_settings
@@ -3568,7 +3568,7 @@ settings-storage-page-messages-and-drafts-are-cached-on-this-device-inside-bound
 # Context: storage_page
 settings-storage-page-removes-cached-messages-and-media-drafts-and-your-login-stay = Odstraní zprávy a média z mezipaměti. Koncepty a vaše přihlášení zůstávají.
 # Context: storage_page
-settings-storage-page-serein-does-not-collect-telemetry-or-upload-diagnostics-discord-retains = Monkado neshromažďuje telemetrii ani nenahrává diagnostiku. Discord uchovává data na straně služeb podle svých vlastních zásad.
+settings-storage-page-monkado-does-not-collect-telemetry-or-upload-diagnostics-discord-retains = Monkado neshromažďuje telemetrii ani nenahrává diagnostiku. Discord uchovává data na straně služeb podle svých vlastních zásad.
 # Context: storage_page
 settings-storage-page-your-privacy = Vaše soukromí
 # Context: cosmetic_settings
@@ -4055,7 +4055,7 @@ updates-update-settings-release-channel = Uvolněte kanál
 # Context: update_settings
 updates-update-settings-restart-to-update = Pro aktualizaci restartujte
 # Context: update_settings
-updates-update-settings-serein-was-installed-via-your-distribution-run-this-in-a = Monkado byl nainstalován prostřednictvím vaší distribuce. Spusťte to v terminálu pro aktualizaci.
+updates-update-settings-monkado-was-installed-via-your-distribution-run-this-in-a = Monkado byl nainstalován prostřednictvím vaší distribuce. Spusťte to v terminálu pro aktualizaci.
 # Context: update_settings
 updates-update-settings-save-diagnostics = Uložit diagnostiku
 # Context: update_settings

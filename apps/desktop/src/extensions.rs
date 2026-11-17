@@ -120,53 +120,53 @@ pub(crate) fn starters() -> Result<Vec<Starter>, String> {
 		#[cfg(any(test, feature = "demo"))]
 		(
 			include_bytes!(
-				"../../../extensions/plugins/packages/message-delete-protector.serein-extension"
+				"../../../extensions/plugins/packages/message-delete-protector.monkado-extension"
 			),
 			"Keep messages already seen in this session visible in red after deletion. Cleared when disabled or signed out.",
 		),
 		#[cfg(any(test, feature = "demo"))]
 		(
-			include_bytes!("../../../extensions/themes/ocean.serein-extension"),
+			include_bytes!("../../../extensions/themes/ocean.monkado-extension"),
 			"Deep blue surfaces with a bright ocean accent.",
 		),
 		#[cfg(any(test, feature = "demo"))]
 		(
-			include_bytes!("../../../extensions/themes/midnight.serein-extension"),
+			include_bytes!("../../../extensions/themes/midnight.monkado-extension"),
 			"Inky midnight surfaces with a vivid violet accent.",
 		),
 		#[cfg(any(test, feature = "demo"))]
 		(
-			include_bytes!("../../../extensions/themes/rose.serein-extension"),
+			include_bytes!("../../../extensions/themes/rose.monkado-extension"),
 			"Soft rose surfaces with a warm pink accent.",
 		),
 		#[cfg(any(test, feature = "demo"))]
 		(
-			include_bytes!("../../../extensions/themes/forest.serein-extension"),
+			include_bytes!("../../../extensions/themes/forest.monkado-extension"),
 			"Calm forest greens and fresh leafy accents.",
 		),
 		#[cfg(any(test, feature = "demo"))]
 		(
-			include_bytes!("../../../extensions/themes/latte.serein-extension"),
+			include_bytes!("../../../extensions/themes/latte.monkado-extension"),
 			"Warm coffee tones and a creamy caramel accent.",
 		),
 		#[cfg(any(test, feature = "demo"))]
 		(
-			include_bytes!("../../../extensions/themes/golden.serein-extension"),
+			include_bytes!("../../../extensions/themes/golden.monkado-extension"),
 			"Warm charcoal and gold, with rounded, roomy controls.",
 		),
 		#[cfg(any(test, feature = "demo"))]
 		(
-			include_bytes!("../../../extensions/themes/katana.serein-extension"),
+			include_bytes!("../../../extensions/themes/katana.monkado-extension"),
 			"Katana's dark charcoal surfaces and sharp red accents. Light mode uses built-in colors.",
 		),
 		#[cfg(any(test, feature = "demo"))]
 		(
-			include_bytes!("../../../extensions/themes/obsidian.serein-extension"),
+			include_bytes!("../../../extensions/themes/obsidian.monkado-extension"),
 			"Obsidian violet surfaces and lavender accents in light and dark.",
 		),
 		#[cfg(any(test, feature = "demo"))]
 		(
-			include_bytes!("../../../extensions/themes/teal.serein-extension"),
+			include_bytes!("../../../extensions/themes/teal.monkado-extension"),
 			"Cool blue-green surfaces with fresh teal accents.",
 		),
 	];
@@ -256,7 +256,7 @@ pub fn demo_check_examples() -> Result<bool, String> {
 			return Err("Theme starter must only supply a valid palette".into());
 		}
 	}
-	let root = std::env::temp_dir().join(format!("serein-theme-check-{}", std::process::id()));
+	let root = std::env::temp_dir().join(format!("monkado-theme-check-{}", std::process::id()));
 	fs::create_dir(&root).map_err(|_| "Cannot create isolated theme check directory")?;
 	let result = (|| {
 		for starter in self::starters()?
@@ -453,7 +453,7 @@ impl ExtensionHost {
 		let context = self.context.clone();
 		self.active = Some((token, receiver));
 		if std::thread::Builder::new()
-			.name("serein-extension".into())
+			.name("monkado-extension".into())
 			.spawn(move || {
 				let result = run(&root, job, &gate);
 				let _ = sender.send(result);
@@ -1727,7 +1727,7 @@ mod tests {
 			let mut nonce = [0; 16];
 			getrandom::fill(&mut nonce).unwrap();
 			let path =
-				std::env::temp_dir().join(format!("serein-extension-test-{}", digest(&nonce)));
+				std::env::temp_dir().join(format!("monkado-extension-test-{}", digest(&nonce)));
 			fs::create_dir(&path).unwrap();
 			Self(path)
 		}
@@ -1798,7 +1798,7 @@ mod tests {
 		let profile = Profile::new();
 		let root = profile.0.join("extensions");
 		let mut package = extensions::parse_package(include_bytes!(
-			"../../../examples/extensions/packages/message-counter.serein-extension"
+			"../../../examples/extensions/packages/message-counter.monkado-extension"
 		))
 		.unwrap();
 		assert!(manifest_scope(&root, &package.manifest, None).is_err());
@@ -1900,7 +1900,7 @@ mod tests {
 		}
 		assert!(!root.exists(), "preview must not install a theme");
 		let original = extensions::parse_package(include_bytes!(
-			"../../../extensions/themes/ocean.serein-extension"
+			"../../../extensions/themes/ocean.monkado-extension"
 		))
 		.unwrap();
 		let directory = root.join("themes").join(&original.manifest.id);
@@ -1946,7 +1946,7 @@ mod tests {
 		let profile = Profile::new();
 		let root = profile.0.join("extensions");
 		let package = extensions::parse_package(include_bytes!(
-			"../../../examples/extensions/packages/message-counter.serein-extension"
+			"../../../examples/extensions/packages/message-counter.monkado-extension"
 		))
 		.unwrap();
 		enable(

@@ -64,7 +64,7 @@ impl Status {
 			Self::Unavailable => {
 				#[cfg(target_os = "macos")]
 				{
-					"System notifications unavailable. Run the packaged Serein.app and check System Settings > Notifications."
+					"System notifications unavailable. Run the packaged Monkado.app and check System Settings > Notifications."
 				}
 				#[cfg(target_os = "windows")]
 				{
@@ -146,7 +146,7 @@ impl Notifications {
 			let restore = Arc::clone(&self.restore);
 			let activated = self.activation_send.clone();
 			if std::thread::Builder::new()
-				.name("serein-notifications".into())
+				.name("monkado-notifications".into())
 				.spawn(move || worker(receive, current, status, wake, restore, activated))
 				.is_err()
 			{
@@ -410,7 +410,7 @@ fn authorize() -> Status {
 	{
 		use windows::{UI::Notifications::ToastNotificationManager, core::HSTRING};
 		let notifier = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(
-			"cz.viceverse.serein",
+			"land.monkey.monkado",
 		));
 		match notifier {
 			Ok(notifier) => windows_setting_status(notifier.Setting(), windows_shortcut_exists()),
@@ -518,7 +518,7 @@ fn show(alert: &Alert, activation: Activation) -> Result<NotificationHandle, ()>
 	#[cfg(target_os = "windows")]
 	{
 		use tauri_winrt_notification::{IconCrop, Toast};
-		let mut toast = Toast::new("cz.viceverse.serein")
+		let mut toast = Toast::new("land.monkey.monkado")
 			.title(&alert.title)
 			.text1(&alert.body)
 			.on_activated(move |_| {
@@ -570,7 +570,7 @@ fn close(outstanding: &mut Option<NotificationHandle>) {
 	if outstanding.take().is_some() {
 		use windows::{UI::Notifications::ToastNotificationManager, core::HSTRING};
 		let _ = ToastNotificationManager::History()
-			.and_then(|history| history.ClearWithId(&HSTRING::from("cz.viceverse.serein")));
+			.and_then(|history| history.ClearWithId(&HSTRING::from("land.monkey.monkado")));
 	}
 }
 

@@ -27,12 +27,12 @@
     {
       "manifest": {
         "api_version": 1,
-        "id": "serein-forest",
+        "id": "monkado-forest",
         "name": "Forest",
         "version": "1.0.0",
-        "author": "Serein contributors",
+        "author": "Monkado contributors",
         "license": "MIT OR Apache-2.0",
-        "source": "https://github.com/ViceVerse-cz/Serein",
+        "source": "https://github.com/monkey-land/monkado",
         "kind": "theme"
       },
       "release_url": "https://raw.githubusercontent.com/ViceVerse-cz/Serein/3abae434ebd9545fdbed044613653f917a27c19f/extensions/themes/forest.serein-extension",
@@ -53,7 +53,7 @@
         "version": "1.0.0",
         "author": "a1.lol",
         "license": "MIT",
-        "source": "https://github.com/ViceVerse-cz/Serein",
+        "source": "https://github.com/monkey-land/monkado",
         "kind": "theme"
       },
       "release_url": "https://raw.githubusercontent.com/ViceVerse-cz/Serein/3abae434ebd9545fdbed044613653f917a27c19f/extensions/themes/golden.serein-extension",
@@ -74,7 +74,7 @@
         "version": "1.1.0",
         "author": "a1.lol",
         "license": "MIT",
-        "source": "https://github.com/ViceVerse-cz/Serein",
+        "source": "https://github.com/monkey-land/monkado",
         "kind": "theme"
       },
       "release_url": "https://raw.githubusercontent.com/ViceVerse-cz/Serein/3abae434ebd9545fdbed044613653f917a27c19f/extensions/themes/katana.serein-extension",
@@ -90,12 +90,12 @@
     {
       "manifest": {
         "api_version": 1,
-        "id": "serein-latte",
+        "id": "monkado-latte",
         "name": "Latte",
         "version": "1.0.0",
-        "author": "Serein contributors",
+        "author": "Monkado contributors",
         "license": "MIT OR Apache-2.0",
-        "source": "https://github.com/ViceVerse-cz/Serein",
+        "source": "https://github.com/monkey-land/monkado",
         "kind": "theme"
       },
       "release_url": "https://raw.githubusercontent.com/ViceVerse-cz/Serein/3abae434ebd9545fdbed044613653f917a27c19f/extensions/themes/latte.serein-extension",
@@ -111,12 +111,12 @@
     {
       "manifest": {
         "api_version": 1,
-        "id": "serein-midnight",
+        "id": "monkado-midnight",
         "name": "Midnight",
         "version": "1.0.0",
-        "author": "Serein contributors",
+        "author": "Monkado contributors",
         "license": "MIT OR Apache-2.0",
-        "source": "https://github.com/ViceVerse-cz/Serein",
+        "source": "https://github.com/monkey-land/monkado",
         "kind": "theme"
       },
       "release_url": "https://raw.githubusercontent.com/ViceVerse-cz/Serein/3abae434ebd9545fdbed044613653f917a27c19f/extensions/themes/midnight.serein-extension",
@@ -137,7 +137,7 @@
         "version": "1.0.0",
         "author": "a1.lol",
         "license": "MIT",
-        "source": "https://github.com/ViceVerse-cz/Serein",
+        "source": "https://github.com/monkey-land/monkado",
         "kind": "theme"
       },
       "release_url": "https://raw.githubusercontent.com/ViceVerse-cz/Serein/3abae434ebd9545fdbed044613653f917a27c19f/extensions/themes/obsidian.serein-extension",
@@ -153,12 +153,12 @@
     {
       "manifest": {
         "api_version": 1,
-        "id": "serein-ocean",
+        "id": "monkado-ocean",
         "name": "Ocean",
         "version": "1.0.0",
-        "author": "Serein contributors",
+        "author": "Monkado contributors",
         "license": "MIT OR Apache-2.0",
-        "source": "https://github.com/ViceVerse-cz/Serein",
+        "source": "https://github.com/monkey-land/monkado",
         "kind": "theme"
       },
       "release_url": "https://raw.githubusercontent.com/ViceVerse-cz/Serein/3abae434ebd9545fdbed044613653f917a27c19f/extensions/themes/ocean.serein-extension",
@@ -174,12 +174,12 @@
     {
       "manifest": {
         "api_version": 1,
-        "id": "serein-rose",
+        "id": "monkado-rose",
         "name": "Rose",
         "version": "1.0.0",
-        "author": "Serein contributors",
+        "author": "Monkado contributors",
         "license": "MIT OR Apache-2.0",
-        "source": "https://github.com/ViceVerse-cz/Serein",
+        "source": "https://github.com/monkey-land/monkado",
         "kind": "theme"
       },
       "release_url": "https://raw.githubusercontent.com/ViceVerse-cz/Serein/3abae434ebd9545fdbed044613653f917a27c19f/extensions/themes/rose.serein-extension",
@@ -200,7 +200,7 @@
         "version": "1.0.0",
         "author": "a1.lol",
         "license": "CC0-1.0",
-        "source": "https://github.com/ViceVerse-cz/Serein",
+        "source": "https://github.com/monkey-land/monkado",
         "kind": "theme",
         "capabilities": [],
         "actions": []
@@ -223,7 +223,7 @@
         "version": "1.0.0",
         "author": "a1.lol",
         "license": "MIT",
-        "source": "https://github.com/ViceVerse-cz/Serein",
+        "source": "https://github.com/monkey-land/monkado",
         "kind": "theme"
       },
       "release_url": "https://raw.githubusercontent.com/ViceVerse-cz/Serein/3abae434ebd9545fdbed044613653f917a27c19f/extensions/themes/teal.serein-extension",
@@ -242,7 +242,7 @@
         "id": "api-proxy",
         "name": "API Proxy",
         "version": "1.0.0",
-        "author": "Serein contributors",
+        "author": "Monkado contributors",
         "license": "MIT OR Apache-2.0",
         "source": "https://github.com/ViceVerse-cz/Serein-extensions/tree/main/plugins/api-proxy",
         "kind": "plugin",
@@ -284,7 +284,7 @@
         "id": "custom-rpc",
         "name": "Custom Rich Presence",
         "version": "1.0.0",
-        "author": "Serein contributors",
+        "author": "Monkado contributors",
         "license": "MIT OR Apache-2.0",
         "source": "https://github.com/ViceVerse-cz/Serein-extensions/tree/main/plugins/custom-rpc",
         "kind": "plugin",
@@ -341,9 +341,9 @@
         "id": "external-search-tools",
         "name": "External Search Tools",
         "version": "1.0.3",
-        "author": "Equicord/Vencord contributors; Serein port contributors",
+        "author": "Equicord/Vencord contributors; Monkado port contributors",
         "license": "GPL-3.0-or-later",
-        "source": "https://github.com/ViceVerse-cz/Serein/tree/main/extensions/plugins/external-search-tools",
+        "source": "https://github.com/monkey-land/monkado/tree/main/extensions/plugins/external-search-tools",
         "kind": "plugin",
         "capabilities": [
           "selected_message",
@@ -384,9 +384,9 @@
         "id": "message-delete-protector",
         "name": "Message delete protector",
         "version": "1.0.0",
-        "author": "Serein contributors",
+        "author": "Monkado contributors",
         "license": "MIT OR Apache-2.0",
-        "source": "https://github.com/ViceVerse-cz/Serein",
+        "source": "https://github.com/monkey-land/monkado",
         "kind": "plugin",
         "capabilities": [
           "deleted_messages"
@@ -415,9 +415,9 @@
         "id": "offline-composer-tools",
         "name": "Offline Composer Tools",
         "version": "1.0.2",
-        "author": "Equicord/Vencord contributors; Serein port contributors",
+        "author": "Equicord/Vencord contributors; Monkado port contributors",
         "license": "GPL-3.0-or-later",
-        "source": "https://github.com/ViceVerse-cz/Serein/tree/main/extensions/plugins/offline-composer-tools",
+        "source": "https://github.com/monkey-land/monkado/tree/main/extensions/plugins/offline-composer-tools",
         "kind": "plugin",
         "capabilities": [
           "composer"
@@ -461,9 +461,9 @@
         "id": "text-commands",
         "name": "Text Commands",
         "version": "1.0.1",
-        "author": "Equicord/Vencord contributors; Serein port contributors",
+        "author": "Equicord/Vencord contributors; Monkado port contributors",
         "license": "GPL-3.0-or-later",
-        "source": "https://github.com/ViceVerse-cz/Serein/tree/main/extensions/plugins/text-commands",
+        "source": "https://github.com/monkey-land/monkado/tree/main/extensions/plugins/text-commands",
         "kind": "plugin",
         "capabilities": [
           "composer",
@@ -528,9 +528,9 @@
         "id": "view-raw-message",
         "name": "ViewRaw — safe message view",
         "version": "1.0.1",
-        "author": "Equicord/Vencord contributors; Serein port contributors",
+        "author": "Equicord/Vencord contributors; Monkado port contributors",
         "license": "GPL-3.0-or-later",
-        "source": "https://github.com/ViceVerse-cz/Serein/tree/main/extensions/plugins/view-raw-message",
+        "source": "https://github.com/monkey-land/monkado/tree/main/extensions/plugins/view-raw-message",
         "kind": "plugin",
         "capabilities": [
           "selected_message"

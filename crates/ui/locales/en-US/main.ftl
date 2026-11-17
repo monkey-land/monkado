@@ -224,7 +224,7 @@ account-menu-custom-status-editor-clear-after = Clear after
 # Context: custom_status_editor
 account-menu-custom-status-editor-no-custom-status = No custom status
 # Context: custom_status_editor
-account-menu-custom-status-editor-serein-clears-it = Monkado clears it
+account-menu-custom-status-editor-monkado-clears-it = Monkado clears it
 # Context: custom_status_editor
 account-menu-custom-status-editor-status-text = Status text
 # Context: custom_status_editor
@@ -1712,7 +1712,7 @@ main-restoring-checking-your-saved-login = Checking your saved login
 # Context: restoring
 main-restoring-connecting-to-discord = Connecting to Discord
 # Context: restoring_screen
-main-restoring-screen-serein = Monkado
+main-restoring-screen-monkado = Monkado
 # Context: restoring_screen
 main-restoring-screen-use-a-different-account = Use a different account
 # Context: restoring_screen
@@ -1722,7 +1722,7 @@ main-sign-in-accounts-saved-accounts = Saved accounts
 # Context: sign_in_consent
 main-sign-in-consent-passwords-and-2fa-stay-on-discord-s-own-login-page = Passwords and 2FA stay on Discord's own login page. Only the session token is kept, in your OS credential store.
 # Context: sign_in_disclosures
-main-sign-in-disclosures-about-serein = About Monkado
+main-sign-in-disclosures-about-monkado = About Monkado
 # Context: sign_in_disclosures
 main-sign-in-disclosures-connect-with-this-token = Connect with this token
 # Context: sign_in_disclosures
@@ -1740,7 +1740,7 @@ main-sign-in-header-sign-in-with-your-discord-account-to-get-started = Sign in w
 # Context: sign_in_header
 main-sign-in-header-welcome-back = Welcome back
 # Context: sign_in_header
-main-sign-in-header-welcome-to-serein = Welcome to Monkado
+main-sign-in-header-welcome-to-monkado = Welcome to Monkado
 # Context: sign_in_preview
 main-sign-in-status-copy-failure-details = Copy failure details
 main-sign-in-preview-explore-the-offline-preview = Explore the offline preview
@@ -1749,7 +1749,7 @@ main-sign-in-preview-sample-conversations-no-discord-connection = Sample convers
 # Context: sign_in_screen
 main-sign-in-screen-independent-and-open-source-not-affiliated-with-discord = Independent and open source · Not affiliated with Discord
 # Context: sign_in_screen
-main-sign-in-screen-serein = Monkado
+main-sign-in-screen-monkado = Monkado
 # Context: ui
 main-ui-cancel = Cancel
 # Context: ui
@@ -2358,7 +2358,7 @@ screen-body-refresh = Refresh
 # Context: body
 screen-body-screen-or-window = Screen or window
 # Context: body
-screen-body-send-what-your-mac-plays-along-with-the-screen-serein = Send what your Mac plays along with the screen. Monkado's own call audio is left out.
+screen-body-send-what-your-mac-plays-along-with-the-screen-monkado = Send what your Mac plays along with the screen. Monkado's own call audio is left out.
 # Context: body
 screen-body-share-sound-from-other-apps-even-when-sharing-one-window = Share sound from other apps, even when sharing one window. Monkado's own audio is left out.
 # Context: body
@@ -3571,7 +3571,7 @@ settings-appearance-settings-primary-color = Primary color
 # Context: appearance_settings
 settings-appearance-settings-reset = Reset
 # Context: appearance_settings
-settings-appearance-settings-restart-serein-after-changing-this-themes-can-customize-effects-while = Restart Monkado after changing this. Themes can customize effects while enabled.
+settings-appearance-settings-restart-monkado-after-changing-this-themes-can-customize-effects-while = Restart Monkado after changing this. Themes can customize effects while enabled.
 # Context: appearance_settings
 settings-appearance-settings-the-active-theme-brings-its-own-accent-it-takes-over = The active theme brings its own accent; it takes over while the theme is in use.
 # Context: appearance_settings
@@ -3612,7 +3612,7 @@ settings-storage-page-messages-and-drafts-are-cached-on-this-device-inside-bound
 # Context: storage_page
 settings-storage-page-removes-cached-messages-and-media-drafts-and-your-login-stay = Removes cached messages and media. Drafts and your login stay.
 # Context: storage_page
-settings-storage-page-serein-does-not-collect-telemetry-or-upload-diagnostics-discord-retains = Monkado does not collect telemetry or upload diagnostics. Discord retains service-side data according to its own policies.
+settings-storage-page-monkado-does-not-collect-telemetry-or-upload-diagnostics-discord-retains = Monkado does not collect telemetry or upload diagnostics. Discord retains service-side data according to its own policies.
 # Context: storage_page
 settings-storage-page-your-privacy = Your privacy
 # Context: cosmetic_settings
@@ -4098,7 +4098,7 @@ updates-update-settings-release-channel = Release channel
 # Context: update_settings
 updates-update-settings-restart-to-update = Restart to update
 # Context: update_settings
-updates-update-settings-serein-was-installed-via-your-distribution-run-this-in-a = Monkado was installed via your distribution. Run this in a terminal to update.
+updates-update-settings-monkado-was-installed-via-your-distribution-run-this-in-a = Monkado was installed via your distribution. Run this in a terminal to update.
 # Context: update_settings
 updates-update-settings-save-diagnostics = Save diagnostics
 # Context: update_settings
