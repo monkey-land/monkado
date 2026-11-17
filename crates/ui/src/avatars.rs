@@ -203,7 +203,7 @@ fn animated_emoji_key(id: model::Id, play: bool) -> Option<String> {
 }
 
 fn is_animated_profile_or_avatar_key(key: &str) -> bool {
-	// Decorations and nameplates animate while hovered, like the avatar beside them.
+	// Animated profile artwork: avatars, decorations, nameplates and banners.
 	if let Some(asset) = key.strip_prefix("decoration-") {
 		return asset.starts_with("a_");
 	}
@@ -1343,10 +1343,9 @@ impl Avatars {
 		key: &str,
 		hovered: bool,
 	) -> Option<TextureHandle> {
-		if !self.animate_gifs
-			|| !ctx.input(|input| input.focused)
-			|| !(hovered || self.avatar_animation || !is_animated_profile_or_avatar_key(key))
-		{
+		// Monkado: animated avatars, banners and decorations always play, not only on hover.
+		let _ = hovered;
+		if !self.animate_gifs || !ctx.input(|input| input.focused) {
 			return None;
 		}
 		if let Some(animation) = self.animations.get_mut(key) {
@@ -2917,7 +2916,7 @@ mod tests {
 	}
 
 	#[test]
-	fn hover_only_avatar_frames_load_on_hover_and_release_when_idle() {
+	fn animated_avatar_plays_without_hover_and_releases_when_idle() {
 		let ctx = egui::Context::default();
 		let mut images = Avatars::default();
 		images.set_animation(true);
@@ -2959,23 +2958,17 @@ mod tests {
 		assert_eq!(images.take_requests(), vec![key.clone()]);
 		deliver(&mut images);
 		assert!(
-			images.animations.is_empty(),
-			"An avatar that is not hovered keeps only its still"
+			images.animations.contains_key(&key),
+			"An animated avatar plays without being hovered"
 		);
-		assert!(images.texture_id(&key).is_some());
-		paint(&mut images, false);
-		assert!(
-			images.take_requests().is_empty(),
-			"Declined frames are not decoded again until they would play"
-		);
-		paint(&mut images, true);
-		assert_eq!(images.take_requests(), vec![key.clone()]);
-		deliver(&mut images);
-		assert!(images.animations.contains_key(&key));
 		images.release_idle(Instant::now() + IDLE_FRAMES);
 		assert!(images.animations.is_empty());
 		paint(&mut images, false);
-		assert!(images.take_requests().is_empty());
+		assert_eq!(
+			images.take_requests(),
+			vec![key.clone()],
+			"A visible avatar asks for its frames again after an idle release"
+		);
 	}
 
 	#[test]

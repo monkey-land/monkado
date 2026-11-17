@@ -220,7 +220,7 @@ impl Avatars {
 		}
 		let still = nameplate.key();
 		let mut texture = self.cosmetic(ui.ctx(), &still, demo);
-		if hovered && !demo && self.animate_gifs {
+		if !demo && self.animate_gifs {
 			let animated = nameplate.animated_key();
 			if self.textures.contains_key(&animated) {
 				if let Some((used, _)) = self.textures.get_mut(&animated) {

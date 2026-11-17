@@ -10,7 +10,7 @@
 //! is enough: whoever was in the call first sees the newcomer's voice state and dials.
 //!
 //! Each connection carries a control stream (a hello with the dialer's user ID, then one
-//! status byte per change) and one stream per subscribed track: the subscriber writes the
+//! five-byte status per change: media flags and the share's age in seconds) and one stream per subscribed track: the subscriber writes the
 //! track ID, then keyframe requests; the publisher writes length-prefixed H.264 access units.
 use crate::{
 	screen::Video,
@@ -38,7 +38,7 @@ use tokio::{
 	task::{JoinHandle, JoinSet},
 };
 
-const ALPN: &[u8] = b"monkado/p2p/1";
+const ALPN: &[u8] = b"monkado/p2p/2";
 
 /// Opt-in log line with fixed text and counts only; no IDs or addresses.
 fn count(value: usize) -> diagnostics::Value {
@@ -80,6 +80,8 @@ type Decoder = Arc<Mutex<DecoderQueue>>;
 struct TrackInner {
 	frames: broadcast::Sender<Arc<Frame>>,
 	live: AtomicBool,
+	/// When the source went live, so peers can show how long a share has run.
+	since: Mutex<Option<Instant>>,
 	keyframe: Mutex<Option<KeyframeHook>>,
 }
 /// One local media source peers can subscribe to. Cheap to clone; frames published while
@@ -91,6 +93,7 @@ impl Default for Track {
 		Self(Arc::new(TrackInner {
 			frames: broadcast::channel(BACKLOG).0,
 			live: AtomicBool::new(false),
+			since: Mutex::new(None),
 			keyframe: Mutex::new(None),
 		}))
 	}
@@ -103,7 +106,16 @@ impl Track {
 	}
 	/// Announces the source to peers; they see it as a live share or a camera tile.
 	pub fn set_live(&self, live: bool) {
-		self.0.live.store(live, Ordering::Release);
+		let was = self.0.live.swap(live, Ordering::AcqRel);
+		if was != live
+			&& let Ok(mut since) = self.0.since.lock()
+		{
+			*since = live.then(Instant::now);
+		}
+	}
+	/// When the source went live; `None` while off.
+	pub fn live_since(&self) -> Option<Instant> {
+		self.0.since.lock().ok().and_then(|since| *since)
 	}
 	pub fn live(&self) -> bool {
 		self.0.live.load(Ordering::Acquire)
@@ -153,18 +165,33 @@ pub async fn publish_screen(track: Track, mut video: Video) {
 	}
 }
 
-/// A peer's announced media changed; both false when it left.
+/// A peer's announced media changed; `linked` false (and no media) when its connection closed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Update {
 	pub user: u64,
+	/// A Monkado connection to this peer is open.
+	pub linked: bool,
 	pub screen: bool,
 	pub camera: bool,
+	/// When the peer's screen share started, in this device's clock.
+	pub screen_since: Option<Instant>,
+}
+impl Update {
+	fn gone(user: u64) -> Self {
+		Self {
+			user,
+			linked: false,
+			screen: false,
+			camera: false,
+			screen_since: None,
+		}
+	}
 }
 
 enum Control {
 	Peer(u64, [u8; 32]),
 	Members(Vec<u64>),
-	Watch(Option<u64>),
+	Watch(Vec<u64>),
 }
 
 /// This client's P2P presence in one call. Dropping it closes every connection.
@@ -179,7 +206,7 @@ pub struct MeshConfig {
 	pub tag: [u8; 32],
 	pub screen: Track,
 	pub camera: Track,
-	/// Decoded screen pictures of the watched peer, tagged with its user ID.
+	/// Decoded screen pictures of the watched peers, tagged with each user ID.
 	pub screen_sink: VideoSink,
 	/// Decoded camera pictures, tagged with each peer's user ID.
 	pub camera_sink: VideoSink,
@@ -224,9 +251,9 @@ impl Mesh {
 	pub fn members(&self, users: Vec<u64>) {
 		let _ = self.control.send(Control::Members(users));
 	}
-	/// The peer whose screen this device shows, if any.
-	pub fn watch(&self, user: Option<u64>) {
-		let _ = self.control.send(Control::Watch(user));
+	/// The peers whose screens this device shows.
+	pub fn watch(&self, users: Vec<u64>) {
+		let _ = self.control.send(Control::Watch(users));
 	}
 	pub fn updates(&self) -> impl Iterator<Item = Update> + '_ {
 		self.updates.try_iter()
@@ -257,6 +284,15 @@ impl Shared {
 	fn status(&self) -> u8 {
 		u8::from(self.screen.live()) | u8::from(self.camera.live()) << 1
 	}
+	/// Wire status: media flags, then the screen share's age in whole seconds (big-endian).
+	fn status_message(&self) -> [u8; 5] {
+		let age = self.screen.live_since().map_or(0, |since| {
+			u32::try_from(since.elapsed().as_secs()).unwrap_or(u32::MAX)
+		});
+		let mut message = [self.status(), 0, 0, 0, 0];
+		message[1..].copy_from_slice(&age.to_be_bytes());
+		message
+	}
 	fn track(&self, id: u8) -> Option<&Track> {
 		match id {
 			SCREEN => Some(&self.screen),
@@ -279,6 +315,8 @@ enum Internal {
 		user: u64,
 		link: u64,
 		status: u8,
+		/// Local clock time the peer's screen share started.
+		screen_since: Option<Instant>,
 	},
 	Closed {
 		user: u64,
@@ -320,7 +358,7 @@ async fn run(shared: Arc<Shared>, key: SecretKey, mut control: mpsc::UnboundedRe
 	let mut members: Vec<u64> = Vec::new();
 	let mut links: HashMap<u64, Link> = HashMap::new();
 	let mut dialing: HashMap<u64, Instant> = HashMap::new();
-	let mut watching = None;
+	let mut watching: Vec<u64> = Vec::new();
 	let mut sequence: u64 = 0;
 	let mut redial = tokio::time::interval(REDIAL_INTERVAL);
 	loop {
@@ -347,10 +385,11 @@ async fn run(shared: Arc<Shared>, key: SecretKey, mut control: mpsc::UnboundedRe
 						dial(&shared, &endpoint, &internal, &tags, &members, &links, &mut dialing, user);
 					}
 				}
-				Some(Control::Watch(user)) => {
-					watching = user;
+				Some(Control::Watch(users)) => {
+					watching = users;
+					watching.truncate(MAX_PEERS);
 					for (user, link) in &mut links {
-						subscribe(&shared, *user, link, watching);
+						subscribe(&shared, *user, link, &watching);
 					}
 				}
 			},
@@ -410,14 +449,14 @@ async fn run(shared: Arc<Shared>, key: SecretKey, mut control: mpsc::UnboundedRe
 						task,
 						subscriptions: [None, None],
 					}) && old.status != 0 {
-						shared.emit(Update { user, screen: false, camera: false });
+						shared.emit(Update::gone(user));
 					}
 				}
 				Internal::DialFailed(user, stage) => {
 					note("p2p_dial_failed", &[("stage", diagnostics::Value::Text(stage))]);
 					dialing.remove(&user);
 				}
-				Internal::Status { user, link, status } => {
+				Internal::Status { user, link, status, screen_since } => {
 					if let Some(current) = links.get_mut(&user).filter(|current| current.id == link) {
 						note(
 							"p2p_status",
@@ -427,11 +466,13 @@ async fn run(shared: Arc<Shared>, key: SecretKey, mut control: mpsc::UnboundedRe
 							],
 						);
 						current.status = status;
-						subscribe(&shared, user, current, watching);
+						subscribe(&shared, user, current, &watching);
 						shared.emit(Update {
 							user,
+							linked: true,
 							screen: status & 1 != 0,
 							camera: status & 2 != 0,
+							screen_since: screen_since.filter(|_| status & 1 != 0),
 						});
 					}
 				}
@@ -439,7 +480,7 @@ async fn run(shared: Arc<Shared>, key: SecretKey, mut control: mpsc::UnboundedRe
 					if links.get(&user).is_some_and(|current| current.id == link) {
 						note("p2p_link_closed", &[]);
 						links.remove(&user);
-						shared.emit(Update { user, screen: false, camera: false });
+						shared.emit(Update::gone(user));
 					}
 				}
 			},
@@ -525,9 +566,9 @@ async fn accept(incoming: Incoming, internal: mpsc::UnboundedSender<Internal>) {
 }
 
 /// Starts or stops this link's subscriptions to match the peer's media and the watch choice.
-fn subscribe(shared: &Arc<Shared>, user: u64, link: &mut Link, watching: Option<u64>) {
+fn subscribe(shared: &Arc<Shared>, user: u64, link: &mut Link, watching: &[u64]) {
 	let wanted = [
-		link.status & 1 != 0 && watching == Some(user),
+		link.status & 1 != 0 && watching.contains(&user),
 		link.status & 2 != 0,
 	];
 	for (index, (wanted, track)) in wanted.into_iter().zip([SCREEN, CAMERA]).enumerate() {
@@ -552,7 +593,7 @@ fn subscribe(shared: &Arc<Shared>, user: u64, link: &mut Link, watching: Option<
 	}
 }
 
-/// One link: exchanges status bytes on the control stream and serves the peer's track
+/// One link: exchanges status messages on the control stream and serves the peer's track
 /// subscriptions until either side closes.
 async fn serve(
 	shared: Arc<Shared>,
@@ -565,23 +606,24 @@ async fn serve(
 	let mut subscribers = JoinSet::new();
 	let mut sent = None;
 	let mut tick = tokio::time::interval(STATUS_INTERVAL);
-	let mut status = [0u8; 1];
+	let mut status = [0u8; 5];
 	loop {
 		tokio::select! {
 			_ = tick.tick() => {
 				let now = shared.status();
 				if sent != Some(now) {
-					if send.write_all(&[now]).await.is_err() {
+					if send.write_all(&shared.status_message()).await.is_err() {
 						break;
 					}
 					sent = Some(now);
 				}
 			}
 			read = recv.read_exact(&mut status) => {
-				if read.is_err() || status[0] > 3 {
+				let Ok(()) = read else { break };
+				let Some((flags, screen_since)) = parse_status(status, Instant::now()) else {
 					break;
-				}
-				let _ = internal.send(Internal::Status { user, link, status: status[0] });
+				};
+				let _ = internal.send(Internal::Status { user, link, status: flags, screen_since });
 			}
 			stream = connection.accept_bi() => {
 				let Ok((send, recv)) = stream else { break };
@@ -695,6 +737,18 @@ async fn receive_frames(
 	}
 }
 
+/// Untrusted status message: flags must be known; an impossible age is dropped.
+fn parse_status(message: [u8; 5], now: Instant) -> Option<(u8, Option<Instant>)> {
+	if message[0] > 3 {
+		return None;
+	}
+	let age = u32::from_be_bytes([message[1], message[2], message[3], message[4]]);
+	let since = (message[0] & 1 != 0)
+		.then(|| now.checked_sub(Duration::from_secs(u64::from(age))))
+		.flatten();
+	Some((message[0], since))
+}
+
 fn parse_header(header: [u8; 5]) -> Result<(bool, usize), &'static str> {
 	let length = u32::from_be_bytes([header[1], header[2], header[3], header[4]]) as usize;
 	if length == 0 || length > MAX_FRAME_BYTES || header[0] > 1 {
@@ -756,14 +810,26 @@ mod tests {
 			announced,
 			Some(Update {
 				user: 2,
+				linked: true,
 				screen: false,
-				camera: true
+				camera: true,
+				screen_since: None,
 			})
 		);
 		assert!(
 			second_camera.has_viewers(),
 			"the camera subscription reached the publisher"
 		);
+	}
+
+	#[test]
+	fn status_carries_share_age_and_rejects_unknown_flags() {
+		let now = Instant::now() + Duration::from_secs(3600);
+		let (flags, since) = parse_status([1, 0, 0, 0, 90], now).unwrap();
+		assert_eq!(flags, 1);
+		assert_eq!(since, Some(now - Duration::from_secs(90)));
+		assert_eq!(parse_status([2, 0, 0, 0, 90], now), Some((2, None)));
+		assert!(parse_status([4, 0, 0, 0, 0], now).is_none());
 	}
 
 	#[test]

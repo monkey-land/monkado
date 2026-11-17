@@ -401,7 +401,7 @@ fn decoded() -> egui::ColorImage {
 /// Paint the full-colour Monkado logo (round, transparent corners) in `rect`.
 pub fn paint_logo(painter: &egui::Painter, rect: Rect) {
 	const LOGO: &[u8] = include_bytes!("../../../assets/icons/monkado.png");
-	let id = egui::Id::new("monkado-logo");
+	let id = egui::Id::unique("monkado-logo");
 	let texture = painter
 		.ctx()
 		.data(|data| data.get_temp::<TextureHandle>(id))

@@ -518,6 +518,14 @@ pub struct MessagingUi {
 	/// Latest picture of the screen share this device chose to watch; desktop-owned texture.
 	pub voice_stream_view: Option<egui::load::SizedTexture>,
 	pub voice_stream_status: &'static str,
+	/// Monkado P2P screen shares being watched, by streamer; desktop-owned textures.
+	pub voice_stream_views: Vec<(Id, egui::load::SizedTexture)>,
+	/// Extra P2P shares watched beside `call.watching`, so several screens show at once.
+	pub voice_also_watching: Vec<Id>,
+	/// Call participants connected over Monkado P2P (this device included while it runs).
+	pub voice_monkado_users: Vec<Id>,
+	/// When each live share in the current call started, for its elapsed-time label.
+	pub voice_live_since: Vec<(Id, std::time::Instant)>,
 	/// Session-only stream playback level; unset is 100%. Mute preserves the level.
 	voice_stream_volume: Option<u16>,
 	voice_stream_muted: bool,
@@ -535,6 +543,8 @@ pub struct MessagingUi {
 	pub voice_chat_open: bool,
 	/// Tile click to start (`Some(user)`) or stop (`None`) watching, applied by the stage.
 	watch_request: Option<Option<Id>>,
+	/// One watched share's own "Stop watching", applied by the stage.
+	watch_stop: Option<Id>,
 	ring_request: Option<(Id, u64, Id, bool)>,
 	voice_moderation: Option<(Id, Id, Id, model::server_admin::VoiceChange)>,
 	stream_preview_open: Option<((Id, Id, Id), u64)>,

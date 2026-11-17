@@ -699,6 +699,22 @@ impl MessagingUi {
 					}
 					if entry.participant.streaming {
 						live_badge(ui);
+						if let Some(elapsed) = self.live_elapsed(ui, entry.participant.user) {
+							ui.label(
+								RichText::new(elapsed)
+									.size(11.0)
+									.color(colors.muted),
+							);
+						}
+					}
+					// Only participants on the original Discord client get a mark here.
+					if self.knows_clients(state, entry.channel)
+						&& !self.voice_monkado_users.contains(&entry.participant.user)
+					{
+						let (mark, response) =
+							ui.allocate_exact_size(egui::Vec2::splat(16.0), egui::Sense::hover());
+						paint_client_mark(ui.painter(), mark, false);
+						response.on_hover_text("No Discord original");
 					}
 					ui.allocate_ui_with_layout(
 						egui::vec2(ui.available_width(), 28.0),
@@ -1192,12 +1208,26 @@ impl MessagingUi {
 		if let Some(streamer) = watching {
 			tiles.push(Tile::Stream(streamer));
 		}
+		// Monkado P2P shares watched beside the main one, each in its own box.
+		let extras: &[Id] = if call.is_some() {
+			&self.voice_also_watching
+		} else {
+			&[]
+		};
+		tiles.extend(
+			extras
+				.iter()
+				.filter(|user| Some(**user) != watching)
+				.map(|user| Tile::Stream(*user)),
+		);
 		let own = state.user.as_ref().map(|user| user.id);
 		tiles.extend(
 			entries
 				.iter()
 				.map(|entry| entry.participant.user)
-				.filter(|user| Some(*user) != watching && Some(*user) != own)
+				.filter(|user| {
+					Some(*user) != watching && Some(*user) != own && !extras.contains(user)
+				})
 				.filter(|user| {
 					entries
 						.iter()
@@ -1342,8 +1372,25 @@ impl MessagingUi {
 		state.voice.active.as_ref().is_some_and(|call| {
 			call.channel == channel
 				&& call.phase != Phase::Failed
-				&& call.watching == Some(streamer)
+				&& (call.watching == Some(streamer) || self.voice_also_watching.contains(&streamer))
 		})
+	}
+
+	/// Monkado P2P knows which participants of this channel's call run Monkado.
+	fn knows_clients(&self, state: &State, channel: Id) -> bool {
+		!self.voice_monkado_users.is_empty()
+			&& state
+				.voice
+				.active
+				.as_ref()
+				.is_some_and(|call| call.channel == channel)
+	}
+
+	/// How long `user`'s screen share has run, as `m:ss` or `h:mm:ss`; repaints each second.
+	fn live_elapsed(&self, ui: &egui::Ui, user: Id) -> Option<String> {
+		let (_, since) = self.voice_live_since.iter().find(|(id, _)| *id == user)?;
+		ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));
+		Some(format_elapsed(since.elapsed().as_secs()))
 	}
 
 	fn remote_texture(&self, user: Id) -> Option<&egui::load::SizedTexture> {
@@ -1415,7 +1462,7 @@ impl MessagingUi {
 						self.stream_audio_controls(ui);
 						ui.separator();
 						if ui.button("Stop watching").clicked() {
-							self.watch_request = Some(None);
+							self.watch_stop = Some(*streamer);
 							ui.close();
 						}
 					});
@@ -1545,7 +1592,18 @@ impl MessagingUi {
 	) {
 		let name = participant_user(state, channel, streamer)
 			.map_or_else(|| "Participant".to_owned(), |user| user.name.clone());
-		let content = match &self.voice_stream_view {
+		let primary = state
+			.voice
+			.active
+			.as_ref()
+			.is_some_and(|call| call.watching == Some(streamer));
+		let view = self
+			.voice_stream_views
+			.iter()
+			.find(|(id, _)| *id == streamer)
+			.map(|(_, texture)| *texture)
+			.or(self.voice_stream_view.filter(|_| primary));
+		let content = match &view {
 			Some(texture) => {
 				let content = fit_rect(rect, texture.size);
 				ui.put(
@@ -1580,10 +1638,14 @@ impl MessagingUi {
 		};
 		// Even a small strip-sized share names whose screen it is.
 		if content.height() >= 72.0 {
+			let label = match self.live_elapsed(ui, streamer) {
+				Some(elapsed) => format!("{name}'s screen · {elapsed}"),
+				None => format!("{name}'s screen"),
+			};
 			name_badge(
 				ui,
 				content,
-				&format!("{name}'s screen"),
+				&label,
 				None,
 				self.badge_opacity(),
 			);
@@ -1696,7 +1758,8 @@ impl MessagingUi {
 		);
 		let enabled = self.can_watch(state, channel, streamer);
 		if !compact {
-			self.watch_stream_button(ui, rect, name, enabled);
+			let elapsed = self.live_elapsed(ui, streamer);
+			self.watch_stream_button(ui, rect, name, elapsed, enabled);
 		}
 		// One click target over the whole box, button included.
 		let response = ui.interact(
@@ -1711,9 +1774,20 @@ impl MessagingUi {
 		enabled && response.clicked()
 	}
 
-	fn watch_stream_button(&self, ui: &mut egui::Ui, rect: egui::Rect, name: &str, enabled: bool) {
+	fn watch_stream_button(
+		&self,
+		ui: &mut egui::Ui,
+		rect: egui::Rect,
+		name: &str,
+		elapsed: Option<String>,
+		enabled: bool,
+	) {
 		let opacity = self.badge_opacity();
-		name_badge(ui, rect, &format!("{name}'s screen"), None, opacity);
+		let label = match elapsed {
+			Some(elapsed) => format!("{name}'s screen · {elapsed}"),
+			None => format!("{name}'s screen"),
+		};
+		name_badge(ui, rect, &label, None, opacity);
 		let font = egui::FontId::new(14.0, design::medium_family(ui.ctx()));
 		let label = "Watch Stream";
 		let galley = ui
@@ -1770,16 +1844,72 @@ impl MessagingUi {
 
 	/// Apply a tile's watch click once the stage has mutable state again.
 	pub(super) fn apply_watch_request(&mut self, state: &mut State) {
+		let primary = state.voice.active.as_ref().and_then(|call| call.watching);
+		if let Some(user) = self.watch_stop.take() {
+			if self.voice_also_watching.contains(&user) {
+				self.voice_also_watching.retain(|extra| *extra != user);
+			} else if primary == Some(user) {
+				state.stop_watching();
+				// The next extra share takes over as the main one.
+				if !self.voice_also_watching.is_empty() {
+					let next = self.voice_also_watching.remove(0);
+					let _ = state.watch_stream(next);
+				}
+			}
+		}
+		let primary = state.voice.active.as_ref().and_then(|call| call.watching);
 		match self.watch_request.take() {
+			// Monkado P2P shares stack: watching another one keeps the current ones open.
+			Some(Some(user)) if primary.is_some() && primary != Some(user) => {
+				let user_p2p = self.voice_monkado_users.contains(&user);
+				let primary_p2p =
+					primary.is_some_and(|previous| self.voice_monkado_users.contains(&previous));
+				if user_p2p {
+					if !self.voice_also_watching.contains(&user)
+						&& self.voice_also_watching.len() < MAX_ALSO_WATCHING
+					{
+						self.voice_also_watching.push(user);
+					}
+					self.voice_focus = None;
+				} else {
+					// A Discord share needs the main slot; a P2P main share moves aside.
+					if let Some(previous) = primary.filter(|_| primary_p2p)
+						&& self.voice_also_watching.len() < MAX_ALSO_WATCHING
+					{
+						self.voice_also_watching.push(previous);
+					}
+					if state.watch_stream(user).is_some() {
+						self.voice_focus = if self.voice_also_watching.is_empty() {
+							Some(StageFocus::Stream(user))
+						} else {
+							None
+						};
+					}
+				}
+			}
 			// Like Discord, a share opens enlarged as soon as you choose to watch it.
 			Some(Some(user)) => {
 				if state.watch_stream(user).is_some() {
 					self.voice_focus = Some(StageFocus::Stream(user));
 				}
 			}
-			Some(None) => state.stop_watching(),
+			Some(None) => {
+				state.stop_watching();
+				self.voice_also_watching.clear();
+			}
 			None => {}
 		}
+		// Extra shares end with their stream, the call, or once they become the main one.
+		let call = state.voice.active.as_ref();
+		self.voice_also_watching.retain(|user| {
+			call.is_some_and(|call| {
+				call.watching != Some(*user)
+					&& call
+						.participants
+						.iter()
+						.any(|participant| participant.user == *user && participant.streaming)
+			})
+		});
 	}
 	pub(super) fn apply_ring_request(&mut self, state: &mut State, commands: &mut Vec<Command>) {
 		if let Some((channel, request, recipient, stop)) = self.ring_request.take()
@@ -1984,6 +2114,15 @@ impl MessagingUi {
 				silenced.filter(|_| video.is_some()),
 				self.badge_opacity(),
 			);
+		}
+		// Top-left mark: Monkado logo or Discord disc, once P2P knows this call's clients.
+		if self.knows_clients(state, entry.channel) && rect.height() >= 72.0 {
+			let user = entry.participant.user;
+			let mark = egui::Rect::from_min_size(
+				rect.left_top() + egui::vec2(8.0, 8.0),
+				egui::Vec2::splat(20.0),
+			);
+			paint_client_mark(ui.painter(), mark, self.voice_monkado_users.contains(&user));
 		}
 	}
 
@@ -5116,6 +5255,36 @@ fn status_icon(ui: &mut egui::Ui, icon: crate::icons::Icon, color: egui::Color32
 	crate::icons::paint(ui.painter(), icon, rect.shrink(1.0), color);
 	response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &label));
 	response.on_hover_text(label);
+}
+
+/// Extra P2P shares watched at once beside the main one.
+const MAX_ALSO_WATCHING: usize = 3;
+/// Discord's brand blurple, marking participants on the original Discord client.
+const DISCORD_BLURPLE: egui::Color32 = egui::Color32::from_rgb(0x58, 0x65, 0xF2);
+
+/// `m:ss` below an hour, `h:mm:ss` after.
+fn format_elapsed(seconds: u64) -> String {
+	let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+	if hours > 0 {
+		format!("{hours}:{minutes:02}:{seconds:02}")
+	} else {
+		format!("{minutes}:{seconds:02}")
+	}
+}
+
+/// Which client a participant uses: the Monkado logo, or a blurple Discord disc.
+fn paint_client_mark(painter: &egui::Painter, rect: egui::Rect, monkado: bool) {
+	if monkado {
+		crate::icons::paint_logo(painter, rect);
+	} else {
+		painter.circle_filled(rect.center(), rect.width() * 0.5, DISCORD_BLURPLE);
+		crate::icons::paint(
+			painter,
+			crate::icons::Icon::GameController,
+			rect.shrink(rect.width() * 0.2),
+			egui::Color32::WHITE,
+		);
+	}
 }
 
 /// Discord's LIVE pill, sized for the channel list row rather than a stage tile.

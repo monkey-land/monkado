@@ -8,7 +8,10 @@ use client_core::{
 use discord_voice::p2p::{Mesh, MeshConfig, Track};
 use eframe::egui;
 use model::Id;
-use std::sync::{Arc, Mutex};
+use std::{
+	sync::{Arc, Mutex},
+	time::Instant,
+};
 use tokio::runtime::Runtime;
 
 /// `MONKADO_P2P=0` turns P2P off entirely: screen share and camera go to Discord as upstream.
@@ -26,7 +29,16 @@ struct Running {
 	tag: [u8; 32],
 	mesh: Mesh,
 	members: Vec<u64>,
-	watching: Option<u64>,
+	watching: Vec<u64>,
+}
+
+/// One connected Monkado peer and what it announces.
+#[derive(Clone, Copy)]
+struct Peer {
+	user: Id,
+	screen: bool,
+	camera: bool,
+	screen_since: Option<Instant>,
 }
 
 #[derive(Default)]
@@ -35,11 +47,14 @@ pub(super) struct P2p {
 	camera: Track,
 	running: Option<Running>,
 	tags: Vec<(Id, Id, [u8; 32])>,
-	peers: Vec<P2pMedia>,
-	stream: Arc<Mutex<crate::watch::Slot>>,
-	texture: crate::gpu_video::VideoTexture,
+	peers: Vec<Peer>,
+	/// Latest decoded picture of every watched P2P share.
+	streams: Arc<Mutex<crate::voice::RemotePictures>>,
+	textures: Vec<(Id, crate::gpu_video::VideoTexture)>,
 	/// Where peers' camera pictures go: the live call's remote pictures, which change on rejoin.
 	cameras: Cameras,
+	/// First time this device saw a Discord-only share live, for its elapsed-time label.
+	seen_live: Vec<(Id, Instant)>,
 }
 impl P2p {
 	/// Records a participant's voice session tag before core reduction.
@@ -67,6 +82,9 @@ impl P2p {
 		ctx: &egui::Context,
 	) {
 		if !enabled() {
+			ui.voice_monkado_users.clear();
+			ui.voice_stream_views.clear();
+			ui.voice_live_since.clear();
 			return;
 		}
 		voice.use_p2p(&self.screen, &self.camera);
@@ -89,7 +107,6 @@ impl P2p {
 		let members: Vec<u64> = call
 			.map(|call| call.participants.iter().map(|p| p.user.0).collect())
 			.unwrap_or_default();
-		let watching = call.and_then(|call| call.watching).map(|user| user.0);
 		if self.running.as_ref().map(|r| (r.channel, r.tag))
 			!= wanted.map(|(channel, _, tag)| (channel, tag))
 		{
@@ -99,8 +116,13 @@ impl P2p {
 				self.start(runtime, channel, me, tag, ctx);
 			}
 		}
+		let me = state.user.as_ref().map(|user| user.id);
 		let Some(running) = &mut self.running else {
 			state.set_p2p_media(Vec::new());
+			ui.voice_monkado_users.clear();
+			ui.voice_stream_views.clear();
+			self.textures.clear();
+			self.live_times(state, ui, me);
 			return;
 		};
 		if running.members != members {
@@ -109,17 +131,27 @@ impl P2p {
 		}
 		for update in running.mesh.updates() {
 			self.peers.retain(|peer| peer.user.0 != update.user);
-			if (update.screen || update.camera) && self.peers.len() < voice::MAX_PARTICIPANTS {
-				self.peers.push(P2pMedia {
+			if update.linked && self.peers.len() < voice::MAX_PARTICIPANTS {
+				self.peers.push(Peer {
 					user: Id(update.user),
-					streaming: update.screen,
-					video: update.camera,
+					screen: update.screen,
+					camera: update.camera,
+					screen_since: update.screen_since,
 				});
 			}
 		}
 		// This device's own share and camera show as for Discord-announced media, too.
-		let mut media = self.peers.clone();
-		if let Some(me) = state.user.as_ref().map(|user| user.id)
+		let mut media: Vec<P2pMedia> = self
+			.peers
+			.iter()
+			.filter(|peer| peer.screen || peer.camera)
+			.map(|peer| P2pMedia {
+				user: peer.user,
+				streaming: peer.screen,
+				video: peer.camera,
+			})
+			.collect();
+		if let Some(me) = me
 			&& (self.screen.live() || self.camera.live())
 		{
 			media.push(P2pMedia {
@@ -129,35 +161,106 @@ impl P2p {
 			});
 		}
 		state.set_p2p_media(media);
-		let watching = watching.filter(|user| {
-			self.peers
-				.iter()
-				.any(|peer| peer.user.0 == *user && peer.streaming)
-		});
+		ui.voice_monkado_users = self.peers.iter().map(|peer| peer.user).chain(me).collect();
+		// Every P2P share chosen on the stage: the main one and the extras beside it.
+		let peers = &self.peers;
+		let p2p_streamer = |user: &Id| peers.iter().any(|peer| peer.user == *user && peer.screen);
+		let primary = state.voice.active.as_ref().and_then(|call| call.watching);
+		let watching: Vec<u64> = primary
+			.into_iter()
+			.chain(ui.voice_also_watching.iter().copied())
+			.filter(p2p_streamer)
+			.map(|user| user.0)
+			.collect();
 		if running.watching != watching {
-			running.mesh.watch(watching);
-			running.watching = watching;
-			if let Ok(mut slot) = self.stream.lock() {
-				*slot = None;
+			running.mesh.watch(watching.clone());
+			running.watching = watching.clone();
+			if let Ok(mut streams) = self.streams.lock() {
+				streams.retain(|(user, _, _)| watching.contains(user));
 			}
-			self.texture = Default::default();
+			self.textures.retain(|(user, _)| watching.contains(&user.0));
+			ui.voice_stream_views
+				.retain(|(user, _)| watching.contains(&user.0));
 		}
-		if watching.is_none() {
+		self.upload_streams(ui, ctx);
+		if let Some(primary) = primary.filter(|user| watching.contains(&user.0)) {
+			let shown = ui.voice_stream_views.iter().any(|(user, _)| *user == primary);
+			ui.voice_stream_status = if shown {
+				"Watching the stream"
+			} else {
+				"Connecting to the stream…"
+			};
+		}
+		self.live_times(state, ui, me);
+	}
+
+	/// Uploads changed pictures of watched P2P shares into their textures.
+	fn upload_streams(&mut self, ui: &mut ui::MessagingUi, ctx: &egui::Context) {
+		let Ok(mut streams) = self.streams.try_lock() else {
 			return;
+		};
+		for (user, picture, dirty) in streams.iter_mut() {
+			if !std::mem::take(dirty) {
+				continue;
+			}
+			let user = Id(*user);
+			let index = match self.textures.iter().position(|(id, _)| *id == user) {
+				Some(index) => index,
+				None => {
+					self.textures.push((user, Default::default()));
+					self.textures.len() - 1
+				}
+			};
+			let name = format!("p2p-stream-{}", user.0);
+			let Some(texture) = self.textures[index].1.upload(ctx, &name, picture.borrow()) else {
+				continue;
+			};
+			match ui.voice_stream_views.iter_mut().find(|(id, _)| *id == user) {
+				Some((_, shown)) => *shown = texture,
+				None => ui.voice_stream_views.push((user, texture)),
+			}
 		}
-		if let Ok(mut slot) = self.stream.try_lock()
-			&& let Some((picture, fresh)) = slot.as_mut()
-			&& std::mem::take(fresh)
-			&& let Some(texture) = self.texture.upload(ctx, "p2p-stream", picture.borrow())
-		{
-			ui.voice_stream_view = Some(texture);
+	}
+
+	/// When each live share in the call started: P2P peers report it, this device knows its
+	/// own, and Discord-only shares count from when this device first saw them.
+	fn live_times(&mut self, state: &State, ui: &mut ui::MessagingUi, me: Option<Id>) {
+		let streaming: Vec<Id> = state
+			.voice
+			.active
+			.as_ref()
+			.map(|call| {
+				call.participants
+					.iter()
+					.filter(|participant| participant.streaming)
+					.map(|participant| participant.user)
+					.collect()
+			})
+			.unwrap_or_default();
+		self.seen_live.retain(|(user, _)| streaming.contains(user));
+		let now = Instant::now();
+		let mut since = Vec::with_capacity(streaming.len());
+		for user in streaming {
+			let known = if Some(user) == me {
+				self.screen.live_since()
+			} else {
+				self.peers
+					.iter()
+					.find(|peer| peer.user == user)
+					.and_then(|peer| peer.screen_since)
+			};
+			let started = known.unwrap_or_else(|| {
+				match self.seen_live.iter().find(|(seen, _)| *seen == user) {
+					Some((_, seen)) => *seen,
+					None => {
+						self.seen_live.push((user, now));
+						now
+					}
+				}
+			});
+			since.push((user, started));
 		}
-		if let Some(texture) = self.texture.texture() {
-			ui.voice_stream_view = Some(texture);
-			ui.voice_stream_status = "Watching the stream";
-		} else {
-			ui.voice_stream_status = "Connecting to the stream…";
-		}
+		ui.voice_live_since = since;
 	}
 
 	fn start(
@@ -168,11 +271,11 @@ impl P2p {
 		tag: [u8; 32],
 		ctx: &egui::Context,
 	) {
-		let (slot, wake) = (self.stream.clone(), ctx.clone());
+		let (streams, wake) = (self.streams.clone(), ctx.clone());
 		let screen_sink: discord_voice::VideoSink = Arc::new(move |frame| {
-			if slot
+			if streams
 				.lock()
-				.is_ok_and(|mut slot| crate::watch::store_frame(&mut slot, frame))
+				.is_ok_and(|mut streams| crate::voice::store_remote_frame(&mut streams, frame))
 			{
 				wake.request_repaint();
 			}
@@ -211,7 +314,7 @@ impl P2p {
 			tag,
 			mesh,
 			members: Vec::new(),
-			watching: None,
+			watching: Vec::new(),
 		});
 	}
 }
