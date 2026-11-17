@@ -5041,3 +5041,4 @@ moderation-delete-week = 过去 7 天
 moderation-confirm-timeout = 禁言
 # Context: moderation
 moderation-confirm-ban = 封禁
+voice-voice-participant-camera-on = 摄像头已开启

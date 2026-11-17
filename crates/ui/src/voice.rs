@@ -697,6 +697,14 @@ impl MessagingUi {
 							"voice-voice-participant-muted-for-you-on-this-device",
 						);
 					}
+					if entry.participant.video {
+						status_icon(
+							ui,
+							crate::icons::Icon::Video,
+							colors.muted,
+							"voice-voice-participant-camera-on",
+						);
+					}
 					if entry.participant.streaming {
 						live_badge(ui);
 						if let Some(elapsed) = self.live_elapsed(ui, entry.participant.user) {

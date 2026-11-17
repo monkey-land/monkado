@@ -260,6 +260,7 @@ mod native {
 	const UNAVAILABLE: &str = "The Windows tray is unavailable. The window will remain accessible.";
 	const ATLAS: &[u8] = include_bytes!("../../../assets/icons/atlas.png");
 	const ICON_SIZE: usize = 32;
+	const LOGO: &[u8] = include_bytes!("../../../assets/icons/monkado.png");
 
 	/// UI-thread-owned registration: no worker, timer or allocating event queue.
 	/// The retained window and Rc prevent cross-thread drop or a dangling subclass callback.
@@ -677,50 +678,64 @@ mod native {
 			unsafe { create_hicon_from_bgra(ICON_SIZE as u32, ICON_SIZE as u32, &bgra) }
 		};
 
-		let extract_gradient =
-			|cell: usize, top_left: [u8; 3], bottom_right: [u8; 3]| -> Option<HICON> {
-				let col = cell % 8;
-				let row = cell / 8;
-				let base_x = (col * 64) as u32;
-				let base_y = (row * 64) as u32;
-				let mut bgra = [0u8; ICON_SIZE * ICON_SIZE * 4];
-
-				for dy in 0..ICON_SIZE {
-					for dx in 0..ICON_SIZE {
-						let sx = base_x + (dx as u32) * 2;
-						let sy = base_y + (dy as u32) * 2;
-						let a00 = atlas.get_pixel(sx, sy)[3] as u32;
-						let a01 = atlas.get_pixel(sx + 1, sy)[3] as u32;
-						let a10 = atlas.get_pixel(sx, sy + 1)[3] as u32;
-						let a11 = atlas.get_pixel(sx + 1, sy + 1)[3] as u32;
-						let alpha = ((a00 + a01 + a10 + a11 + 2) / 4) as u8;
-
-						// Diagonal interpolation factor across 32x32: dx + dy in 0..=62
-						let t = (dx + dy) as u32;
-						let cr = ((top_left[0] as u32 * (62 - t) + bottom_right[0] as u32 * t) / 62)
-							as u16;
-						let cg = ((top_left[1] as u32 * (62 - t) + bottom_right[1] as u32 * t) / 62)
-							as u16;
-						let cb = ((top_left[2] as u32 * (62 - t) + bottom_right[2] as u32 * t) / 62)
-							as u16;
-
-						let idx = (dy * ICON_SIZE + dx) * 4;
-						let a = alpha as u16;
-						bgra[idx] = ((cb * a) / 255) as u8;
-						bgra[idx + 1] = ((cg * a) / 255) as u8;
-						bgra[idx + 2] = ((cr * a) / 255) as u8;
-						bgra[idx + 3] = alpha;
-					}
-				}
-				unsafe { create_hicon_from_bgra(ICON_SIZE as u32, ICON_SIZE as u32, &bgra) }
-			};
-
 		[
-			extract(58, [215, 218, 224]),
-			extract_gradient(58, [100, 165, 255], [120, 50, 230]),
+			logo_icon(false),
+			logo_icon(true),
 			extract(4, [242, 63, 67]),
 			extract(6, [242, 63, 67]),
 		]
+	}
+
+	/// The Monkado logo at tray size; speaking adds a green ring, like call avatars.
+	fn logo_icon(speaking: bool) -> Option<HICON> {
+		const GREEN: [f32; 3] = [35.0, 165.0, 90.0];
+		let logo = image::load_from_memory_with_format(LOGO, image::ImageFormat::Png)
+			.ok()?
+			.into_rgba8();
+		let inset = if speaking { 3 } else { 0 };
+		let side = ICON_SIZE - inset * 2;
+		let logo = image::imageops::resize(
+			&logo,
+			side as u32,
+			side as u32,
+			image::imageops::FilterType::Triangle,
+		);
+		// Anti-aliased coverage of a centred rounded square.
+		let coverage = |x: f32, y: f32, half: f32, radius: f32| -> f32 {
+			let centre = ICON_SIZE as f32 / 2.0;
+			let qx = (x - centre).abs() - (half - radius);
+			let qy = (y - centre).abs() - (half - radius);
+			let outside = qx.max(0.0).hypot(qy.max(0.0)) + qx.max(qy).min(0.0) - radius;
+			(0.5 - outside).clamp(0.0, 1.0)
+		};
+		let mut bgra = [0u8; ICON_SIZE * ICON_SIZE * 4];
+		for y in 0..ICON_SIZE {
+			for x in 0..ICON_SIZE {
+				let (px, py) = (x as f32 + 0.5, y as f32 + 0.5);
+				let ring = if speaking {
+					(coverage(px, py, 16.0, 8.0) - coverage(px, py, 14.0, 6.5)).max(0.0)
+				} else {
+					0.0
+				};
+				let mut rgb = GREEN.map(|channel| channel * ring);
+				let mut alpha = ring;
+				if (inset..inset + side).contains(&x) && (inset..inset + side).contains(&y) {
+					let pixel = logo.get_pixel((x - inset) as u32, (y - inset) as u32);
+					let a = f32::from(pixel[3]) / 255.0;
+					for (channel, value) in rgb.iter_mut().zip(pixel.0) {
+						*channel = f32::from(value) * a + *channel * (1.0 - a);
+					}
+					alpha = a + alpha * (1.0 - a);
+				}
+				// Premultiplied BGRA, like the glyph icons.
+				let idx = (y * ICON_SIZE + x) * 4;
+				bgra[idx] = rgb[2].round() as u8;
+				bgra[idx + 1] = rgb[1].round() as u8;
+				bgra[idx + 2] = rgb[0].round() as u8;
+				bgra[idx + 3] = (alpha * 255.0).round() as u8;
+			}
+		}
+		unsafe { create_hicon_from_bgra(ICON_SIZE as u32, ICON_SIZE as u32, &bgra) }
 	}
 
 	unsafe fn create_hicon_from_bgra(width: u32, height: u32, bgra: &[u8]) -> Option<HICON> {

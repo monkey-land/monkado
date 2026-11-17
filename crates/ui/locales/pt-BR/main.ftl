@@ -4944,3 +4944,4 @@ moderation-delete-week = Últimos 7 dias
 moderation-confirm-timeout = Castigar
 # Context: moderation
 moderation-confirm-ban = Banir
+voice-voice-participant-camera-on = Câmera ligada

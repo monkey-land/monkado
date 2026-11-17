@@ -4954,3 +4954,4 @@ moderation-delete-week = Последние 7 дней
 moderation-confirm-timeout = Тайм-аут
 # Context: moderation
 moderation-confirm-ban = Забанить
+voice-voice-participant-camera-on = Камера включена

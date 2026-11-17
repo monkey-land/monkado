@@ -6,6 +6,8 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 #[derive(Default)]
 pub struct Startup {
 	saved: Settings,
+	/// The OS entry has been read at least once.
+	loaded: bool,
 	pending: Option<Receiver<Result<Settings, &'static str>>>,
 }
 
@@ -64,6 +66,7 @@ impl Startup {
 		match result {
 			Ok(saved) => {
 				self.saved = saved;
+				self.loaded = true;
 				view.startup_status = "";
 			}
 			Err(error) => view.startup_status = error,
@@ -83,6 +86,13 @@ impl Startup {
 			return;
 		}
 		self.poll(view);
+		// First run: open with Windows unless it is already set up.
+		if view.startup_default_pending && self.loaded && self.pending.is_none() {
+			view.startup_default_pending = false;
+			if !self.saved.enabled {
+				view.startup_enabled = true;
+			}
+		}
 		let disable = std::mem::take(&mut view.startup_disable_requested);
 		let desired = if disable {
 			Settings::default()

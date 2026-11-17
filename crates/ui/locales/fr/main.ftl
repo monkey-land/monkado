@@ -4944,3 +4944,4 @@ moderation-delete-week = 7 derniers jours
 moderation-confirm-timeout = Exclure
 # Context: moderation
 moderation-confirm-ban = Bannir
+voice-voice-participant-camera-on = Caméra activée

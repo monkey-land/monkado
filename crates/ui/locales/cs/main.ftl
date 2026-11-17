@@ -5072,3 +5072,4 @@ moderation-delete-week = Posledních 7 dní
 moderation-confirm-timeout = Oddechový čas
 # Context: moderation
 moderation-confirm-ban = Zabanovat
+voice-voice-participant-camera-on = Kamera zapnutá

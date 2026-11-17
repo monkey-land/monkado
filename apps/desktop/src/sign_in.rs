@@ -1112,8 +1112,7 @@ impl Desktop {
 fn app_mark(ui: &mut egui::Ui, size: f32) {
 	let p = ui::design::palette(ui);
 	let (mark, _) = ui.allocate_exact_size(egui::Vec2::splat(size), egui::Sense::hover());
-	ui.painter()
-		.rect_filled(mark, (size * 0.25).round() as u8, p.accent);
+	let _ = p;
 	ui::icons::paint(
 		ui.painter(),
 		ui::icons::Icon::Monkado,

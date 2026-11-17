@@ -40,7 +40,11 @@ pub struct AppPreferences {
 	/// `None` follows the operating-system locale; otherwise this is a bounded BCP 47 tag.
 	pub language: Option<String>,
 	pub notifications_enabled: bool,
+	/// Renamed keys: Monkado updates automatically on its stable channel by default, so values
+	/// saved by earlier builds (off, nightly) are not carried over.
+	#[serde(rename = "monkado_auto_update")]
 	pub auto_update: bool,
+	#[serde(rename = "monkado_update_nightly")]
 	pub update_nightly: bool,
 	pub notification_options: model::notification_preferences::Device,
 	pub show_hidden_channels: bool,
@@ -110,6 +114,8 @@ pub struct AppPreferences {
 	/// First-run setup finished or skipped; absent in older preferences, so existing installs
 	/// see it once too.
 	pub setup_done: bool,
+	/// Opening with Windows was switched on once by default; the owner may turn it off later.
+	pub startup_default_applied: bool,
 }
 impl Default for AppPreferences {
 	fn default() -> Self {
@@ -117,8 +123,8 @@ impl Default for AppPreferences {
 			window_geometry: None,
 			language: None,
 			notifications_enabled: true,
-			auto_update: false,
-			update_nightly: true,
+			auto_update: true,
+			update_nightly: false,
 			notification_options: Default::default(),
 			show_hidden_channels: false,
 			hide_nitro_emojis: false,
@@ -157,6 +163,7 @@ impl Default for AppPreferences {
 			time_format: Default::default(),
 			diagnostics_log: diagnostics::Level::Off,
 			setup_done: false,
+			startup_default_applied: false,
 		}
 	}
 }

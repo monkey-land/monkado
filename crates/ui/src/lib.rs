@@ -415,6 +415,8 @@ pub struct MessagingUi {
 	pub tray_available: bool,
 	pub tray_status: &'static str,
 	pub startup_enabled: bool,
+	/// Opening with Windows is still to be switched on once by default.
+	pub startup_default_pending: bool,
 	pub startup_minimized: bool,
 	pub startup_available: bool,
 	pub startup_busy: bool,
@@ -2536,6 +2538,24 @@ impl MessagingUi {
 									self.shown_presence_status().wire(),
 									ring,
 								);
+								// Speaking in a call: the same green ring as call avatars.
+								let speaking = state.voice.active.as_ref().is_some_and(|call| {
+									matches!(
+										call.phase,
+										client_core::voice::Phase::Connected
+											| client_core::voice::Phase::Waiting
+									) && !call.muted
+										&& !call.deafened
+										&& !call.server_muted
+										&& !call.server_deafened
+								}) && self.voice_speaking.contains(&user.id);
+								if speaking {
+									ui.painter().circle_stroke(
+										avatar.rect.center(),
+										avatar.rect.width() * 0.5 - 1.5,
+										egui::Stroke::new(3.0, colors.positive),
+									);
+								}
 								anchor =
 									Some(avatar.on_hover_text(language.text("profile-and-status")));
 							}

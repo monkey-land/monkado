@@ -5153,3 +5153,4 @@ reading-chat-reading-settings-hide-ignored-messages = 무시한 사용자의 메
 # Context: reading_chat
 reading-chat-reading-settings-hide-ignored-messages-description = 무시한 작성자도 로컬 필터에 포함합니다. 관계 상태를 알 수 없으면 메시지를 숨기지 않습니다.
 
+voice-voice-participant-camera-on = 카메라 켜짐

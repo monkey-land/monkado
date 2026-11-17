@@ -468,6 +468,13 @@ fn layer(ctx: &egui::Context, cell: u32) -> TextureHandle {
 
 /// Paint `icon` centred in `rect` with `color`.
 pub fn paint(painter: &egui::Painter, icon: Icon, rect: Rect, color: Color32) {
+	// The app mark is the full-colour Monkado logo, never a tinted glyph.
+	if icon == Icon::Monkado {
+		let _ = color;
+		let size = rect.width().min(rect.height()) * 1.6;
+		paint_logo(painter, Rect::from_center_size(rect.center(), Vec2::splat(size)));
+		return;
+	}
 	let size = rect.width().min(rect.height());
 	let ppp = painter.pixels_per_point();
 	let drawn = size * (CELL / GLYPH);

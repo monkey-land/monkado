@@ -4930,3 +4930,4 @@ moderation-delete-week = Son 7 gün
 moderation-confirm-timeout = Zaman aşımı
 # Context: moderation
 moderation-confirm-ban = Yasakla
+voice-voice-participant-camera-on = Kamera açık

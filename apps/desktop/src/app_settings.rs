@@ -89,6 +89,7 @@ impl Settings {
 			time_format: ui.time_format,
 			diagnostics_log: ui.diagnostics_log,
 			setup_done: !ui.setup_pending,
+			startup_default_applied: !ui.startup_default_pending,
 		};
 		if value != self.current {
 			self.state.touched = true;
@@ -148,6 +149,7 @@ impl Settings {
 		ui.diagnostics_log = value.diagnostics_log;
 		// Unreadable preferences fall back to defaults; never nag with setup on every launch.
 		ui.setup_pending = self.loaded && !value.setup_done;
+		ui.startup_default_pending = self.loaded && !value.startup_default_applied;
 		ui::local_time::set_format(ui.time_format, ui.language);
 	}
 }
@@ -513,6 +515,7 @@ mod tests {
 		ui.auto_idle = defaults.auto_idle;
 		ui.custom_title_bar = defaults.custom_title_bar;
 		ui.setup_pending = !defaults.setup_done;
+		ui.startup_default_pending = !defaults.startup_default_applied;
 		settings.observe(&ui);
 		assert!(
 			!settings.state.touched,

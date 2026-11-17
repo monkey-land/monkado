@@ -23,6 +23,8 @@ const MAX_METADATA: usize = 2 * 1024 * 1024;
 const MAX_DOWNLOAD: u64 = 512 * 1024 * 1024;
 const CHECK_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const LOG_RELEASES: usize = 30;
+/// How long after launch a downloaded automatic update restarts the app by itself.
+const AUTO_RESTART_WINDOW: Duration = Duration::from_secs(5 * 60);
 const LOG_NOTES: usize = 16 * 1024;
 const LOG_ITEMS: usize = 60;
 
@@ -85,6 +87,8 @@ pub struct Updater {
 	demo_available: bool,
 	demo_ready: bool,
 	log: Option<Vec<ui::updates::LogEntry>>,
+	/// Launch time: an automatic update downloaded soon after it restarts into the new version.
+	launched: Instant,
 }
 impl Updater {
 	pub fn new(demo: bool) -> Self {
@@ -105,6 +109,7 @@ impl Updater {
 			demo_available: false,
 			demo_ready: false,
 			log: None,
+			launched: Instant::now(),
 		}
 	}
 
@@ -119,6 +124,12 @@ impl Updater {
 		let check = std::mem::take(&mut view.check_requested);
 		let download = std::mem::take(&mut view.download_requested);
 		let restart = std::mem::take(&mut view.restart_requested);
+		// Update on launch: an automatic update found right after launch installs at once.
+		let restart = restart
+			|| (view.auto_update
+				&& self.staged.is_some()
+				&& !self.armed
+				&& self.launched.elapsed() < AUTO_RESTART_WINDOW);
 		if self.demo {
 			if self.channel != Some(view.nightly) {
 				self.demo_available = false;
@@ -555,9 +566,9 @@ fn asset_name(tag: &str) -> Option<String> {
 }
 fn on_channel(release: &Release, version: &semver::Version, nightly: bool) -> bool {
 	let is_nightly = version.pre.as_str().starts_with("nightly.");
-	!release.draft
-		&& ((nightly && release.prerelease && is_nightly)
-			|| (!nightly && !release.prerelease && version.pre.is_empty()))
+	// Monkado publishes stable releases only; the nightly channel still receives them.
+	let stable = !release.prerelease && version.pre.is_empty();
+	!release.draft && (stable || (nightly && release.prerelease && is_nightly))
 }
 /// Releases between the running build and the newest one, notes reduced to plain bullets.
 fn release_log(

@@ -37,8 +37,8 @@ pub struct Updates {
 impl Default for Updates {
 	fn default() -> Self {
 		Self {
-			auto_update: false,
-			nightly: true,
+			auto_update: true,
+			nightly: false,
 			status: "Updates have not been checked yet.".into(),
 			busy: false,
 			available: false,
@@ -308,8 +308,6 @@ impl MessagingUi {
 				ui.spacing_mut().item_spacing.x = 14.0;
 				let (badge, _) =
 					ui.allocate_exact_size(egui::Vec2::splat(44.0), egui::Sense::hover());
-				ui.painter()
-					.rect_filled(badge, 12, colors.accent.gamma_multiply(0.16));
 				crate::icons::paint(
 					ui.painter(),
 					crate::icons::Icon::Monkado,
