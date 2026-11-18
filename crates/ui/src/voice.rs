@@ -159,7 +159,11 @@ impl MessagingUi {
 			.with_inner_size([480.0, 270.0])
 			.with_min_inner_size([240.0, 135.0])
 			.with_app_id("land.monkey.monkado.stream")
-			.with_always_on_top();
+			.with_window_level(if self.voice_stream_unpinned {
+				egui::WindowLevel::Normal
+			} else {
+				egui::WindowLevel::AlwaysOnTop
+			});
 		let mut open = true;
 		ctx.show_viewport_immediate(id, builder, |ui, _| {
 			if ui.input(|input| input.viewport().close_requested()) {
@@ -169,6 +173,7 @@ impl MessagingUi {
 			let rect = ui.max_rect();
 			ui.painter().rect_filled(rect, 0, STAGE_FILL);
 			self.stream_tile(ui, state, rect, channel, streamer, true);
+			self.stream_pin_control(ui, rect);
 		});
 		if !open {
 			// Closing the window docks the share back into the call stage.
@@ -1959,6 +1964,51 @@ impl MessagingUi {
 			.clicked()
 		{
 			self.watch_request = Some(None);
+		}
+	}
+
+	/// Pin toggle over a detached share: always on top, or an ordinary floating window.
+	fn stream_pin_control(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
+		const SIZE: f32 = 36.0;
+		let button = egui::Rect::from_min_size(
+			rect.right_top() + egui::vec2(-12.0 - SIZE, 12.0),
+			egui::Vec2::splat(SIZE),
+		);
+		let response = ui.allocate_rect(button, egui::Sense::click());
+		let pinned = !self.voice_stream_unpinned;
+		ui.painter().rect_filled(
+			button,
+			8,
+			egui::Color32::from_black_alpha(if response.hovered() { 220 } else { 170 }),
+		);
+		let color = if pinned {
+			design::palette(ui).accent
+		} else {
+			egui::Color32::WHITE
+		};
+		crate::icons::paint(
+			ui.painter(),
+			crate::icons::Icon::Pin,
+			button.shrink(9.0),
+			color,
+		);
+		if !pinned {
+			ui.painter().line_segment(
+				[
+					button.left_bottom() + egui::vec2(9.0, -9.0),
+					button.right_top() + egui::vec2(-9.0, 9.0),
+				],
+				egui::Stroke::new(2.0, egui::Color32::WHITE),
+			);
+		}
+		let label = if pinned {
+			"Deixar como janela flutuante"
+		} else {
+			"Manter sempre no topo"
+		};
+		response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
+		if response.on_hover_text(label).clicked() {
+			self.voice_stream_unpinned = pinned;
 		}
 	}
 

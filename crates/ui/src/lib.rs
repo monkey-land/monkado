@@ -562,6 +562,8 @@ pub struct MessagingUi {
 	voice_stage_drawn: bool,
 	/// Primary share moved into its own native window; closing it returns the share to the stage.
 	voice_stream_detached: Option<Id>,
+	/// Whether the detached share is an ordinary window instead of staying above others.
+	voice_stream_unpinned: bool,
 	/// Tile click to start (`Some(user)`) or stop (`None`) watching, applied by the stage.
 	watch_request: Option<Option<Id>>,
 	/// One watched share's own "Stop watching", applied by the stage.
