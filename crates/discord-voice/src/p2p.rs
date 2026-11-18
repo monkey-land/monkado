@@ -29,7 +29,7 @@ use std::{
 	collections::HashMap,
 	sync::{
 		Arc, Mutex,
-		atomic::{AtomicBool, Ordering},
+		atomic::{AtomicBool, AtomicU64, Ordering},
 	},
 	time::{Duration, Instant},
 };
@@ -65,6 +65,16 @@ const AUDIO_PENDING: usize = AUDIO_FRAME * 5;
 /// Largest Opus packet a 20 ms frame can produce.
 const MAX_AUDIO_PACKET: usize = 1275;
 const AUDIO_BITRATE: i32 = 128_000;
+/// QUIC stream priority of share audio; video streams keep the default 0.
+const AUDIO_PRIORITY: i32 = 1;
+/// Received share audio plays one 20 ms frame per tick.
+const AUDIO_TICK: Duration = Duration::from_millis(20);
+/// Frames buffered before playback starts or resumes: 60 ms of jitter headroom.
+const AUDIO_PREFILL: usize = 3;
+/// Most frames buffered, 200 ms; older ones are dropped so latency cannot build up.
+const AUDIO_MAX_BUFFER: usize = 10;
+/// Missing frames Opus conceals before playback pauses to refill.
+const AUDIO_CONCEAL: u8 = 3;
 /// Decoded 20 ms mono frames of the watched peer's share audio.
 pub type AudioSink = Arc<dyn Fn(crate::Frame) + Send + Sync>;
 /// Frames buffered per subscriber; a slower one skips to the next keyframe instead.
@@ -101,6 +111,8 @@ struct TrackInner {
 	/// When the source went live, so peers can show how long a share has run.
 	since: Mutex<Option<Instant>>,
 	keyframe: Mutex<Option<KeyframeHook>>,
+	/// Which publisher owns the track; a replaced publisher must not take it offline.
+	owner: AtomicU64,
 }
 /// One local media source peers can subscribe to. Cheap to clone; frames published while
 /// nobody subscribes are dropped.
@@ -113,6 +125,7 @@ impl Default for Track {
 			live: AtomicBool::new(false),
 			since: Mutex::new(None),
 			keyframe: Mutex::new(None),
+			owner: AtomicU64::new(0),
 		}))
 	}
 }
@@ -152,25 +165,38 @@ impl Track {
 	pub fn has_viewers(&self) -> bool {
 		self.0.frames.receiver_count() > 0
 	}
+	/// Makes the caller the track's publisher, returning its claim.
+	fn claim(&self) -> u64 {
+		self.0.owner.fetch_add(1, Ordering::AcqRel) + 1
+	}
+	/// Takes the track offline unless a newer publisher claimed it since `claim`.
+	fn release(&self, claim: u64) {
+		if self.0.owner.load(Ordering::Acquire) == claim {
+			self.set_live(false);
+			self.set_keyframe_hook(None);
+		}
+	}
 }
 
 /// Publishes the screen encoder's frames on `track`, and the captured system audio as Opus
 /// on `audio`, until capture stops or the future is dropped. The encoder only works while
 /// someone watches.
 pub async fn publish_screen(track: Track, audio: Track, mut video: Video) {
-	struct Offline(Track);
+	// Switching sources starts a new publisher before the old one is dropped: the share
+	// stays live for viewers, so the old one must not take it offline afterwards.
+	struct Offline(Track, u64);
 	impl Drop for Offline {
 		fn drop(&mut self) {
-			self.0.set_live(false);
-			self.0.set_keyframe_hook(None);
+			self.0.release(self.1);
 		}
 	}
+	let claim = track.claim();
 	let keyframe = video.keyframe.clone();
 	track.set_keyframe_hook(Some(Arc::new(move || {
 		keyframe.store(true, Ordering::Release)
 	})));
 	track.set_live(true);
-	let _offline = Offline(track.clone());
+	let _offline = Offline(track.clone(), claim);
 	let mut source = video.audio.take();
 	let mut encoder = source.as_ref().and_then(|_| ShareAudio::new());
 	if source.is_some() && encoder.is_none() {
@@ -286,8 +312,11 @@ enum Control {
 pub struct Mesh {
 	control: mpsc::UnboundedSender<Control>,
 	updates: std::sync::mpsc::Receiver<Update>,
+	viewers: Viewers,
 	task: JoinHandle<()>,
 }
+/// Peers subscribed to this device's screen, with their open subscription count.
+type Viewers = Arc<Mutex<HashMap<u64, usize>>>;
 pub struct MeshConfig {
 	pub channel: u64,
 	pub user: u64,
@@ -315,7 +344,9 @@ impl Mesh {
 			video_receive::spawn_decoder(config.screen_sink.clone())?;
 		let (camera_decoder, camera_lost) =
 			video_receive::spawn_decoder(config.camera_sink.clone())?;
+		let viewers = Viewers::default();
 		let shared = Arc::new(Shared {
+			viewers: viewers.clone(),
 			channel: config.channel,
 			user: config.user,
 			screen: config.screen,
@@ -334,6 +365,7 @@ impl Mesh {
 		Ok(Self {
 			control,
 			updates,
+			viewers,
 			task,
 		})
 	}
@@ -352,6 +384,16 @@ impl Mesh {
 	pub fn updates(&self) -> impl Iterator<Item = Update> + '_ {
 		self.updates.try_iter()
 	}
+	/// Peers currently watching this device's screen share, in ascending ID order.
+	pub fn screen_viewers(&self) -> Vec<u64> {
+		let mut users: Vec<u64> = self
+			.viewers
+			.lock()
+			.map(|viewers| viewers.keys().copied().collect())
+			.unwrap_or_default();
+		users.sort_unstable();
+		users
+	}
 }
 impl Drop for Mesh {
 	fn drop(&mut self) {
@@ -360,6 +402,7 @@ impl Drop for Mesh {
 }
 
 struct Shared {
+	viewers: Viewers,
 	channel: u64,
 	user: u64,
 	screen: Track,
@@ -740,7 +783,7 @@ async fn serve(
 			stream = connection.accept_bi() => {
 				let Ok((send, recv)) = stream else { break };
 				if subscribers.len() < 6 {
-					subscribers.spawn(publish(shared.clone(), send, recv));
+					subscribers.spawn(publish(shared.clone(), user, send, recv));
 				}
 			}
 			Some(_) = subscribers.join_next(), if !subscribers.is_empty() => {}
@@ -752,12 +795,18 @@ async fn serve(
 /// Sends one local track to a subscriber, starting at a keyframe.
 async fn publish(
 	shared: Arc<Shared>,
+	user: u64,
 	mut send: SendStream,
 	mut recv: RecvStream,
 ) -> Result<(), ()> {
 	let mut request = [0u8; 1];
 	recv.read_exact(&mut request).await.map_err(drop)?;
 	let track = shared.track(request[0]).ok_or(())?.clone();
+	// Audio is tiny but late audio is audible: it goes ahead of queued video on the link.
+	if request[0] == SCREEN_AUDIO {
+		send.set_priority(AUDIO_PRIORITY).map_err(drop)?;
+	}
+	let _viewer = (request[0] == SCREEN).then(|| Viewing::start(&shared.viewers, user));
 	let mut frames = track.0.frames.subscribe();
 	track.request_keyframe();
 	let mut asked = Instant::now();
@@ -786,6 +835,35 @@ async fn publish(
 				}
 				Err(RecvError::Closed) => return Ok(()),
 			},
+		}
+	}
+}
+
+/// Counts one screen subscription of `user` for as long as it lives.
+struct Viewing {
+	viewers: Viewers,
+	user: u64,
+}
+impl Viewing {
+	fn start(viewers: &Viewers, user: u64) -> Self {
+		if let Ok(mut viewers) = viewers.lock() {
+			*viewers.entry(user).or_default() += 1;
+		}
+		Self {
+			viewers: viewers.clone(),
+			user,
+		}
+	}
+}
+impl Drop for Viewing {
+	fn drop(&mut self) {
+		if let Ok(mut viewers) = self.viewers.lock()
+			&& let Some(count) = viewers.get_mut(&self.user)
+		{
+			*count -= 1;
+			if *count == 0 {
+				viewers.remove(&self.user);
+			}
 		}
 	}
 }
@@ -873,22 +951,93 @@ async fn receive_audio_frames(
 	let mut decoder = opus2::Decoder::new(48_000, Channels::Mono).map_err(|_| "decoder")?;
 	let (mut send, mut recv) = connection.open_bi().await.map_err(|_| ENDED)?;
 	send.write_all(&[SCREEN_AUDIO]).await.map_err(|_| ENDED)?;
-	let mut header = [0u8; 5];
-	let mut packet = [0u8; MAX_AUDIO_PACKET];
-	loop {
-		recv.read_exact(&mut header).await.map_err(|_| ENDED)?;
-		let length = parse_audio_header(header)?;
-		recv.read_exact(&mut packet[..length])
-			.await
-			.map_err(|_| ENDED)?;
-		let mut frame: crate::Frame = [0.0; 960];
-		// A corrupt packet is skipped; the playout bridge absorbs the gap.
-		if decoder
-			.decode_float(&packet[..length], &mut frame, false)
-			.ok() == Some(frame.len())
-		{
-			sink(frame);
+	// Reading stays in its own future: a stream read cut short by `select!` would lose bytes.
+	let (packets, mut arrived) = mpsc::channel::<Vec<u8>>(AUDIO_MAX_BUFFER * 2);
+	let reader = async move {
+		let mut header = [0u8; 5];
+		loop {
+			recv.read_exact(&mut header).await.map_err(|_| ENDED)?;
+			let length = parse_audio_header(header)?;
+			let mut packet = vec![0; length];
+			recv.read_exact(&mut packet).await.map_err(|_| ENDED)?;
+			// A full queue means playout is far behind; the jitter buffer would trim it anyway.
+			let _ = packets.try_send(packet);
 		}
+	};
+	let player = async {
+		let mut jitter = Jitter::default();
+		let mut tick = tokio::time::interval(AUDIO_TICK);
+		tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+		loop {
+			tokio::select! {
+				packet = arrived.recv() => {
+					let Some(packet) = packet else { return Err(ENDED) };
+					let mut frame: crate::Frame = [0.0; 960];
+					// A corrupt packet is dropped; concealment covers the gap.
+					if decoder.decode_float(&packet, &mut frame, false).ok() == Some(frame.len()) {
+						jitter.push(frame);
+					}
+				}
+				_ = tick.tick() => match jitter.tick() {
+					Playout::Frame(frame) => sink(*frame),
+					Playout::Conceal => {
+						let mut frame: crate::Frame = [0.0; 960];
+						if decoder.decode_float(&[], &mut frame, false).ok() == Some(frame.len()) {
+							sink(frame);
+						}
+					}
+					Playout::Wait => {}
+				},
+			}
+		}
+	};
+	tokio::select! {
+		result = reader => result,
+		result = player => result,
+	}
+}
+
+/// Paces received share audio at one frame per 20 ms after a short prefill, so network
+/// jitter neither overflows the playout queue (clicks) nor leaves it empty (gaps).
+#[derive(Default)]
+struct Jitter {
+	frames: std::collections::VecDeque<crate::Frame>,
+	playing: bool,
+	concealed: u8,
+}
+#[derive(Debug, PartialEq)]
+enum Playout {
+	Frame(Box<crate::Frame>),
+	/// One frame missing: Opus extrapolates it from the previous audio.
+	Conceal,
+	/// Refilling before playback (re)starts.
+	Wait,
+}
+impl Jitter {
+	fn push(&mut self, frame: crate::Frame) {
+		self.frames.push_back(frame);
+		// After a stall the backlog would only add latency; keep the newest audio.
+		while self.frames.len() > AUDIO_MAX_BUFFER {
+			self.frames.pop_front();
+		}
+	}
+	fn tick(&mut self) -> Playout {
+		if !self.playing {
+			if self.frames.len() < AUDIO_PREFILL {
+				return Playout::Wait;
+			}
+			self.playing = true;
+		}
+		if let Some(frame) = self.frames.pop_front() {
+			self.concealed = 0;
+			return Playout::Frame(Box::new(frame));
+		}
+		if self.concealed < AUDIO_CONCEAL {
+			self.concealed += 1;
+			return Playout::Conceal;
+		}
+		self.playing = false;
+		Playout::Wait
 	}
 }
 
@@ -994,6 +1143,67 @@ mod tests {
 		assert_eq!(parse_audio_header([1, 0, 0, 0x04, 0xfb]), Ok(1275));
 		assert!(parse_audio_header([1, 0, 0, 0x04, 0xfc]).is_err());
 		assert!(parse_audio_header([0, 0, 0, 0, 9]).is_err());
+	}
+
+	/// Bursty arrival plays smoothly: playback waits for the prefill, a short gap is
+	/// concealed instead of going silent, a long one refills, and a backlog is trimmed.
+	#[test]
+	fn jitter_buffer_prefills_conceals_and_trims() {
+		let frame = |value: f32| [value; 960];
+		let mut jitter = Jitter::default();
+		jitter.push(frame(1.0));
+		jitter.push(frame(2.0));
+		assert_eq!(jitter.tick(), Playout::Wait);
+		jitter.push(frame(3.0));
+		for value in [1.0, 2.0, 3.0] {
+			assert_eq!(jitter.tick(), Playout::Frame(Box::new(frame(value))));
+		}
+		for _ in 0..AUDIO_CONCEAL {
+			assert_eq!(jitter.tick(), Playout::Conceal);
+		}
+		assert_eq!(jitter.tick(), Playout::Wait);
+		jitter.push(frame(4.0));
+		assert_eq!(
+			jitter.tick(),
+			Playout::Wait,
+			"a stall refills before resuming"
+		);
+		for value in 0..AUDIO_MAX_BUFFER + 5 {
+			jitter.push(frame(value as f32));
+		}
+		assert_eq!(
+			jitter.tick(),
+			Playout::Frame(Box::new(frame(5.0))),
+			"oldest backlog dropped"
+		);
+	}
+
+	/// A viewer counts while any of its screen subscriptions lives, so a resubscription
+	/// overlapping the old one never drops it from the list.
+	#[test]
+	fn screen_viewers_count_overlapping_subscriptions() {
+		let viewers = Viewers::default();
+		let first = Viewing::start(&viewers, 7);
+		let second = Viewing::start(&viewers, 7);
+		let other = Viewing::start(&viewers, 9);
+		drop(first);
+		assert_eq!(viewers.lock().unwrap().get(&7), Some(&1));
+		drop(second);
+		drop(other);
+		assert!(viewers.lock().unwrap().is_empty());
+	}
+
+	/// Switching sources: the replaced publisher's late cleanup leaves the new one live.
+	#[test]
+	fn replaced_publisher_cannot_take_the_track_offline() {
+		let track = Track::default();
+		let old = track.claim();
+		track.set_live(true);
+		let new = track.claim();
+		track.release(old);
+		assert!(track.live());
+		track.release(new);
+		assert!(!track.live());
 	}
 
 	/// Captured system audio becomes Opus packets only while a peer subscribes, and a

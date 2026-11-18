@@ -82,6 +82,8 @@ pub(super) struct Screen {
 	closing: Option<Closing>,
 	retiring: Option<mpsc::Receiver<Result<(), Cow<'static, str>>>>,
 	source_scan: Option<SourceScan>,
+	/// Picker previews arriving one by one from the scan thread, for its current sources.
+	thumbnails: Option<mpsc::Receiver<(screen::SourceId, image::RgbaImage)>>,
 	command: Option<Command>,
 	sequence: u64,
 	/// Owned when it carries a run-time detail such as a Windows error code.
@@ -112,6 +114,35 @@ impl Screen {
 
 	pub fn use_p2p(&mut self, track: discord_voice::p2p::Track, audio: discord_voice::p2p::Track) {
 		self.p2p = Some((track, audio));
+	}
+
+	/// Uploads the previews that arrived since the last frame, one texture per source.
+	fn receive_thumbnails(&mut self, ui: &mut ui::MessagingUi, ctx: &egui::Context) {
+		let Some(previews) = &self.thumbnails else {
+			return;
+		};
+		loop {
+			match previews.try_recv() {
+				Ok((id, preview)) => {
+					let image = egui::ColorImage::from_rgba_unmultiplied(
+						[preview.width() as usize, preview.height() as usize],
+						preview.as_raw(),
+					);
+					let texture = ctx.load_texture(
+						format!("screen-source-{id:?}"),
+						image,
+						egui::TextureOptions::LINEAR,
+					);
+					ui.screen.thumbnails.retain(|(known, _)| *known != id);
+					ui.screen.thumbnails.push((id, texture));
+				}
+				Err(mpsc::TryRecvError::Empty) => break,
+				Err(mpsc::TryRecvError::Disconnected) => {
+					self.thumbnails = None;
+					break;
+				}
+			}
+		}
 	}
 
 	fn retire_live(&mut self) {
@@ -291,6 +322,7 @@ impl Screen {
 			return None;
 		}
 		ui.screen.supported = discord_voice::screen::supported();
+		ui.screen.switchable = self.p2p_live;
 		let cue = model::notification_preferences::Sound::ViewerJoin;
 		if std::mem::take(&mut self.viewer_cue) && ui.notification_options.allows(cue) {
 			ui.notification_preview = Some(cue);
@@ -300,18 +332,42 @@ impl Screen {
 			ui.screen.sources.clear();
 			ui.screen.selected = None;
 		}
+		if !ui.screen.open {
+			self.thumbnails = None;
+			ui.screen.thumbnails.clear();
+		}
+		self.receive_thumbnails(ui, ctx);
 
 		if ui.screen.refresh_requested {
 			ui.screen.refresh_requested = false;
 			if !state.demo && self.source_scan.is_none() && ui.screen.supported {
 				let (send, receive) = mpsc::sync_channel(1);
+				// A few previews in flight; the thread waits for the UI to take them.
+				let (preview_send, previews) = mpsc::sync_channel(4);
 				let wake = ctx.clone();
 				self.status = "Procurando telas e janelas…".into();
+				self.thumbnails = Some(previews);
+				ui.screen.thumbnails.clear();
 				match std::thread::Builder::new()
 					.name("screen-sources".into())
 					.spawn(move || {
-						let _ = send.send(discord_voice::screen::sources());
+						let sources = discord_voice::screen::sources();
+						let ids: Vec<screen::SourceId> = sources
+							.as_ref()
+							.map(|sources| sources.iter().map(|source| source.id).collect())
+							.unwrap_or_default();
+						let _ = send.send(sources);
 						wake.request_repaint();
+						for id in ids {
+							let Some(preview) = discord_voice::screen::thumbnail(id) else {
+								continue;
+							};
+							// The picker closed or rescanned: stop drawing previews.
+							if preview_send.send((id, preview)).is_err() {
+								break;
+							}
+							wake.request_repaint();
+						}
 					}) {
 					Ok(_) => {
 						self.source_scan = Some(SourceScan {
@@ -415,7 +471,9 @@ impl Screen {
 										)
 								})
 						});
-					if self.context().is_some() || self.retiring.is_some() {
+					// A live P2P share switches source in place: viewers keep watching.
+					let switching = self.p2p_live && self.live.is_some();
+					if !switching && (self.context().is_some() || self.retiring.is_some()) {
 						self.status =
 							"O compartilhamento de tela anterior ainda está fechando".into();
 						self.toast = Some((ui::design::Level::Warning, self.status.clone()));
@@ -428,6 +486,9 @@ impl Screen {
 							stream_request: self.sequence,
 						};
 						if let Some(track) = self.p2p.clone() {
+							if switching {
+								self.retire_live();
+							}
 							if let Err(error) =
 								self.start_p2p(runtime, context, settings, track, ctx)
 							{

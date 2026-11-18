@@ -40,6 +40,17 @@ mod imp;
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(crate) use imp::{Capture, sources};
+#[cfg(target_os = "windows")]
+#[path = "thumbnail_windows.rs"]
+mod thumbnail_windows;
+#[cfg(target_os = "windows")]
+pub(crate) use thumbnail_windows::thumbnail;
+
+/// Still previews need a platform drawing API; elsewhere the picker shows icons.
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn thumbnail(_source: crate::screen::SourceId) -> Option<image::RgbaImage> {
+	None
+}
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub(crate) fn sources() -> Result<Vec<Source>, &'static str> {
