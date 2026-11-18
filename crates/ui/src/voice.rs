@@ -132,6 +132,61 @@ impl MessagingUi {
 		true
 	}
 
+	/// The primary watched share in its own movable window, kept above other applications.
+	/// Closing it returns the share to the call stage.
+	pub(super) fn show_detached_stream(&mut self, ctx: &egui::Context, state: &mut State) {
+		let Some(streamer) = self.voice_stream_detached else {
+			return;
+		};
+		let Some(call) = state
+			.voice
+			.active
+			.as_ref()
+			.filter(|call| call.phase != Phase::Failed && call.watching == Some(streamer))
+		else {
+			self.voice_stream_detached = None;
+			return;
+		};
+		if self.is_voice_fullscreen() {
+			return;
+		}
+		let channel = call.channel;
+		let name = participant_user(state, channel, streamer)
+			.map_or_else(|| "Participante".to_owned(), |user| user.name.clone());
+		let id = egui::ViewportId::from_hash_of(("monkado-stream-window", streamer.0));
+		let builder = egui::ViewportBuilder::default()
+			.with_title(format!("Tela de {name}"))
+			.with_inner_size([480.0, 270.0])
+			.with_min_inner_size([240.0, 135.0])
+			.with_app_id("land.monkey.monkado.stream")
+			.with_always_on_top();
+		let mut open = true;
+		ctx.show_viewport_immediate(id, builder, |ui, _| {
+			if ui.input(|input| input.viewport().close_requested()) {
+				open = false;
+				return;
+			}
+			let rect = ui.max_rect();
+			ui.painter().rect_filled(rect, 0, STAGE_FILL);
+			self.stream_tile(ui, state, rect, channel, streamer, true);
+		});
+		if !open {
+			// Closing the window docks the share back into the call stage.
+			self.voice_stream_detached = None;
+			self.voice_focus = Some(StageFocus::Stream(streamer));
+			return;
+		}
+		self.apply_watch_request(state);
+		if state.voice.active.as_ref().and_then(|call| call.watching) != Some(streamer) {
+			self.voice_stream_detached = None;
+		}
+	}
+
+	fn detach_stream(&mut self, streamer: Id) {
+		self.voice_stream_detached = Some(streamer);
+		self.voice_focus = None;
+	}
+
 	/// Effective screen-share audio level, independent of participant voice levels.
 	pub fn voice_stream_volume(&self) -> u16 {
 		if self.voice_stream_muted {
@@ -1217,7 +1272,9 @@ impl MessagingUi {
 		// Like Discord, every remote share gets its own box beside its streamer's tile; the
 		// watched one leads, the rest stay previews until someone clicks to watch.
 		let watching = call.and_then(|call| call.watching);
-		if let Some(streamer) = watching {
+		if let Some(streamer) = watching
+			&& self.voice_stream_detached != Some(streamer)
+		{
 			tiles.push(Tile::Stream(streamer));
 		}
 		// Monkado P2P shares watched beside the main one, each in its own box.
@@ -1572,6 +1629,12 @@ impl MessagingUi {
 					.show(|ui| {
 						self.stream_audio_controls(ui);
 						ui.separator();
+						if state.voice.active.as_ref().and_then(|call| call.watching)
+							== Some(*streamer) && ui.button("Abrir em janela separada").clicked()
+						{
+							self.detach_stream(*streamer);
+							ui.close();
+						}
 						if ui.button("Parar de assistir").clicked() {
 							self.watch_stop = Some(*streamer);
 							ui.close();
@@ -2612,7 +2675,7 @@ impl MessagingUi {
 		commands: &mut Vec<Command>,
 		stage_drawn: bool,
 	) {
-		if stage_drawn {
+		if stage_drawn || self.voice_stream_detached.is_some() {
 			return;
 		}
 		let Some(call) = state.voice.active.as_ref() else {
@@ -3823,10 +3886,15 @@ impl MessagingUi {
 		// share/more) before anything overlaps; mute, camera and hang-up always stay.
 		let actions = 2.0 * 48.0;
 		let essential = 2.0 * 48.0 + BAR_GAP + HANG_UP;
-		let side = [watched.is_some(), focused, screen_focused]
-			.iter()
-			.filter(|shown| **shown)
-			.count() as f32
+		let side = [
+			watched.is_some(),
+			watched.is_some(),
+			focused,
+			screen_focused,
+		]
+		.iter()
+		.filter(|shown| **shown)
+		.count() as f32
 			* 44.0;
 		let side_shown = bar.width() - 2.0 * STAGE_MARGIN >= essential + BAR_GAP + side;
 		let side = if side_shown { side } else { 0.0 };
@@ -4063,6 +4131,20 @@ impl MessagingUi {
 			}
 		}
 		if watched.is_some() && side_shown {
+			let detach = control(
+				&mut view,
+				crate::icons::Icon::External,
+				40.0,
+				true,
+				STAGE_TEXT,
+				"Janela separada",
+				"Abrir a transmissão em uma janela separada",
+			);
+			if detach.clicked()
+				&& let Some(streamer) = watched
+			{
+				self.detach_stream(streamer);
+			}
 			let volume = control(
 				&mut view,
 				crate::icons::Icon::Speaker,
