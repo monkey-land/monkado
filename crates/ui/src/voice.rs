@@ -647,7 +647,7 @@ impl MessagingUi {
 		});
 		response.on_hover_text_with(|| {
 			format!(
-				"{} · Ver canal de voz{}{}{}",
+				"{} · Entrar no canal de voz{}{}{}",
 				channel.name,
 				occupancy.map_or(String::new(), |(people, limit)| format!(
 					" · {people} of {limit} people"
@@ -2608,7 +2608,7 @@ impl MessagingUi {
 	pub(super) fn apply_voice_join(&mut self, state: &mut State, commands: &mut Vec<Command>) {
 		if let Some(channel) = self.voice_join.take() {
 			self.request_call(state, channel, false, commands);
-			// A double-clicked row has no disabled button to explain why nothing joined.
+			// A clicked row has no disabled button to explain why nothing joined.
 			if let Some(full) = state.call_full(channel) {
 				self.toasts.push(crate::design::Level::Error, full);
 			}
