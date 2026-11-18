@@ -19,7 +19,7 @@ url.workspace = true
 getrandom.workspace = true
 tracing = { version = "0.1", default-features = false, features = ["max_level_off", "release_max_level_off"] }
 davey = { version = "=0.1.4", default-features = false }
-openmls = { version = "=0.8.1", default-features = false }
+openmls = { version = "=0.9.2", default-features = false }
 chacha20poly1305 = { version = "=0.10.1", default-features = false, features = ["alloc"] }
 opus2 = { version = "=0.4.0", default-features = false, features = ["backend-libopus", "static", "bundled"] }
 rtrb = "=0.4.0"
