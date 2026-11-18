@@ -558,6 +558,8 @@ pub struct MessagingUi {
 	voice_chrome_hidden: f32,
 	/// Session-only visibility of the selected guild voice channel's chat.
 	pub voice_chat_open: bool,
+	/// The call stage was painted last frame; otherwise a watched stream shows as a mini player.
+	voice_stage_drawn: bool,
 	/// Tile click to start (`Some(user)`) or stop (`None`) watching, applied by the stage.
 	watch_request: Option<Option<Id>>,
 	/// One watched share's own "Stop watching", applied by the stage.
@@ -5018,6 +5020,8 @@ impl MessagingUi {
 		let side = self.drain_side_press();
 		let mut commands = Vec::new();
 		commands.extend(cosmetics_refresh);
+		let stage_drawn = std::mem::take(&mut self.voice_stage_drawn);
+		self.stream_mini_player(ui.ctx(), state, &mut commands, stage_drawn);
 		// A server joined from an invite opens as soon as the Gateway delivers it.
 		commands.extend(state.navigate_after_join());
 		// A chat link to an unloaded thread opens once its bounded channel read admits it.
