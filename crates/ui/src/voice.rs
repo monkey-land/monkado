@@ -1969,7 +1969,7 @@ impl MessagingUi {
 
 	/// Pin toggle over a detached share: always on top, or an ordinary floating window.
 	fn stream_pin_control(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
-		const SIZE: f32 = 36.0;
+		const SIZE: f32 = 40.0;
 		let button = egui::Rect::from_min_size(
 			rect.right_top() + egui::vec2(-12.0 - SIZE, 12.0),
 			egui::Vec2::splat(SIZE),
@@ -1992,15 +1992,6 @@ impl MessagingUi {
 			button.shrink(9.0),
 			color,
 		);
-		if !pinned {
-			ui.painter().line_segment(
-				[
-					button.left_bottom() + egui::vec2(9.0, -9.0),
-					button.right_top() + egui::vec2(-9.0, 9.0),
-				],
-				egui::Stroke::new(2.0, egui::Color32::WHITE),
-			);
-		}
 		let label = if pinned {
 			"Deixar como janela flutuante"
 		} else {
