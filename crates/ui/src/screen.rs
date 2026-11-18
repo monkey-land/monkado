@@ -42,6 +42,8 @@ pub struct ScreenUi {
 	pub preview: Option<egui::TextureHandle>,
 	/// The share is running and the local picture is intentionally not updating.
 	pub preview_paused: bool,
+	/// Call participants watching this device's share, when the transport reports them.
+	pub viewers: Vec<Id>,
 	resolution: Resolution,
 	/// Selection the current resolution was chosen for. `None` until sources arrive.
 	quality_for: Option<SourceId>,
@@ -66,6 +68,7 @@ impl Default for ScreenUi {
 			supported: false,
 			preview: None,
 			preview_paused: false,
+			viewers: Vec::new(),
 			resolution: Resolution::Source,
 			quality_for: None,
 			fps: 30,
