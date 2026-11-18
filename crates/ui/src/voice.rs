@@ -3445,11 +3445,17 @@ impl MessagingUi {
 	}
 
 	fn camera_settings_popup(&mut self, trigger: &egui::Response, demo: bool) {
+		self.camera_settings_menu(trigger, demo, trigger.clicked());
+	}
+
+	/// Camera device menu anchored to `trigger`, opened or closed when `toggle` is set (a click
+	/// on a chevron, or a right-click on the camera button itself, like Discord's).
+	fn camera_settings_menu(&mut self, trigger: &egui::Response, demo: bool, toggle: bool) {
 		let id = trigger.id.with("camera-settings-open");
 		let mut open = trigger
 			.ctx
 			.data_mut(|data| *data.get_temp_mut_or_default::<bool>(id));
-		if trigger.clicked() {
+		if toggle {
 			open = !open;
 		}
 		let close_behavior = if egui::Popup::is_any_open(&trigger.ctx) {
@@ -4280,9 +4286,14 @@ impl MessagingUi {
 				egui::Shape::rect_filled(response.rect.shrink(4.0), 8, fill),
 			);
 		}
-		// A live P2P share opens a menu, like Discord's: switch the source or stop.
+		self.share_button_action(&response, state);
+	}
+
+	/// What every share button does, like Discord's: a live switchable share opens a menu to
+	/// switch the source or stop; otherwise a click starts or stops sharing.
+	fn share_button_action(&mut self, response: &egui::Response, state: &State) {
 		if self.screen.busy && self.screen.switchable {
-			egui::Popup::menu(&response).show(|ui| {
+			egui::Popup::menu(response).show(|ui| {
 				if ui.button("Trocar tela ou janela").clicked() {
 					self.screen.launch_switch(state);
 					ui.close();
@@ -4702,6 +4713,8 @@ impl MessagingUi {
 		let title = share.title.as_deref().unwrap_or("Sua tela");
 		let quality = format!("{}p {}FPS", share.height, share.fps);
 		let mut stop = false;
+		let mut switch = false;
+		let switchable = self.screen.switchable;
 		egui::Frame::new()
 			.inner_margin(egui::Margin::same(8))
 			.show(ui, |ui| {
@@ -4725,6 +4738,15 @@ impl MessagingUi {
 							"Parar transmissão",
 						)
 						.clicked();
+						if switchable {
+							switch = crate::icons::button(
+								ui,
+								crate::icons::Icon::ScreenShare,
+								32.0,
+								"Trocar tela ou janela",
+							)
+							.clicked();
+						}
 						ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
 							ui.vertical(|ui| {
 								ui.spacing_mut().item_spacing.y = 0.0;
@@ -4749,6 +4771,8 @@ impl MessagingUi {
 			});
 		if stop {
 			self.screen.launch(state);
+		} else if switch {
+			self.screen.launch_switch(state);
 		}
 		true
 	}
@@ -4925,11 +4949,10 @@ impl MessagingUi {
 					&& state.can_stream(channel_id));
 				let processing = !state.demo && self.voice_available;
 				let mut camera_clicked = false;
-				let mut share_clicked = false;
 				ui.horizontal(|ui| {
 					ui.spacing_mut().item_spacing.x = 8.0;
-					let width = ((ui.available_width() - 3.0 * 8.0 - 24.0) / 3.0).max(24.0);
-					camera_clicked = card_action(
+					let width = ((ui.available_width() - 2.0 * 8.0) / 3.0).max(24.0);
+					let camera_button = card_action(
 						ui,
 						width,
 						if camera {
@@ -4953,18 +4976,14 @@ impl MessagingUi {
 						} else if !state.can_camera(channel_id) {
 							"Câmera indisponível com as permissões atuais do canal"
 						} else {
-							"Compartilhar a câmera selecionada nesta chamada"
+							"Compartilhar a câmera selecionada nesta chamada · clique direito para escolher a câmera"
 						},
-					)
-					.clicked();
-					let camera_settings = crate::icons::button(
-						ui,
-						crate::icons::Icon::ChevronDown,
-						24.0,
-						&crate::i18n::translate("voice-voice-card-section-camera-settings"),
 					);
-					self.camera_settings_popup(&camera_settings, state.demo);
-					share_clicked = card_action(
+					camera_clicked = camera_button.clicked();
+					// Discord keeps the device choice on the button itself instead of a chevron.
+					let pick_camera = camera_button.secondary_clicked();
+					self.camera_settings_menu(&camera_button, state.demo, pick_camera);
+					let share_button = card_action(
 						ui,
 						width,
 						if self.screen.busy {
@@ -4990,8 +5009,8 @@ impl MessagingUi {
 						} else {
 							"Compartilhar a tela exige uma chamada conectada e permissão de vídeo em um desktop compatível."
 						},
-					)
-					.clicked();
+					);
+					self.share_button_action(&share_button, state);
 					if card_action(
 						ui,
 						width,
@@ -5023,9 +5042,6 @@ impl MessagingUi {
 				if camera_clicked && let Some(command) = state.set_call_camera(!camera) {
 					self.voice_camera_status = "";
 					commands.push(command);
-				}
-				if share_clicked {
-					self.screen.launch(state);
 				}
 			});
 		if connected && ui.is_rect_visible(ui.max_rect()) {
