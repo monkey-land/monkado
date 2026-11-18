@@ -478,6 +478,10 @@ pub fn paint(painter: &egui::Painter, icon: Icon, rect: Rect, color: Color32) {
 		);
 		return;
 	}
+	if matches!(icon, Icon::ScreenShare | Icon::StopScreenShare) {
+		paint_screen(painter, icon == Icon::StopScreenShare, rect, color);
+		return;
+	}
 	let size = rect.width().min(rect.height());
 	let ppp = painter.pixels_per_point();
 	let drawn = size * (CELL / GLYPH);
@@ -496,6 +500,58 @@ pub fn paint(painter: &egui::Painter, icon: Icon, rect: Rect, color: Color32) {
 		std::mem::swap(&mut uv.min.x, &mut uv.max.x);
 	}
 	painter.image(texture.id(), rect, uv, color);
+}
+
+/// Line-drawn screen-share glyph: an outlined monitor on a short stand with an upward arrow
+/// (sharing) or a cross (stop) inside, like Discord's call controls. Drawn as vectors so it
+/// stays light and crisp at the small sizes the call card uses.
+fn paint_screen(painter: &egui::Painter, stop: bool, rect: Rect, color: Color32) {
+	let size = rect.width().min(rect.height());
+	let center = rect.center();
+	let stroke = egui::Stroke::new((size * 0.09).max(1.25), color);
+	let screen = Rect::from_center_size(
+		center - Vec2::new(0.0, size * 0.08),
+		Vec2::new(size * 0.9, size * 0.62),
+	);
+	painter.rect_stroke(screen, size * 0.1, stroke, egui::StrokeKind::Middle);
+	let foot = screen.bottom() + size * 0.2;
+	painter.line_segment(
+		[
+			egui::pos2(center.x, screen.bottom()),
+			egui::pos2(center.x, foot),
+		],
+		stroke,
+	);
+	painter.line_segment(
+		[
+			egui::pos2(center.x - size * 0.2, foot),
+			egui::pos2(center.x + size * 0.2, foot),
+		],
+		stroke,
+	);
+	let mark = screen.center();
+	let arm = size * 0.14;
+	if stop {
+		for (from, to) in [
+			(Vec2::new(-arm, -arm), Vec2::new(arm, arm)),
+			(Vec2::new(arm, -arm), Vec2::new(-arm, arm)),
+		] {
+			painter.line_segment([mark + from, mark + to], stroke);
+		}
+	} else {
+		painter.line_segment(
+			[mark + Vec2::new(0.0, arm), mark - Vec2::new(0.0, arm)],
+			stroke,
+		);
+		painter.add(egui::Shape::line(
+			vec![
+				mark + Vec2::new(-arm, 0.0),
+				mark - Vec2::new(0.0, arm),
+				mark + Vec2::new(arm, 0.0),
+			],
+			stroke,
+		));
+	}
 }
 
 /// `icon` as an atom, so widgets built from atoms (buttons, combo boxes) can show it beside text.

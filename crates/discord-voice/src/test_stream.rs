@@ -125,6 +125,8 @@ async fn exchange(rekey_timeout: bool) {
 			fps: 30,
 			cursor: false,
 			audio: true,
+			audio_apps: Default::default(),
+			encoder: Default::default(),
 		},
 		frames,
 		ready: ready.clone(),

@@ -27,6 +27,8 @@ pub(crate) fn main() {
 			fps,
 			cursor: true,
 			audio: false,
+			audio_apps: Default::default(),
+			encoder: Default::default(),
 		};
 		assert!(settings.valid());
 		assert_eq!(

@@ -83,6 +83,37 @@ pub fn audio_supported() -> bool {
 	supported()
 }
 
+/// Encoders the share picker can offer here: `Auto` first, then hardware vendors this machine
+/// has, then `Software`. Slow (it starts Media Foundation), so call it off the UI thread.
+pub fn encoders() -> Vec<client_core::screen::Encoder> {
+	use client_core::screen::Encoder;
+	let mut offered = vec![Encoder::Auto];
+	#[cfg(target_os = "windows")]
+	offered.extend(
+		crate::video_encode::windows::vendors()
+			.into_iter()
+			.filter(|v| *v != Encoder::Auto),
+	);
+	if cfg!(any(target_os = "windows", target_os = "macos")) {
+		offered.push(Encoder::Software);
+	}
+	offered
+}
+
+/// Applications playing through an output now, by executable name, for the picker's audio
+/// list. Monkado, call clients and system audio hosts are left out. Empty where per-application
+/// audio is not available. Call off the UI thread.
+pub fn audio_applications() -> Vec<String> {
+	#[cfg(target_os = "windows")]
+	{
+		capture::audio_applications()
+	}
+	#[cfg(not(target_os = "windows"))]
+	{
+		Vec::new()
+	}
+}
+
 pub fn supported() -> bool {
 	cfg!(any(
 		target_os = "macos",
@@ -530,14 +561,24 @@ impl ScreenEncoder {
 			max_bytes: MAX_ENCODED_BYTES,
 			profile: crate::video_encode::Profile::Main,
 		};
+		let software_only = settings.encoder == client_core::screen::Encoder::Software;
 		#[cfg(target_os = "macos")]
-		let hardware = crate::video_encode::hardware::Encoder::new(
-			config,
-			crate::video_encode::SourceFormat::Bgra,
-		)
-		.ok();
+		let hardware = (!software_only)
+			.then(|| {
+				crate::video_encode::hardware::Encoder::new(
+					config,
+					crate::video_encode::SourceFormat::Bgra,
+				)
+				.ok()
+			})
+			.flatten();
 		#[cfg(target_os = "windows")]
-		let hardware = crate::video_encode::hardware::Encoder::new(config).ok();
+		let hardware = (!software_only)
+			.then(|| {
+				crate::video_encode::hardware::Encoder::with_preference(config, settings.encoder)
+					.ok()
+			})
+			.flatten();
 		let software = if hardware.is_none() {
 			Some(encoder(settings, bitrate)?)
 		} else {
@@ -896,6 +937,8 @@ mod tests {
 			fps: 30,
 			cursor: true,
 			audio: false,
+			audio_apps: Default::default(),
+			encoder: Default::default(),
 		};
 		let mut encoder = encoder(settings, settings.bit_rate()).unwrap();
 		let mut yuv = YUVBuffer::new(1280, 720);

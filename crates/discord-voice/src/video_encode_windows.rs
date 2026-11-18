@@ -3,6 +3,7 @@
 
 use super::{Config, Profile};
 use crate::screen::i420_to_nv12;
+use client_core::screen::Encoder as Preference;
 use std::{
 	marker::PhantomData,
 	rc::Rc,
@@ -76,11 +77,23 @@ impl Drop for Activated {
 
 impl Encoder {
 	pub(crate) fn new(config: Config) -> Result<Self, &'static str> {
+		Self::with_preference(config, Preference::Auto)
+	}
+
+	/// Opens the hardware encoder `preference` names. `Auto` and a vendor that is missing both
+	/// fall back to the best-ranked hardware encoder; `Software` never opens one.
+	pub(crate) fn with_preference(
+		config: Config,
+		preference: Preference,
+	) -> Result<Self, &'static str> {
+		if preference == Preference::Software {
+			return Err(UNAVAILABLE);
+		}
 		let runtime = Runtime::open()?;
 		// SAFETY: Media Foundation owns returned COM objects; the activation array is cleared
 		// before its CoTaskMem allocation is released.
 		unsafe {
-			let activate = Activated(hardware_encoder()?);
+			let activate = Activated(hardware_encoder(preference)?);
 			let transform: IMFTransform = activate.0.ActivateObject().map_err(|_| UNAVAILABLE)?;
 			let attributes = transform.GetAttributes().map_err(|_| UNAVAILABLE)?;
 			if attributes.GetUINT32(&MF_TRANSFORM_ASYNC).unwrap_or(0) == 0 {
@@ -353,7 +366,70 @@ impl Drop for Encoder {
 	}
 }
 
-unsafe fn hardware_encoder() -> Result<IMFActivate, &'static str> {
+/// Hardware H.264 vendors on this machine, best-ranked first. Empty when Media Foundation
+/// lists none or cannot start.
+pub(crate) fn vendors() -> Vec<Preference> {
+	let Ok(_runtime) = Runtime::open() else {
+		return Vec::new();
+	};
+	// SAFETY: The runtime is open on this thread; entries are released by `enumerate`.
+	let mut found: Vec<Preference> = unsafe { enumerate() }
+		.unwrap_or_default()
+		.into_iter()
+		.filter_map(|activate| unsafe { vendor_of(&activate) })
+		.collect();
+	found.sort_by_key(|vendor| rank(*vendor));
+	found.dedup();
+	found
+}
+
+/// Auto's order: dedicated GPUs first, so a laptop or desktop with integrated graphics does not
+/// encode on the iGPU while a discrete NVIDIA or AMD card sits idle.
+fn rank(vendor: Preference) -> u8 {
+	match vendor {
+		Preference::Nvidia => 0,
+		Preference::Amd => 1,
+		Preference::Intel => 3,
+		Preference::Auto | Preference::Software => 2,
+	}
+}
+
+/// The vendor a hardware MFT reports through its PCI vendor id, `Auto` when unknown.
+unsafe fn vendor_of(activate: &IMFActivate) -> Option<Preference> {
+	unsafe {
+		let mut text = windows::core::PWSTR::null();
+		let mut length = 0;
+		let vendor = activate
+			.GetAllocatedString(
+				&MFT_ENUM_HARDWARE_VENDOR_ID_Attribute,
+				&mut text,
+				&mut length,
+			)
+			.ok()
+			.map(|()| {
+				let value = text.to_string().unwrap_or_default();
+				CoTaskMemFree(Some(text.0.cast()));
+				value
+			})?;
+		Some(vendor_from_id(&vendor))
+	}
+}
+
+fn vendor_from_id(id: &str) -> Preference {
+	let id = id.to_ascii_uppercase();
+	if id.contains("VEN_10DE") {
+		Preference::Nvidia
+	} else if id.contains("VEN_1002") || id.contains("VEN_1022") {
+		Preference::Amd
+	} else if id.contains("VEN_8086") {
+		Preference::Intel
+	} else {
+		Preference::Auto
+	}
+}
+
+/// Every async hardware NV12→H.264 encoder Media Foundation lists, in its own order.
+unsafe fn enumerate() -> Result<Vec<IMFActivate>, &'static str> {
 	unsafe {
 		let input = MFT_REGISTER_TYPE_INFO {
 			guidMajorType: MFMediaType_Video,
@@ -377,17 +453,30 @@ unsafe fn hardware_encoder() -> Result<IMFActivate, &'static str> {
 		if entries.is_null() {
 			return Err(UNAVAILABLE);
 		}
-		if count == 0 {
-			CoTaskMemFree(Some(entries.cast()));
+		let entries_slice = std::slice::from_raw_parts_mut(entries, count as usize);
+		let found = entries_slice.iter_mut().filter_map(Option::take).collect();
+		CoTaskMemFree(Some(entries.cast()));
+		Ok(found)
+	}
+}
+
+/// The hardware encoder for `preference`: that vendor's when present, otherwise Auto's pick.
+unsafe fn hardware_encoder(preference: Preference) -> Result<IMFActivate, &'static str> {
+	unsafe {
+		let mut found: Vec<(Preference, IMFActivate)> = enumerate()?
+			.into_iter()
+			.map(|activate| (vendor_of(&activate).unwrap_or(Preference::Auto), activate))
+			.collect();
+		// Stable, so Media Foundation's own order breaks ties within a vendor.
+		found.sort_by_key(|(vendor, _)| rank(*vendor));
+		let wanted = found
+			.iter()
+			.position(|(vendor, _)| *vendor == preference)
+			.unwrap_or(0);
+		if found.is_empty() {
 			return Err(UNAVAILABLE);
 		}
-		let entries_slice = std::slice::from_raw_parts_mut(entries, count as usize);
-		let selected = entries_slice.first_mut().and_then(Option::take);
-		for entry in entries_slice {
-			*entry = None;
-		}
-		CoTaskMemFree(Some(entries.cast()));
-		selected.ok_or(UNAVAILABLE)
+		Ok(found.swap_remove(wanted).1)
 	}
 }
 
@@ -494,5 +583,24 @@ mod tests {
 			assert_eq!(value.vt(), windows::Win32::System::Variant::VT_UI4);
 			assert_eq!(u32::try_from(&value).unwrap(), 1);
 		}
+	}
+}
+
+#[cfg(test)]
+mod vendor_tests {
+	use super::*;
+
+	#[test]
+	fn auto_ranks_dedicated_gpus_ahead_of_intel_graphics() {
+		let mut vendors = [
+			vendor_from_id("VEN_8086"),
+			vendor_from_id("ven_10de&dev_2484"),
+			vendor_from_id("VEN_1002"),
+		];
+		vendors.sort_by_key(|vendor| rank(*vendor));
+		assert_eq!(
+			vendors,
+			[Preference::Nvidia, Preference::Amd, Preference::Intel]
+		);
 	}
 }
