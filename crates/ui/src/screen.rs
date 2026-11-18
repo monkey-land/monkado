@@ -415,7 +415,7 @@ impl ScreenUi {
 			Some("screen-body-include-the-pointer-in-the-shared-video"),
 			&mut self.cursor,
 		);
-		if self.supported {
+		if self.supported || state.demo {
 			ui.add_space(6.0);
 			crate::design::switch(
 				ui,
