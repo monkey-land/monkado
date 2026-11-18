@@ -1160,6 +1160,8 @@ mod tests {
 			Playout::Frame(Box::new(frame(5.0))),
 			"oldest backlog dropped"
 		);
+	}
+
 	/// A viewer counts while any of its screen subscriptions lives, so a resubscription
 	/// overlapping the old one never drops it from the list.
 	#[test]
