@@ -65,6 +65,16 @@ const AUDIO_PENDING: usize = AUDIO_FRAME * 5;
 /// Largest Opus packet a 20 ms frame can produce.
 const MAX_AUDIO_PACKET: usize = 1275;
 const AUDIO_BITRATE: i32 = 128_000;
+/// QUIC stream priority of share audio; video streams keep the default 0.
+const AUDIO_PRIORITY: i32 = 1;
+/// Received share audio plays one 20 ms frame per tick.
+const AUDIO_TICK: Duration = Duration::from_millis(20);
+/// Frames buffered before playback starts or resumes: 60 ms of jitter headroom.
+const AUDIO_PREFILL: usize = 3;
+/// Most frames buffered, 200 ms; older ones are dropped so latency cannot build up.
+const AUDIO_MAX_BUFFER: usize = 10;
+/// Missing frames Opus conceals before playback pauses to refill.
+const AUDIO_CONCEAL: u8 = 3;
 /// Decoded 20 ms mono frames of the watched peer's share audio.
 pub type AudioSink = Arc<dyn Fn(crate::Frame) + Send + Sync>;
 /// Frames buffered per subscriber; a slower one skips to the next keyframe instead.
@@ -758,6 +768,10 @@ async fn publish(
 	let mut request = [0u8; 1];
 	recv.read_exact(&mut request).await.map_err(drop)?;
 	let track = shared.track(request[0]).ok_or(())?.clone();
+	// Audio is tiny but late audio is audible: it goes ahead of queued video on the link.
+	if request[0] == SCREEN_AUDIO {
+		send.set_priority(AUDIO_PRIORITY).map_err(drop)?;
+	}
 	let mut frames = track.0.frames.subscribe();
 	track.request_keyframe();
 	let mut asked = Instant::now();
@@ -873,22 +887,93 @@ async fn receive_audio_frames(
 	let mut decoder = opus2::Decoder::new(48_000, Channels::Mono).map_err(|_| "decoder")?;
 	let (mut send, mut recv) = connection.open_bi().await.map_err(|_| ENDED)?;
 	send.write_all(&[SCREEN_AUDIO]).await.map_err(|_| ENDED)?;
-	let mut header = [0u8; 5];
-	let mut packet = [0u8; MAX_AUDIO_PACKET];
-	loop {
-		recv.read_exact(&mut header).await.map_err(|_| ENDED)?;
-		let length = parse_audio_header(header)?;
-		recv.read_exact(&mut packet[..length])
-			.await
-			.map_err(|_| ENDED)?;
-		let mut frame: crate::Frame = [0.0; 960];
-		// A corrupt packet is skipped; the playout bridge absorbs the gap.
-		if decoder
-			.decode_float(&packet[..length], &mut frame, false)
-			.ok() == Some(frame.len())
-		{
-			sink(frame);
+	// Reading stays in its own future: a stream read cut short by `select!` would lose bytes.
+	let (packets, mut arrived) = mpsc::channel::<Vec<u8>>(AUDIO_MAX_BUFFER * 2);
+	let reader = async move {
+		let mut header = [0u8; 5];
+		loop {
+			recv.read_exact(&mut header).await.map_err(|_| ENDED)?;
+			let length = parse_audio_header(header)?;
+			let mut packet = vec![0; length];
+			recv.read_exact(&mut packet).await.map_err(|_| ENDED)?;
+			// A full queue means playout is far behind; the jitter buffer would trim it anyway.
+			let _ = packets.try_send(packet);
 		}
+	};
+	let player = async {
+		let mut jitter = Jitter::default();
+		let mut tick = tokio::time::interval(AUDIO_TICK);
+		tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+		loop {
+			tokio::select! {
+				packet = arrived.recv() => {
+					let Some(packet) = packet else { return Err(ENDED) };
+					let mut frame: crate::Frame = [0.0; 960];
+					// A corrupt packet is dropped; concealment covers the gap.
+					if decoder.decode_float(&packet, &mut frame, false).ok() == Some(frame.len()) {
+						jitter.push(frame);
+					}
+				}
+				_ = tick.tick() => match jitter.tick() {
+					Playout::Frame(frame) => sink(*frame),
+					Playout::Conceal => {
+						let mut frame: crate::Frame = [0.0; 960];
+						if decoder.decode_float(&[], &mut frame, false).ok() == Some(frame.len()) {
+							sink(frame);
+						}
+					}
+					Playout::Wait => {}
+				},
+			}
+		}
+	};
+	tokio::select! {
+		result = reader => result,
+		result = player => result,
+	}
+}
+
+/// Paces received share audio at one frame per 20 ms after a short prefill, so network
+/// jitter neither overflows the playout queue (clicks) nor leaves it empty (gaps).
+#[derive(Default)]
+struct Jitter {
+	frames: std::collections::VecDeque<crate::Frame>,
+	playing: bool,
+	concealed: u8,
+}
+#[derive(Debug, PartialEq)]
+enum Playout {
+	Frame(Box<crate::Frame>),
+	/// One frame missing: Opus extrapolates it from the previous audio.
+	Conceal,
+	/// Refilling before playback (re)starts.
+	Wait,
+}
+impl Jitter {
+	fn push(&mut self, frame: crate::Frame) {
+		self.frames.push_back(frame);
+		// After a stall the backlog would only add latency; keep the newest audio.
+		while self.frames.len() > AUDIO_MAX_BUFFER {
+			self.frames.pop_front();
+		}
+	}
+	fn tick(&mut self) -> Playout {
+		if !self.playing {
+			if self.frames.len() < AUDIO_PREFILL {
+				return Playout::Wait;
+			}
+			self.playing = true;
+		}
+		if let Some(frame) = self.frames.pop_front() {
+			self.concealed = 0;
+			return Playout::Frame(Box::new(frame));
+		}
+		if self.concealed < AUDIO_CONCEAL {
+			self.concealed += 1;
+			return Playout::Conceal;
+		}
+		self.playing = false;
+		Playout::Wait
 	}
 }
 
@@ -994,6 +1079,39 @@ mod tests {
 		assert_eq!(parse_audio_header([1, 0, 0, 0x04, 0xfb]), Ok(1275));
 		assert!(parse_audio_header([1, 0, 0, 0x04, 0xfc]).is_err());
 		assert!(parse_audio_header([0, 0, 0, 0, 9]).is_err());
+	}
+
+	/// Bursty arrival plays smoothly: playback waits for the prefill, a short gap is
+	/// concealed instead of going silent, a long one refills, and a backlog is trimmed.
+	#[test]
+	fn jitter_buffer_prefills_conceals_and_trims() {
+		let frame = |value: f32| [value; 960];
+		let mut jitter = Jitter::default();
+		jitter.push(frame(1.0));
+		jitter.push(frame(2.0));
+		assert_eq!(jitter.tick(), Playout::Wait);
+		jitter.push(frame(3.0));
+		for value in [1.0, 2.0, 3.0] {
+			assert_eq!(jitter.tick(), Playout::Frame(Box::new(frame(value))));
+		}
+		for _ in 0..AUDIO_CONCEAL {
+			assert_eq!(jitter.tick(), Playout::Conceal);
+		}
+		assert_eq!(jitter.tick(), Playout::Wait);
+		jitter.push(frame(4.0));
+		assert_eq!(
+			jitter.tick(),
+			Playout::Wait,
+			"a stall refills before resuming"
+		);
+		for value in 0..AUDIO_MAX_BUFFER + 5 {
+			jitter.push(frame(value as f32));
+		}
+		assert_eq!(
+			jitter.tick(),
+			Playout::Frame(Box::new(frame(5.0))),
+			"oldest backlog dropped"
+		);
 	}
 
 	/// Captured system audio becomes Opus packets only while a peer subscribes, and a
