@@ -70,7 +70,7 @@ cpal = { version = "=0.18.2", default-features = false, features = ["pulseaudio"
 egui-winit.workspace = true
 
 [build-dependencies]
-find-msvc-tools = "=0.1.12"
+find-msvc-tools = "=0.1.15"
 
 [dev-dependencies]
 test-support.workspace = true
