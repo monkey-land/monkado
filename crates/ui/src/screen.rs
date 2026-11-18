@@ -140,6 +140,13 @@ impl ScreenUi {
 			.as_ref()
 			.filter(|_| self.switching)
 			.map(|live| live.source);
+		if let Some(source) = self.selected {
+			self.tab = if is_window(source) {
+				SourceTab::Windows
+			} else {
+				SourceTab::Screens
+			};
+		}
 		self.audio_applications.clear();
 		self.quality_for = None;
 		self.sources.clear();
@@ -467,17 +474,17 @@ impl ScreenUi {
 
 	/// OBS-style application audio: every application, or only the ones picked here.
 	fn audio_app_choices(&mut self, ui: &mut egui::Ui) {
-		if self.audio_applications.is_empty() {
+		if self.audio_applications.is_empty() && self.audio_apps.is_all() {
 			return;
 		}
-		// Forget picks that stopped playing, so a hidden pick never silences the share.
-		let mut listed = AudioApps::default();
-		for name in &self.audio_applications {
-			if self.audio_apps.contains(name) {
-				listed.insert(name);
-			}
-		}
-		self.audio_apps = listed;
+		// Picks that are not listed now stay picked: dropping them could leave the selection
+		// empty, which means every application, and share audio nobody chose.
+		let listed = self
+			.audio_applications
+			.iter()
+			.filter(|name| self.audio_apps.contains(name))
+			.count();
+		let unavailable = self.audio_apps.len().saturating_sub(listed);
 		let colors = crate::design::palette(ui);
 		ui.add_space(8.0);
 		ui.label(crate::design::eyebrow(
@@ -515,6 +522,18 @@ impl ScreenUi {
 			)
 			.wrap(),
 		);
+		if unavailable > 0 {
+			ui.add(
+				egui::Label::new(
+					egui::RichText::new(format!(
+						"{unavailable} app(s) escolhido(s) não está(ão) tocando agora; continua(m) selecionado(s)."
+					))
+					.size(12.0)
+					.color(colors.warning),
+				)
+				.wrap(),
+			);
+		}
 	}
 
 	/// Hardware encoder choice, shown when this machine offers more than Auto.

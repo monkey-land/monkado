@@ -710,15 +710,26 @@ mod native {
 			&mut HashSet::new(),
 			AudioApps::default(),
 		)
-		.map(|found| found.into_keys().map(image_name).collect())
-		.unwrap_or_default();
+		.map(|found| {
+			// Playing applications first, so idle ones never push them past the limit.
+			let mut found: Vec<(u32, bool)> = found.into_iter().collect();
+			found.sort_by_key(|(_, playing)| !playing);
+			found
+				.into_iter()
+				.map(|(pid, playing)| (image_name(pid), playing))
+				.collect::<Vec<_>>()
+		})
+		.unwrap_or_default()
+		.into_iter()
+		.filter(|(name, _)| name != "unknown" && !excluded_executable(name))
+		.take(32)
+		.map(|(name, _)| name)
+		.collect();
 		if initialized {
 			unsafe { CoUninitialize() };
 		}
-		names.retain(|name| name != "unknown" && !excluded_executable(name));
 		names.sort_by_key(|name| name.to_ascii_lowercase());
 		names.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
-		names.truncate(32);
 		names
 	}
 

@@ -460,6 +460,19 @@ unsafe fn enumerate() -> Result<Vec<IMFActivate>, &'static str> {
 	}
 }
 
+/// Index of the encoder to open among rank-sorted vendors: the first for `Auto` (unknown
+/// vendors also read as `Auto`, so they must not be matched), otherwise the named vendor,
+/// falling back to the first.
+fn pick(vendors: impl Iterator<Item = Preference>, preference: Preference) -> usize {
+	if preference == Preference::Auto {
+		return 0;
+	}
+	vendors
+		.into_iter()
+		.position(|vendor| vendor == preference)
+		.unwrap_or(0)
+}
+
 /// The hardware encoder for `preference`: that vendor's when present, otherwise Auto's pick.
 unsafe fn hardware_encoder(preference: Preference) -> Result<IMFActivate, &'static str> {
 	unsafe {
@@ -469,10 +482,7 @@ unsafe fn hardware_encoder(preference: Preference) -> Result<IMFActivate, &'stat
 			.collect();
 		// Stable, so Media Foundation's own order breaks ties within a vendor.
 		found.sort_by_key(|(vendor, _)| rank(*vendor));
-		let wanted = found
-			.iter()
-			.position(|(vendor, _)| *vendor == preference)
-			.unwrap_or(0);
+		let wanted = pick(found.iter().map(|(vendor, _)| *vendor), preference);
 		if found.is_empty() {
 			return Err(UNAVAILABLE);
 		}
@@ -602,5 +612,14 @@ mod vendor_tests {
 			vendors,
 			[Preference::Nvidia, Preference::Amd, Preference::Intel]
 		);
+	}
+
+	#[test]
+	fn auto_keeps_nvidia_ahead_of_an_unknown_vendor() {
+		let mut vendors = [vendor_from_id("VEN_1234"), vendor_from_id("VEN_10DE")];
+		vendors.sort_by_key(|vendor| rank(*vendor));
+		assert_eq!(pick(vendors.into_iter(), Preference::Auto), 0);
+		assert_eq!(vendors[0], Preference::Nvidia);
+		assert_eq!(pick(vendors.into_iter(), Preference::Intel), 0);
 	}
 }
