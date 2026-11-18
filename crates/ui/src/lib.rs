@@ -2549,13 +2549,8 @@ impl MessagingUi {
 									&mut self.profile,
 									&mut self.user_action,
 								);
-								design::presence_dot(
-									ui,
-									avatar.rect,
-									self.shown_presence_status().wire(),
-									ring,
-								);
 								// Speaking in a call: the same green ring as call avatars.
+								// Painted before the presence dot so the dot stays on top.
 								let speaking = state.voice.active.as_ref().is_some_and(|call| {
 									matches!(
 										call.phase,
@@ -2571,6 +2566,12 @@ impl MessagingUi {
 										egui::Stroke::new(3.0, colors.positive),
 									);
 								}
+								design::presence_dot(
+									ui,
+									avatar.rect,
+									self.shown_presence_status().wire(),
+									ring,
+								);
 								anchor =
 									Some(avatar.on_hover_text(language.text("profile-and-status")));
 							}
