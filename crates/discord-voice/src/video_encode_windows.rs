@@ -5,6 +5,7 @@ use super::{Config, Profile};
 use crate::screen::i420_to_nv12;
 use client_core::screen::Encoder as Preference;
 use std::{
+	collections::VecDeque,
 	marker::PhantomData,
 	rc::Rc,
 	time::{Duration, Instant},
@@ -20,6 +21,9 @@ use windows::{
 
 const UNAVAILABLE: &str = "Windows hardware video encoding is unavailable";
 const FAILED: &str = "Windows hardware video encoding failed";
+/// Access units an encoder may hold back before the stream counts as stalled. Intel Quick Sync
+/// and some AMD drivers pipeline a few pictures even in low-latency mode.
+const MAX_PENDING_OUTPUTS: usize = 8;
 
 struct Runtime(PhantomData<Rc<()>>);
 
@@ -62,6 +66,10 @@ pub(crate) struct Encoder {
 	provides_samples: bool,
 	max_bytes: usize,
 	max_buffer_bytes: usize,
+	/// Finished access units, oldest first, not yet handed to the caller.
+	pending: VecDeque<(Vec<u8>, bool)>,
+	/// Keyframe requested for a picture that was skipped and not yet submitted.
+	keyframe_pending: bool,
 }
 
 struct Activated(IMFActivate);
@@ -180,6 +188,8 @@ impl Encoder {
 				need_input: 0,
 				have_output: 0,
 				provides_samples,
+				pending: VecDeque::new(),
+				keyframe_pending: false,
 			})
 		}
 	}
@@ -218,8 +228,18 @@ impl Encoder {
 		force_keyframe: bool,
 		fill: impl FnOnce(&mut [u8]) -> Result<(), &'static str>,
 	) -> Result<(Vec<u8>, bool), &'static str> {
-		self.wait_for_input()?;
-		if force_keyframe {
+		// A full FIFO means the caller is behind, not that the transform stalled: hand back
+		// the oldest unit and skip this picture rather than failing over to software.
+		self.wait_until(|encoder| {
+			encoder.need_input != 0 || encoder.pending.len() >= MAX_PENDING_OUTPUTS
+		})?;
+		// A skipped picture keeps its keyframe request for the next submitted one.
+		self.keyframe_pending |= force_keyframe;
+		if self.need_input == 0 {
+			return Ok(self.pending.pop_front().unwrap_or_default());
+		}
+		self.need_input -= 1;
+		if self.keyframe_pending {
 			// SAFETY: Codec control is called on the owning worker before this input sample.
 			unsafe {
 				self.codec
@@ -262,25 +282,28 @@ impl Encoder {
 				.ProcessInput(0, &sample, 0)
 				.map_err(|_| FAILED)?;
 		}
-		self.wait_for_output()?;
-		self.take_output()
+		self.keyframe_pending = false;
+		// Wait for this picture's output, but stop as soon as the encoder asks for the next
+		// picture instead: a pipelining encoder (Intel Quick Sync especially) emits it a few
+		// frames later, and blocking here made every frame time out and drop to openh264.
+		self.wait_until(|encoder| !encoder.pending.is_empty() || encoder.need_input != 0)?;
+		Ok(self.pending.pop_front().unwrap_or_default())
 	}
 
-	fn wait_for_input(&mut self) -> Result<(), &'static str> {
-		self.wait_until(|encoder| encoder.need_input != 0)?;
-		self.need_input -= 1;
-		Ok(())
-	}
-
-	fn wait_for_output(&mut self) -> Result<(), &'static str> {
-		self.wait_until(|encoder| encoder.have_output != 0)?;
-		self.have_output -= 1;
-		Ok(())
-	}
-
+	/// Polls encoder events until `ready`, collecting every finished access unit on the way so
+	/// none is lost or reordered while waiting for input.
 	fn wait_until(&mut self, ready: impl Fn(&Self) -> bool) -> Result<(), &'static str> {
 		let deadline = Instant::now() + Duration::from_millis(250);
-		while !ready(self) {
+		loop {
+			// Outputs beyond the FIFO stay signalled for the next call.
+			while self.have_output != 0 && self.pending.len() < MAX_PENDING_OUTPUTS {
+				self.have_output -= 1;
+				let output = self.take_output()?;
+				self.pending.push_back(output);
+			}
+			if ready(self) {
+				return Ok(());
+			}
 			// SAFETY: Event polling stays on the worker that owns this MFT.
 			let event = unsafe { self.events.GetEvent(MF_EVENT_FLAG_NO_WAIT) };
 			match event {
@@ -304,7 +327,6 @@ impl Encoder {
 				Err(_) => return Err(FAILED),
 			}
 		}
-		Ok(())
 	}
 
 	fn take_output(&self) -> Result<(Vec<u8>, bool), &'static str> {
