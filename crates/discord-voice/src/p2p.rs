@@ -29,7 +29,7 @@ use std::{
 	collections::HashMap,
 	sync::{
 		Arc, Mutex,
-		atomic::{AtomicBool, Ordering},
+		atomic::{AtomicBool, AtomicU64, Ordering},
 	},
 	time::{Duration, Instant},
 };
@@ -111,6 +111,8 @@ struct TrackInner {
 	/// When the source went live, so peers can show how long a share has run.
 	since: Mutex<Option<Instant>>,
 	keyframe: Mutex<Option<KeyframeHook>>,
+	/// Which publisher owns the track; a replaced publisher must not take it offline.
+	owner: AtomicU64,
 }
 /// One local media source peers can subscribe to. Cheap to clone; frames published while
 /// nobody subscribes are dropped.
@@ -123,6 +125,7 @@ impl Default for Track {
 			live: AtomicBool::new(false),
 			since: Mutex::new(None),
 			keyframe: Mutex::new(None),
+			owner: AtomicU64::new(0),
 		}))
 	}
 }
@@ -162,25 +165,38 @@ impl Track {
 	pub fn has_viewers(&self) -> bool {
 		self.0.frames.receiver_count() > 0
 	}
+	/// Makes the caller the track's publisher, returning its claim.
+	fn claim(&self) -> u64 {
+		self.0.owner.fetch_add(1, Ordering::AcqRel) + 1
+	}
+	/// Takes the track offline unless a newer publisher claimed it since `claim`.
+	fn release(&self, claim: u64) {
+		if self.0.owner.load(Ordering::Acquire) == claim {
+			self.set_live(false);
+			self.set_keyframe_hook(None);
+		}
+	}
 }
 
 /// Publishes the screen encoder's frames on `track`, and the captured system audio as Opus
 /// on `audio`, until capture stops or the future is dropped. The encoder only works while
 /// someone watches.
 pub async fn publish_screen(track: Track, audio: Track, mut video: Video) {
-	struct Offline(Track);
+	// Switching sources starts a new publisher before the old one is dropped: the share
+	// stays live for viewers, so the old one must not take it offline afterwards.
+	struct Offline(Track, u64);
 	impl Drop for Offline {
 		fn drop(&mut self) {
-			self.0.set_live(false);
-			self.0.set_keyframe_hook(None);
+			self.0.release(self.1);
 		}
 	}
+	let claim = track.claim();
 	let keyframe = video.keyframe.clone();
 	track.set_keyframe_hook(Some(Arc::new(move || {
 		keyframe.store(true, Ordering::Release)
 	})));
 	track.set_live(true);
-	let _offline = Offline(track.clone());
+	let _offline = Offline(track.clone(), claim);
 	let mut source = video.audio.take();
 	let mut encoder = source.as_ref().and_then(|_| ShareAudio::new());
 	if source.is_some() && encoder.is_none() {
@@ -1175,6 +1191,19 @@ mod tests {
 		drop(second);
 		drop(other);
 		assert!(viewers.lock().unwrap().is_empty());
+	}
+
+	/// Switching sources: the replaced publisher's late cleanup leaves the new one live.
+	#[test]
+	fn replaced_publisher_cannot_take_the_track_offline() {
+		let track = Track::default();
+		let old = track.claim();
+		track.set_live(true);
+		let new = track.claim();
+		track.release(old);
+		assert!(track.live());
+		track.release(new);
+		assert!(!track.live());
 	}
 
 	/// Captured system audio becomes Opus packets only while a peer subscribes, and a

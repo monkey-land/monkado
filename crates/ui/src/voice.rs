@@ -4052,7 +4052,19 @@ impl MessagingUi {
 				egui::Shape::rect_filled(response.rect.shrink(4.0), 8, fill),
 			);
 		}
-		if response.clicked() {
+		// A live P2P share opens a menu, like Discord's: switch the source or stop.
+		if self.screen.busy && self.screen.switchable {
+			egui::Popup::menu(&response).show(|ui| {
+				if ui.button("Trocar tela ou janela").clicked() {
+					self.screen.launch_switch(state);
+					ui.close();
+				}
+				if ui.button("Parar de compartilhar").clicked() {
+					self.screen.launch(state);
+					ui.close();
+				}
+			});
+		} else if response.clicked() {
 			self.screen.launch(state);
 		}
 	}

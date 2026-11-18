@@ -322,6 +322,7 @@ impl Screen {
 			return None;
 		}
 		ui.screen.supported = discord_voice::screen::supported();
+		ui.screen.switchable = self.p2p_live;
 		let cue = model::notification_preferences::Sound::ViewerJoin;
 		if std::mem::take(&mut self.viewer_cue) && ui.notification_options.allows(cue) {
 			ui.notification_preview = Some(cue);
@@ -470,7 +471,9 @@ impl Screen {
 										)
 								})
 						});
-					if self.context().is_some() || self.retiring.is_some() {
+					// A live P2P share switches source in place: viewers keep watching.
+					let switching = self.p2p_live && self.live.is_some();
+					if !switching && (self.context().is_some() || self.retiring.is_some()) {
 						self.status =
 							"O compartilhamento de tela anterior ainda está fechando".into();
 						self.toast = Some((ui::design::Level::Warning, self.status.clone()));
@@ -483,6 +486,9 @@ impl Screen {
 							stream_request: self.sequence,
 						};
 						if let Some(track) = self.p2p.clone() {
+							if switching {
+								self.retire_live();
+							}
 							if let Err(error) =
 								self.start_p2p(runtime, context, settings, track, ctx)
 							{

@@ -53,6 +53,10 @@ pub struct ScreenUi {
 	/// Still previews of listed sources; the desktop fills them while the picker is open.
 	pub thumbnails: Vec<(SourceId, egui::TextureHandle)>,
 	tab: SourceTab,
+	/// The live share can change source without stopping (Monkado P2P shares).
+	pub switchable: bool,
+	/// The picker is open to replace the live share's source.
+	switching: bool,
 	resolution: Resolution,
 	/// Selection the current resolution was chosen for. `None` until sources arrive.
 	quality_for: Option<SourceId>,
@@ -80,6 +84,8 @@ impl Default for ScreenUi {
 			viewers: Vec::new(),
 			thumbnails: Vec::new(),
 			tab: SourceTab::Screens,
+			switchable: false,
+			switching: false,
 			resolution: Resolution::Source,
 			quality_for: None,
 			fps: 30,
@@ -90,13 +96,29 @@ impl Default for ScreenUi {
 }
 impl ScreenUi {
 	pub(crate) fn launch(&mut self, state: &State) {
-		let Some(call) = &state.voice.active else {
+		if state.voice.active.is_none() {
 			return;
-		};
+		}
 		if self.busy {
 			self.request = Some(Request::Stop);
 			return;
 		}
+		self.switching = false;
+		self.open_picker(state);
+	}
+
+	/// Opens the picker to move the live share to another screen or window.
+	pub(crate) fn launch_switch(&mut self, state: &State) {
+		if self.busy && self.switchable {
+			self.switching = true;
+			self.open_picker(state);
+		}
+	}
+
+	fn open_picker(&mut self, state: &State) {
+		let Some(call) = &state.voice.active else {
+			return;
+		};
 		self.context = Some((state.generation, call.channel, call.request));
 		self.open = true;
 		self.selected = None;
@@ -231,7 +253,8 @@ impl ScreenUi {
 			d.footer(|ui| {
 				let allowed = !state.demo
 					&& self.supported
-					&& !self.busy && self.settings().is_some()
+					&& (!self.busy || self.switching && self.switchable)
+					&& self.settings().is_some()
 					&& state.voice.active.as_ref().is_some_and(|call| {
 						matches!(call.phase, Phase::Connected | Phase::Waiting)
 							&& state.can_stream(call.channel)
@@ -239,7 +262,11 @@ impl ScreenUi {
 				ui.add_enabled_ui(allowed, |ui| {
 					share = crate::dialog::action(
 						ui,
-						"screen-show-share-screen",
+						if self.switching {
+							"Trocar transmissão"
+						} else {
+							"screen-show-share-screen"
+						},
 						crate::dialog::Action::Primary,
 					)
 					.clicked();
@@ -264,6 +291,7 @@ impl ScreenUi {
 		}
 		if cancel || share {
 			self.open = false;
+			self.switching = false;
 		}
 	}
 
