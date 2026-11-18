@@ -225,7 +225,15 @@ impl Encoder {
 		force_keyframe: bool,
 		fill: impl FnOnce(&mut [u8]) -> Result<(), &'static str>,
 	) -> Result<(Vec<u8>, bool), &'static str> {
-		self.wait_for_input()?;
+		// A full FIFO means the caller is behind, not that the transform stalled: hand back
+		// the oldest unit and skip this picture rather than failing over to software.
+		self.wait_until(|encoder| {
+			encoder.need_input != 0 || encoder.pending.len() >= MAX_PENDING_OUTPUTS
+		})?;
+		if self.need_input == 0 {
+			return Ok(self.pending.pop_front().unwrap_or_default());
+		}
+		self.need_input -= 1;
 		if force_keyframe {
 			// SAFETY: Codec control is called on the owning worker before this input sample.
 			unsafe {
@@ -276,23 +284,15 @@ impl Encoder {
 		Ok(self.pending.pop_front().unwrap_or_default())
 	}
 
-	fn wait_for_input(&mut self) -> Result<(), &'static str> {
-		self.wait_until(|encoder| encoder.need_input != 0)?;
-		self.need_input -= 1;
-		Ok(())
-	}
-
 	/// Polls encoder events until `ready`, collecting every finished access unit on the way so
 	/// none is lost or reordered while waiting for input.
 	fn wait_until(&mut self, ready: impl Fn(&Self) -> bool) -> Result<(), &'static str> {
 		let deadline = Instant::now() + Duration::from_millis(250);
 		loop {
-			while self.have_output != 0 {
+			// Outputs beyond the FIFO stay signalled for the next call.
+			while self.have_output != 0 && self.pending.len() < MAX_PENDING_OUTPUTS {
 				self.have_output -= 1;
 				let output = self.take_output()?;
-				if self.pending.len() >= MAX_PENDING_OUTPUTS {
-					return Err(FAILED);
-				}
 				self.pending.push_back(output);
 			}
 			if ready(self) {

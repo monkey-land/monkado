@@ -4952,6 +4952,7 @@ impl MessagingUi {
 				ui.horizontal(|ui| {
 					ui.spacing_mut().item_spacing.x = 8.0;
 					let width = ((ui.available_width() - 2.0 * 8.0) / 3.0).max(24.0);
+					let camera_enabled = controls && (camera || can_camera);
 					let camera_button = card_action(
 						ui,
 						width,
@@ -4960,7 +4961,7 @@ impl MessagingUi {
 						} else {
 							crate::icons::Icon::VideoSlash
 						},
-						controls && (camera || can_camera),
+						camera_enabled,
 						camera,
 						if camera {
 							"Desligar câmera"
@@ -4968,7 +4969,7 @@ impl MessagingUi {
 							"Ligar câmera"
 						},
 						if camera {
-							"Parar de compartilhar sua câmera"
+							"Parar de compartilhar sua câmera · clique direito ou Shift+F10 para escolher a câmera"
 						} else if state.demo {
 							"A câmera fica desligada na prévia offline"
 						} else if !self.voice_camera_available {
@@ -4976,12 +4977,17 @@ impl MessagingUi {
 						} else if !state.can_camera(channel_id) {
 							"Câmera indisponível com as permissões atuais do canal"
 						} else {
-							"Compartilhar a câmera selecionada nesta chamada · clique direito para escolher a câmera"
+							"Compartilhar a câmera selecionada nesta chamada · clique direito ou Shift+F10 para escolher a câmera"
 						},
 					);
-					camera_clicked = camera_button.clicked();
-					// Discord keeps the device choice on the button itself instead of a chevron.
-					let pick_camera = camera_button.secondary_clicked();
+					camera_clicked = camera_enabled && camera_button.clicked();
+					// Discord keeps the device choice on the button itself instead of a chevron;
+					// it stays reachable while the toggle is disabled and from the keyboard.
+					let pick_camera = camera_button.secondary_clicked()
+						|| (camera_button.has_focus()
+							&& ui.input(|input| {
+								input.modifiers.shift && input.key_pressed(egui::Key::F10)
+							}));
 					self.camera_settings_menu(&camera_button, state.demo, pick_camera);
 					let share_button = card_action(
 						ui,
@@ -4993,7 +4999,10 @@ impl MessagingUi {
 						},
 						can_share,
 						self.screen.busy,
-						if self.screen.busy {
+						// A live switchable share opens a menu instead of stopping directly.
+						if self.screen.busy && self.screen.switchable {
+							"Opções de compartilhamento"
+						} else if self.screen.busy {
 							"Parar de compartilhar"
 						} else {
 							"Compartilhar sua tela"
@@ -5010,8 +5019,11 @@ impl MessagingUi {
 							"Compartilhar a tela exige uma chamada conectada e permissão de vídeo em um desktop compatível."
 						},
 					);
-					self.share_button_action(&share_button, state);
-					if card_action(
+					if can_share {
+						self.share_button_action(&share_button, state);
+					}
+					if processing
+						&& card_action(
 						ui,
 						width,
 						crate::icons::Icon::Soundboard,
@@ -5086,14 +5098,9 @@ fn card_action(
 	let label = crate::i18n::translate_if_key(label);
 	let hint = crate::i18n::translate_if_key(hint);
 	let colors = design::palette(ui);
-	let (rect, response) = ui.allocate_exact_size(
-		egui::vec2(width, 32.0),
-		if enabled {
-			egui::Sense::click()
-		} else {
-			egui::Sense::hover()
-		},
-	);
+	// Always clickable so a disabled toggle can still offer its right-click menu; callers
+	// gate the primary action on `enabled`.
+	let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 32.0), egui::Sense::click());
 	let fill = if enabled && (response.hovered() || response.has_focus()) {
 		colors.selected
 	} else {
