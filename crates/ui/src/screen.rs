@@ -9,6 +9,12 @@ use client_core::{
 use model::Id;
 use std::borrow::Cow;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SourceTab {
+	Screens,
+	Windows,
+}
+
 pub enum Request {
 	Start(Settings),
 	Stop,
@@ -42,6 +48,9 @@ pub struct ScreenUi {
 	pub preview: Option<egui::TextureHandle>,
 	/// The share is running and the local picture is intentionally not updating.
 	pub preview_paused: bool,
+	/// Still previews of listed sources; the desktop fills them while the picker is open.
+	pub thumbnails: Vec<(SourceId, egui::TextureHandle)>,
+	tab: SourceTab,
 	resolution: Resolution,
 	/// Selection the current resolution was chosen for. `None` until sources arrive.
 	quality_for: Option<SourceId>,
@@ -66,6 +75,8 @@ impl Default for ScreenUi {
 			supported: false,
 			preview: None,
 			preview_paused: false,
+			thumbnails: Vec::new(),
+			tab: SourceTab::Screens,
 			resolution: Resolution::Source,
 			quality_for: None,
 			fps: 30,
@@ -211,9 +222,9 @@ impl ScreenUi {
 		.subtitle(crate::i18n::translate(
 			"screen-show-choose-what-people-in-this-call-can-see",
 		))
-		.width(520.0)
+		.width(720.0)
 		.show(ctx, |d| {
-			d.scroll(260.0, |ui| self.body(ui, state));
+			d.scroll(520.0, |ui| self.body(ui, state));
 			d.footer(|ui| {
 				let allowed = !state.demo
 					&& self.supported
@@ -284,7 +295,7 @@ impl ScreenUi {
 		ui.add_space(6.0);
 		egui::ScrollArea::vertical()
 			.id_salt("screen-sources")
-			.max_height(196.0)
+			.max_height(300.0)
 			.show(ui, |ui| self.source_list(ui));
 		self.align_quality();
 		let (width, height, refresh) = self.geometry();
@@ -386,9 +397,34 @@ impl ScreenUi {
 		}
 	}
 
-	/// Selectable source rows; the caller bounds the height so options stay visible.
+	/// Discord-style source browser: Screens/Windows tabs over a grid of preview tiles.
 	fn source_list(&mut self, ui: &mut egui::Ui) {
 		let colors = crate::design::palette(ui);
+		let screens = self.sources.iter().filter(|s| !is_window(s.id)).count();
+		let windows = self.sources.len() - screens;
+		// Open on whichever kind exists, and follow the selection when it moves tabs.
+		if screens == 0 && windows > 0 {
+			self.tab = SourceTab::Windows;
+		} else if windows == 0 {
+			self.tab = SourceTab::Screens;
+		}
+		ui.horizontal(|ui| {
+			ui.spacing_mut().item_spacing.x = 6.0;
+			for (tab, label, count) in [
+				(SourceTab::Screens, "Telas", screens),
+				(SourceTab::Windows, "Janelas", windows),
+			] {
+				let text = if count > 0 {
+					format!("{label}  {count}")
+				} else {
+					label.to_owned()
+				};
+				if segment(ui, &text, self.tab == tab).clicked() {
+					self.tab = tab;
+				}
+			}
+		});
+		ui.add_space(8.0);
 		if self.sources.is_empty() {
 			egui::Frame::new()
 				.fill(colors.base)
@@ -407,98 +443,144 @@ impl ScreenUi {
 						.wrap(),
 					);
 				});
+			return;
 		}
-		for source in &self.sources {
-			let selected = self.selected == Some(source.id);
-			let (rect, response) = ui
-				.allocate_exact_size(egui::vec2(ui.available_width(), 48.0), egui::Sense::click());
-			let fill = if selected {
-				colors.accent.gamma_multiply(0.18)
-			} else if response.hovered() || response.has_focus() {
-				colors.hover
-			} else {
-				colors.base
-			};
-			ui.painter().rect_filled(rect, 8, fill);
-			if selected {
-				ui.painter().rect_stroke(
-					rect,
-					8,
-					egui::Stroke::new(1.0, colors.accent),
-					egui::StrokeKind::Inside,
-				);
-			}
-			let display = matches!(source.id, SourceId::Display(_) | SourceId::X11Desktop);
-			crate::icons::paint(
-				ui.painter(),
-				if display {
-					crate::icons::Icon::Television
-				} else {
-					crate::icons::Icon::ScreenShare
-				},
-				egui::Rect::from_center_size(
-					egui::pos2(rect.left() + 26.0, rect.center().y),
-					egui::Vec2::splat(20.0),
-				),
-				if selected {
-					colors.accent
-				} else {
-					colors.muted
-				},
-			);
-			let text_left = rect.left() + 46.0;
-			let text_width = (rect.right() - 36.0 - text_left).max(40.0);
-			let source_name = if source.id == SourceId::SystemPicker {
-				crate::i18n::translate("screen-macos-system-picker")
-			} else {
-				source.name.clone()
-			};
-			let name = ui.painter().layout(
-				source_name.clone(),
-				egui::FontId::new(14.0, crate::design::medium_family(ui.ctx())),
-				colors.text_strong,
-				text_width,
-			);
-			let kind = ui.painter().layout_no_wrap(
-				match source.id {
-					SourceId::Display(_) | SourceId::X11Desktop => "Tela".to_owned(),
-					SourceId::Window(_) => "Janela".to_owned(),
-					SourceId::SystemPicker => {
-						crate::i18n::translate("screen-macos-system-picker-kind")
-					}
-					#[allow(unreachable_patterns)] // Portal may be absent outside Linux.
-					_ => "Diálogo de permissão do sistema".to_owned(),
-				},
-				egui::FontId::proportional(11.0),
-				colors.muted,
-			);
-			let total = name.size().y + kind.size().y;
-			let mut y = rect.center().y - total * 0.5;
-			ui.painter()
-				.galley(egui::pos2(text_left, y), name, colors.text_strong);
-			y += total - kind.size().y;
-			ui.painter()
-				.galley(egui::pos2(text_left, y), kind, colors.muted);
-			if selected {
-				crate::icons::paint(
-					ui.painter(),
-					crate::icons::Icon::Check,
-					egui::Rect::from_center_size(
-						egui::pos2(rect.right() - 20.0, rect.center().y),
-						egui::Vec2::splat(16.0),
-					),
-					colors.accent,
-				);
-			}
-			response.widget_info(|| {
-				egui::WidgetInfo::selected(egui::Role::RadioButton, true, selected, &source_name)
+		let windows_tab = self.tab == SourceTab::Windows;
+		let columns = if windows_tab { 3 } else { 2 };
+		let gap = 10.0;
+		let width =
+			((ui.available_width() - gap * (columns as f32 - 1.0)) / columns as f32).max(80.0);
+		let preview_height = width * 9.0 / 16.0;
+		let tile = egui::vec2(width, preview_height + 30.0);
+		let shown: Vec<Source> = self
+			.sources
+			.iter()
+			.filter(|source| is_window(source.id) == windows_tab)
+			.cloned()
+			.collect();
+		for row in shown.chunks(columns) {
+			ui.horizontal(|ui| {
+				ui.spacing_mut().item_spacing.x = gap;
+				for source in row {
+					self.source_tile(ui, source, tile, preview_height);
+				}
 			});
-			if response.clicked() {
-				self.selected = Some(source.id);
-			}
-			ui.add_space(4.0);
+			ui.add_space(gap);
 		}
 	}
+
+	/// One source: its live-looking preview (or an icon), the name below, the selection ring.
+	fn source_tile(
+		&mut self,
+		ui: &mut egui::Ui,
+		source: &Source,
+		size: egui::Vec2,
+		preview_height: f32,
+	) {
+		let colors = crate::design::palette(ui);
+		let selected = self.selected == Some(source.id);
+		let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+		let hovered = response.hovered() || response.has_focus();
+		let preview = egui::Rect::from_min_size(rect.min, egui::vec2(rect.width(), preview_height));
+		ui.painter()
+			.rect_filled(preview, 8, if hovered { colors.hover } else { colors.base });
+		match self
+			.thumbnails
+			.iter()
+			.find(|(id, _)| *id == source.id)
+			.map(|(_, texture)| texture)
+		{
+			Some(texture) => {
+				let inner = preview.shrink(4.0);
+				let fitted = fit_inside(inner, texture.resolution_vec2());
+				ui.put(
+					fitted,
+					egui::Image::from_texture((texture.id(), fitted.size())).corner_radius(4),
+				);
+			}
+			None => crate::icons::paint(
+				ui.painter(),
+				if is_window(source.id) {
+					crate::icons::Icon::ScreenShare
+				} else {
+					crate::icons::Icon::Television
+				},
+				egui::Rect::from_center_size(preview.center(), egui::Vec2::splat(32.0)),
+				colors.muted,
+			),
+		}
+		if selected || hovered {
+			ui.painter().rect_stroke(
+				preview,
+				8,
+				egui::Stroke::new(
+					if selected { 2.0 } else { 1.0 },
+					if selected {
+						colors.accent
+					} else {
+						colors.muted
+					},
+				),
+				egui::StrokeKind::Inside,
+			);
+		}
+		if selected {
+			let badge = egui::Rect::from_center_size(
+				preview.right_top() + egui::vec2(-14.0, 14.0),
+				egui::Vec2::splat(20.0),
+			);
+			ui.painter()
+				.circle_filled(badge.center(), 10.0, colors.accent);
+			crate::icons::paint(
+				ui.painter(),
+				crate::icons::Icon::Check,
+				badge.shrink(4.0),
+				egui::Color32::WHITE,
+			);
+		}
+		let source_name = if source.id == SourceId::SystemPicker {
+			crate::i18n::translate("screen-macos-system-picker")
+		} else {
+			source.name.clone()
+		};
+		let mut job = egui::text::LayoutJob::simple_singleline(
+			source_name.clone(),
+			egui::FontId::new(13.0, crate::design::medium_family(ui.ctx())),
+			if selected {
+				colors.text_strong
+			} else {
+				colors.muted
+			},
+		);
+		job.wrap = egui::text::TextWrapping::truncate_at_width(rect.width());
+		let name = ui.painter().layout_job(job);
+		ui.painter().galley(
+			egui::pos2(rect.left(), preview.bottom() + 8.0),
+			name,
+			colors.text_strong,
+		);
+		response.widget_info(|| {
+			egui::WidgetInfo::selected(egui::Role::RadioButton, true, selected, &source_name)
+		});
+		let response = response.on_hover_text(&source_name);
+		if response.clicked() {
+			self.selected = Some(source.id);
+		}
+	}
+}
+
+/// Windows go under their own tab; displays and system pickers under Screens.
+fn is_window(id: SourceId) -> bool {
+	matches!(id, SourceId::Window(_))
+}
+
+/// The largest rectangle with `size`'s aspect ratio centred inside `bounds`.
+fn fit_inside(bounds: egui::Rect, size: egui::Vec2) -> egui::Rect {
+	if size.x <= 0.0 || size.y <= 0.0 {
+		return bounds;
+	}
+	let scale = (bounds.width() / size.x).min(bounds.height() / size.y);
+	egui::Rect::from_center_size(bounds.center(), size * scale)
 }
 
 fn preferred_resolution(offered: &[Resolution]) -> Resolution {

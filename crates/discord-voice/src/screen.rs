@@ -116,6 +116,20 @@ pub fn sources() -> Result<Vec<Source>, &'static str> {
 	capture::sources()
 }
 
+/// A bounded still preview of a listed source for the share picker, when the platform can
+/// draw one. Slow for some windows, so call it off the UI thread.
+pub fn thumbnail(source: SourceId) -> Option<image::RgbaImage> {
+	#[cfg(not(target_os = "linux"))]
+	{
+		capture::thumbnail(source)
+	}
+	#[cfg(target_os = "linux")]
+	{
+		let _ = source;
+		None
+	}
+}
+
 pub struct Worker {
 	stop: Arc<AtomicBool>,
 	ready: Arc<AtomicBool>,
