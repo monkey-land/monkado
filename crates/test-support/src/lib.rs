@@ -1549,6 +1549,30 @@ pub fn seed_stickers(state: &mut State) {
 	if let Some(guild) = state.guilds.iter_mut().find(|guild| guild.id == Id(10)) {
 		guild.stickers = Some(guild_stickers.clone());
 	}
+	// Extra folder mosaic servers need sticker sets so the picker shows every group's order.
+	for (guild, label) in [
+		(11, "North lab"),
+		(12, "Ops desk"),
+		(13, "Night shift"),
+		(14, "Archive"),
+	] {
+		if let Some(target) = state.guilds.iter_mut().find(|known| known.id == Id(guild)) {
+			target.stickers = Some(
+				["Wave", "Smile", "Celebrate"]
+					.into_iter()
+					.enumerate()
+					.map(|(index, name)| {
+						sticker(
+							guild * 100 + index as u64,
+							&format!("{label} {name}"),
+							Some(Id(guild)),
+							None,
+						)
+					})
+					.collect(),
+			);
+		}
+	}
 	state.stickers.recent = vec![guild_stickers[0].clone()];
 	state.stickers.packs = vec![model::StickerPack {
 		id: Id(9200),
