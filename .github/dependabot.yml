@@ -1,0 +1,37 @@
+version: 2
+
+updates:
+  - package-ecosystem: "cargo"
+    directories:
+      - "/"
+      - "/fuzz"
+      - "/extensions"
+      - "/examples/extensions"
+    schedule:
+      interval: "daily"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  - package-ecosystem: "bun"
+    directory: "/.github/release"
+    schedule:
+      interval: "daily"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
