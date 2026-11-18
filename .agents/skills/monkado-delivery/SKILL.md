@@ -20,6 +20,15 @@ or a concrete external blocker has been reported with a reviewable local result.
 - Visible or runtime changes: read [evidence guidance](references/evidence.md) before editing so
   the relevant baseline can be collected. Load only the screenshot/measurement sections that apply.
 - Author-visible SDK changes: also use `monkado-sdk-wiki`; read the affected canonical authoring docs.
+- Visible UI changes: also use `monkado-visual-check` and send the owner screenshots.
+- Anything merged to `main` or released: also use `monkado-release` and check the current version.
+
+## One request, one PR
+
+Changes the owner asks for together go on one task branch and one PR, even when they touch
+different areas. Split only when the owner asks, or when one part is risky enough to need its own
+review or revert. Never stack PRs on other unmerged PR branches: a later change to an open task goes
+onto that task's branch. Several PRs touching the same files conflict as soon as one merges.
 
 ## Review and deliver
 
@@ -40,4 +49,5 @@ Inspect PR checks and repair task-caused failures within scope. Report pre-exist
 pending checks and unavailable evidence accurately; do not repeatedly retry infrastructure failures.
 Verify the PR URL, head and body after updating. When the host provides PR linking, register the PR
 with the current thread. Finish with the link, result, verification and material limitations.
-Do not merge or publish a release without a separate request.
+Do not merge or publish a release without a separate request. Before merging, check the release
+state with `monkado-release`: never merge while a Release workflow run is queued or running.

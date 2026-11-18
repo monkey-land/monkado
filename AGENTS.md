@@ -84,13 +84,18 @@ Use a separate worktree when dirty state cannot be safely separated. Stage expli
 review the staged diff, use a scoped Conventional Commit, and push normally.
 
 For PRs use `.github/pull_request_template.md`, explicit base/head and `gh pr create/edit`. User
-visible changes need before/after screenshots; runtime changes need relevant performance comparisons.
+visible changes need before/after screenshots shared with the owner (not committed); runtime changes need relevant performance comparisons.
 Use the delivery skill for evidence. Inspect checks, fix task-caused failures and report pending or
 pre-existing failures honestly. Do not create `docs/progress.md` or `docs/adr/`; update performance,
 compatibility, storage or dependency docs when their claims change.
 
 For author-visible SDK changes, use `.agents/skills/monkado-sdk-wiki/SKILL.md` and publish its
 reviewed wiki update from the pushed source commit. Keep unmerged capabilities labeled Preview.
+
+Use `.agents/skills/monkado-visual-check/SKILL.md` for visible UI changes (screenshots go to the
+git-ignored `.evidence/` and to the owner) and `.agents/skills/monkado-release/SKILL.md` before
+merging to `main` or releasing. Requests that arrive together ship as one PR unless the owner
+asks otherwise.
 
 Load optional skills only for their specific workflows: `ponytail` for complexity tradeoffs,
 `visual-design-polish` for substantial UI polish, `gh-fix-ci` for CI diagnosis, and

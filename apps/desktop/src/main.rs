@@ -3860,6 +3860,8 @@ impl Desktop {
 			let event = match command {
 				// Offline typing has no transport or synthetic state change.
 				Command::Typing { .. } => return,
+				// The demo has no service to hide embeds on; the message keeps them.
+				Command::SuppressEmbeds { .. } => return,
 				// Offline previews confirm locally; nothing reaches the service.
 				Command::BadgeSettings { request, settings } => Event::BadgeSettings {
 					request,

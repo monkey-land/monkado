@@ -33,20 +33,11 @@ light/dark and narrow/long-content cases when the change affects those layouts. 
 blank scroll strips, unreadable text and inaccessible controls before taking the final images.
 Capture only this application's synthetic content, excluding other windows or notifications.
 
-Save a small, useful pair under `docs/pr-evidence/<task-slug>/before.png` and `after.png` (or WebP).
-Keep each image at most 2 MiB; avoid whole-desktop captures and generated build artifacts. Evidence
-is development material, never a bundled runtime asset. Commit only reviewed synthetic images.
-In the PR use a Before/After Markdown table with absolute, commit-pinned image URLs:
-
-```text
-https://github.com/<owner>/<repo>/blob/<pushed-commit>/docs/pr-evidence/<task-slug>/before.png?raw=true
-```
-
-Use the existing repository's visibility; do not upload to an unrelated image host or create a
-public gist. Verify each linked file exists at the pushed commit and the PR contains both links.
-A screenshot only displayed in chat, a local path, or inaccessible CI artifact is not an embedded
-PR image. If capture/export is unavailable, record the exact missing capability in the PR;
-never fabricate a screenshot or call an uninspected image verified.
+Follow `monkado-visual-check`: save images under the git-ignored `.evidence/<task-slug>/`, never
+commit them, and send every inspected image to the owner in the conversation. In the PR's
+Before/After section, describe the states checked and say the images were shared with the owner.
+Keep each image at most 2 MiB and avoid whole-desktop captures. If capture is unavailable, record
+the exact missing capability; never fabricate a screenshot or call an uninspected image verified.
 
 For nonvisual work write `Not applicable — no visible UI change`; do not manufacture screenshots
 of identical windows or source code. Include a brief reproduction procedure for changed behavior.
