@@ -96,6 +96,13 @@ impl MessagingUi {
 					}
 					StageFocus::Participant(_) => unreachable!("validated screen share"),
 				}
+				if rect.width() >= LIVE_ROSTER_WIDTH * 3.0 {
+					let column = egui::Rect::from_min_max(
+						egui::pos2(rect.right() - LIVE_ROSTER_WIDTH - 12.0, rect.top() + 64.0),
+						egui::pos2(rect.right() - 12.0, rect.bottom() - 12.0),
+					);
+					self.live_roster(ui, state, channel, column);
+				}
 				let button = ui.put(
 					egui::Rect::from_min_size(
 						rect.right_top() + egui::vec2(-52.0, 12.0),
@@ -1241,7 +1248,87 @@ impl MessagingUi {
 				.map(Tile::Stream),
 		);
 		tiles.extend(entries.iter().map(Tile::Participant));
+		// Live mode: with a share or camera on, only video stays on the stage; everyone
+		// else moves to the side roster.
+		if call.is_some()
+			&& tiles
+				.iter()
+				.any(|tile| self.tile_shows_media(state, channel, tile))
+		{
+			tiles.retain(|tile| self.tile_shows_media(state, channel, tile));
+		}
 		tiles
+	}
+
+	fn tile_shows_media(&self, state: &State, channel: Id, tile: &Tile<'_>) -> bool {
+		matches!(tile, Tile::Stream(_)) || self.tile_has_video(state, channel, tile)
+	}
+
+	/// Live mode is on while this device is in the channel's call and a tile shows video.
+	fn live_mode(&self, state: &State, channel: Id) -> bool {
+		state
+			.voice
+			.active
+			.as_ref()
+			.is_some_and(|call| call.channel == channel && call.phase != Phase::Failed)
+			&& self.stage_shows_video(state, channel)
+	}
+
+	/// Live mode's roster: each participant's photo and name down `column`, ringed green
+	/// while speaking.
+	fn live_roster(&mut self, ui: &mut egui::Ui, state: &State, channel: Id, column: egui::Rect) {
+		let entries = stage_participants(state, channel);
+		let rows = ((column.height() + LIVE_ROSTER_GAP) / (LIVE_ROSTER_ROW + LIVE_ROSTER_GAP))
+			.floor()
+			.max(0.0) as usize;
+		let colors = design::palette(ui);
+		for (index, entry) in entries.iter().take(rows).enumerate() {
+			let row = egui::Rect::from_min_size(
+				column.left_top()
+					+ egui::vec2(0.0, index as f32 * (LIVE_ROSTER_ROW + LIVE_ROSTER_GAP)),
+				egui::vec2(column.width(), LIVE_ROSTER_ROW),
+			);
+			let speaking = self.is_speaking(state, channel, &entry.participant);
+			let radius = LIVE_ROSTER_ROW * 0.5;
+			ui.painter()
+				.rect_filled(row, radius, egui::Color32::from_black_alpha(160));
+			let size = LIVE_ROSTER_ROW - 8.0;
+			let avatar_rect = egui::Rect::from_min_size(
+				row.left_top() + egui::Vec2::splat(4.0),
+				egui::Vec2::splat(size),
+			);
+			let (user, name) = resolve_member(state, entry);
+			let mut avatar_ui = ui.new_child(egui::UiBuilder::new().max_rect(avatar_rect));
+			let avatar = match user {
+				Some(user) => self.avatars.show(&mut avatar_ui, user, size, state.demo),
+				None => design::avatar(&mut avatar_ui, name, size),
+			};
+			if speaking {
+				speaking_avatar(ui, &avatar, name);
+				ui.painter().rect_stroke(
+					row,
+					radius,
+					egui::Stroke::new(2.0, colors.positive),
+					egui::StrokeKind::Inside,
+				);
+			}
+			let text = egui::Rect::from_min_max(
+				egui::pos2(avatar_rect.right() + 8.0, row.top()),
+				row.right_bottom() - egui::vec2(radius * 0.5, 0.0),
+			);
+			let mut text_ui = ui.new_child(
+				egui::UiBuilder::new()
+					.max_rect(text)
+					.layout(egui::Layout::left_to_right(egui::Align::Center)),
+			);
+			let color = if speaking {
+				colors.positive
+			} else {
+				STAGE_TEXT
+			};
+			let label = design::semibold(&text_ui, name, 14.0).color(color);
+			text_ui.add(egui::Label::new(label).truncate().selectable(false));
+		}
 	}
 
 	/// True once any stage tile carries video or a live share, so the direct-message stage
@@ -1285,7 +1372,22 @@ impl MessagingUi {
 				|| self.tile_has_video(state, channel, tile)
 		});
 		let frameless = dm && !video && !state.is_group_dm(channel);
-		let area = ui.available_rect_before_wrap();
+		let full = ui.available_rect_before_wrap();
+		let live = self.live_mode(state, channel) && full.width() >= LIVE_ROSTER_WIDTH * 3.0;
+		let roster = live.then(|| {
+			let inset = if focus.is_some() { 12.0 } else { 0.0 };
+			egui::Rect::from_min_max(
+				egui::pos2(full.right() - LIVE_ROSTER_WIDTH - inset, full.top() + inset),
+				egui::pos2(full.right() - inset, full.bottom() - inset),
+			)
+		});
+		let area = match roster {
+			Some(_) if focus.is_none() => egui::Rect::from_min_max(
+				full.min,
+				egui::pos2(full.right() - LIVE_ROSTER_WIDTH - TILE_GAP, full.bottom()),
+			),
+			_ => full,
+		};
 		if area.width() < 40.0 || area.height() < 40.0 {
 			return;
 		}
@@ -1367,6 +1469,9 @@ impl MessagingUi {
 					}
 				}
 			}
+		}
+		if let Some(column) = roster {
+			self.live_roster(ui, state, channel, column);
 		}
 		if let Some(focus) = toggle {
 			self.voice_focus = (self.voice_focus != Some(focus)).then_some(focus);
@@ -4881,6 +4986,10 @@ const PILL_FILL: egui::Color32 = egui::Color32::from_rgb(0x1e, 0x1f, 0x22);
 const STAGE_TEXT: egui::Color32 = egui::Color32::from_rgb(0xdb, 0xde, 0xe1);
 const STAGE_MUTED: egui::Color32 = egui::Color32::from_rgb(0x9a, 0x9b, 0xa1);
 const STAGE_MARGIN: f32 = 16.0;
+/// Live mode's side roster: column width, row height and the gap between rows.
+const LIVE_ROSTER_WIDTH: f32 = 200.0;
+const LIVE_ROSTER_ROW: f32 = 44.0;
+const LIVE_ROSTER_GAP: f32 = 6.0;
 const TILE_GAP: f32 = 8.0;
 /// Frameless DM tile height and the horizontal room beside each avatar for its name.
 const FRAMELESS_HEIGHT: f32 = 132.0;
