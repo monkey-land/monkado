@@ -1,5 +1,5 @@
 //! Sticker browsing shares the composer popout and the bounded image working set.
-use crate::{avatars::Avatars, design};
+use crate::{avatars::Avatars, design, guild_folders::ordered_guilds};
 use client_core::State;
 use model::{Id, Sticker};
 
@@ -31,7 +31,8 @@ fn sections(state: &State) -> Vec<Section<'_>> {
 			stickers: &state.stickers.recent,
 		});
 	}
-	sections.extend(state.guilds.iter().filter_map(|guild| {
+	sections.extend(ordered_guilds(state).into_iter().filter_map(|(id, _)| {
+		let guild = state.guild(id)?;
 		let stickers = guild
 			.stickers
 			.as_deref()
@@ -558,6 +559,52 @@ mod tests {
 			egui::Shape::Vec(shapes) => shapes.iter().find_map(|shape| label_rect(shape, label)),
 			_ => None,
 		}
+	}
+	#[test]
+	fn guild_groups_follow_the_user_server_order() {
+		let base = test_support::demo_state()
+			.guilds
+			.into_iter()
+			.next()
+			.unwrap();
+		let mut state = State {
+			demo: true,
+			..State::default()
+		};
+		state.guilds = [4, 1, 2, 3]
+			.into_iter()
+			.map(|id| model::Guild {
+				id: Id(id),
+				name: format!("Server {id}"),
+				stickers: Some(vec![sticker(id, 1)]),
+				..base.clone()
+			})
+			.collect();
+		state.guild_folders = Some(model::guild_folders::Settings {
+			folders: vec![
+				model::guild_folders::Folder {
+					id: None,
+					guild_ids: vec![Id(3)],
+					name: None,
+					color: None,
+				},
+				model::guild_folders::Folder {
+					id: Some(7),
+					guild_ids: vec![Id(2), Id(1)],
+					name: None,
+					color: Some(0x5865f2),
+				},
+			],
+			version: 1,
+		});
+		let order: Vec<_> = sections(&state)
+			.into_iter()
+			.filter_map(|section| match section.id {
+				Group::Guild(id) => Some(id),
+				_ => None,
+			})
+			.collect();
+		assert_eq!(order, [Id(4), Id(3), Id(2), Id(1)]);
 	}
 	#[test]
 	fn sticker_details_open_and_view_more_keeps_pack_provenance() {

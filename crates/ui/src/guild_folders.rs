@@ -28,55 +28,70 @@ enum Item {
 }
 type Row = (Item, Option<(u64, u32)>);
 
+/// Guild ids in the order the server rail lists them: freshly joined servers that folder settings
+/// do not know yet come first, then each configured folder in the user's order.
+pub(crate) fn ordered_guilds(state: &State) -> Vec<(Id, Option<(u64, u32)>)> {
+	let mut placed = BTreeSet::new();
+	if let Some(settings) = &state.guild_folders {
+		placed.extend(
+			settings
+				.folders
+				.iter()
+				.flat_map(|folder| folder.guild_ids.iter().copied()),
+		);
+	}
+	let mut guilds: Vec<_> = state
+		.guilds
+		.iter()
+		.filter(|guild| !placed.contains(&guild.id))
+		.map(|guild| (guild.id, None))
+		.collect();
+	if let Some(settings) = &state.guild_folders {
+		for folder in &settings.folders {
+			let group = folder
+				.id
+				.map(|id| (id, folder.color.unwrap_or(design::DEFAULT_PRIMARY_RGB)));
+			guilds.extend(
+				folder
+					.guild_ids
+					.iter()
+					.copied()
+					.filter(|id| state.guild(*id).is_some())
+					.map(|id| (id, group)),
+			);
+		}
+	}
+	guilds
+}
+
 impl FolderUi {
 	fn sync_rows(&mut self, state: &State) -> bool {
 		let key = (state.generation, state.catalog_revision());
 		if self.key == Some(key) {
 			return false;
 		}
-		let mut seen = BTreeSet::new();
-		if let Some(settings) = &state.guild_folders {
-			for folder in &settings.folders {
-				seen.extend(folder.guild_ids.iter().copied());
-			}
-		}
-		// Servers not yet recorded in folder settings are freshly joined; show them at the
-		// top of the list like Discord does, ahead of the user's organized folders.
-		let mut rows: Vec<Row> = state
-			.guilds
-			.iter()
-			.filter(|g| !seen.contains(&g.id))
-			.map(|g| (Item::Server(g.id), None))
-			.collect();
 		if let Some(settings) = &state.guild_folders {
 			for set in [&mut self.expanded, &mut self.closing] {
 				set.retain(|id| settings.folders.iter().any(|f| f.id == Some(*id)));
 			}
-			let shown = |id| self.expanded.contains(&id) || self.closing.contains(&id);
-			for folder in &settings.folders {
-				if !folder.guild_ids.iter().any(|&id| state.guild(id).is_some()) {
-					continue;
-				}
-				if let Some(id) = folder.id {
+		}
+		let shown = |id| self.expanded.contains(&id) || self.closing.contains(&id);
+		let mut rows: Vec<Row> = Vec::new();
+		let mut folder = None;
+		for (id, group) in ordered_guilds(state) {
+			if let Some((folder_id, rgb)) = group {
+				if folder != Some(folder_id) {
+					folder = Some(folder_id);
 					rows.push((
-						Item::Folder(id),
-						shown(id)
-							.then_some((id, folder.color.unwrap_or(design::DEFAULT_PRIMARY_RGB))),
+						Item::Folder(folder_id),
+						shown(folder_id).then_some((folder_id, rgb)),
 					));
 				}
-				for &id in &folder.guild_ids {
-					if folder.id.is_none_or(shown) && state.guild(id).is_some() {
-						rows.push((
-							Item::Server(id),
-							folder.id.map(|folder_id| {
-								(
-									folder_id,
-									folder.color.unwrap_or(design::DEFAULT_PRIMARY_RGB),
-								)
-							}),
-						));
-					}
+				if shown(folder_id) {
+					rows.push((Item::Server(id), Some((folder_id, rgb))));
 				}
+			} else {
+				rows.push((Item::Server(id), None));
 			}
 		}
 		self.rows = rows
