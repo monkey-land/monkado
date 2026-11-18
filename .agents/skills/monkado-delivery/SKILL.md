@@ -23,6 +23,12 @@ or a concrete external blocker has been reported with a reviewable local result.
 - Visible UI changes: also use `monkado-visual-check` and send the owner screenshots.
 - Anything merged to `main` or released: also use `monkado-release` and check the current version.
 
+## Instructions-only changes go straight to main
+
+Changes to agent instructions, skills and docs that do not touch application behaviour are
+committed and pushed directly to `main` (fast-forward, after `monkado-release` shows no release
+running). No task branch or PR.
+
 ## One request, one PR
 
 Changes the owner asks for together go on one task branch and one PR, even when they touch
