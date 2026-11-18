@@ -2082,11 +2082,12 @@ emoji picker, account switching or public-profile editing is claimed.
 The popout itself was restyled to match Discord's account panel: a 64-point banner with
 a ring-punched 72-point avatar, a sunken card holding display name, handle, pronouns and
 any custom status, then icon rows for the presence submenu (leading status glyph,
-trailing chevron) and the custom-status editor (smiley, or pencil once set). Only
-layout changed; presence publication, profile loading and the bounded editor are the
-same. `--demo --demo-account` (or `--demo-account=status`) opens the popout with the
-synthetic profile at startup for screenshots; dark and light rendering were captured
-natively on macOS.
+trailing chevron) and the custom-status editor (smiley, or pencil once set). Clicking the
+banner, avatar or name card opens the full profile in the centred modal and closes the
+popout. Otherwise only layout changed; presence publication, profile loading and the
+bounded editor are the same. `--demo --demo-account` (or `--demo-account=status`) opens
+the popout with the synthetic profile at startup for screenshots; dark and light rendering
+were captured natively on macOS.
 
 ### Account-type badges (updated September 29, 2026)
 

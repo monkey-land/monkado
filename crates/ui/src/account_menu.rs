@@ -229,8 +229,8 @@ impl MessagingUi {
 		commands: &mut Vec<Command>,
 	) {
 		let colors = design::palette(ui);
-		let (banner, _) =
-			ui.allocate_exact_size(vec2(ui.available_width(), 64.0), egui::Sense::hover());
+		let (banner, banner_response) =
+			ui.allocate_exact_size(vec2(ui.available_width(), 64.0), egui::Sense::click());
 		let corner = egui::CornerRadius {
 			nw: 10,
 			ne: 10,
@@ -247,6 +247,12 @@ impl MessagingUi {
 				design::mix(colors.accent, colors.base, 0.55),
 			);
 		}
+		if banner_response
+			.on_hover_cursor(egui::CursorIcon::PointingHand)
+			.clicked()
+		{
+			self.open_own_profile(state);
+		}
 		if let Some(user) = &state.user {
 			let avatar = egui::Rect::from_min_size(
 				banner.left_bottom() + vec2(14.0, -38.0),
@@ -255,11 +261,19 @@ impl MessagingUi {
 			// Thick popover-coloured ring, as Discord punches the avatar out of the banner.
 			ui.painter()
 				.circle_filled(avatar.center(), 42.0, colors.raised);
-			ui.scope_builder(egui::UiBuilder::new().max_rect(avatar), |ui| {
-				self.avatars.with_avatar_animation(true, |avatars| {
-					avatars.show(ui, user, 72.0, state.demo)
-				});
-			});
+			let avatar_response = ui
+				.scope_builder(egui::UiBuilder::new().max_rect(avatar), |ui| {
+					self.avatars.with_avatar_animation(true, |avatars| {
+						avatars.show(ui, user, 72.0, state.demo)
+					})
+				})
+				.inner;
+			if avatar_response
+				.on_hover_cursor(egui::CursorIcon::PointingHand)
+				.clicked()
+			{
+				self.open_own_profile(state);
+			}
 			// Same 6 px ring as the avatar, so the dot is cut out of the banner alike.
 			let dot = avatar.right_bottom() - egui::Vec2::splat(12.0);
 			ui.painter().circle_filled(dot, 17.5, colors.raised);
@@ -501,6 +515,8 @@ impl MessagingUi {
 			.inner_margin(12)
 			.show(ui, |ui| {
 				ui.set_width(ui.available_width());
+				// The name block is a button, not selectable text.
+				ui.style_mut().interaction.selectable_labels = false;
 				ui.spacing_mut().item_spacing.y = 2.0;
 				let profile = state.own_profile.data.as_ref();
 				let name = profile
@@ -508,17 +524,19 @@ impl MessagingUi {
 					.or_else(|| state.user.as_ref().map(|u| u.name.as_str()))
 					.map(str::to_owned)
 					.unwrap_or_else(|| crate::i18n::translate("your-account"));
-				ui.add(
+				let name_response = ui.add(
 					egui::Label::new(design::semibold(ui, &name, 20.0).color(colors.text_strong))
 						.wrap(),
 				);
+				let mut identity = name_response.rect;
 				if let Some(profile) = profile {
-					ui.add(
+					let handle = ui.add(
 						egui::Label::new(
 							design::medium(ui, &profile.username, 14.0).color(colors.muted),
 						)
 						.wrap(),
 					);
+					identity = identity.union(handle.rect);
 					if !profile.pronouns.is_empty() {
 						ui.add(
 							egui::Label::new(
@@ -549,6 +567,29 @@ impl MessagingUi {
 							);
 						},
 					);
+				}
+				// The whole name block is the profile target; the error retry below keeps its click.
+				let identity = egui::Rect::from_min_max(
+					egui::pos2(ui.max_rect().left(), identity.top()),
+					egui::pos2(ui.max_rect().right(), identity.bottom()),
+				);
+				let open = ui.interact(
+					identity,
+					ui.scope_id().with("account-identity-open-profile"),
+					egui::Sense::click(),
+				);
+				open.widget_info(|| {
+					egui::WidgetInfo::labeled(
+						egui::Role::Button,
+						true,
+						crate::i18n::translate("profiles-view-full-profile"),
+					)
+				});
+				if open
+					.on_hover_cursor(egui::CursorIcon::PointingHand)
+					.clicked()
+				{
+					self.open_own_profile(state);
 				}
 				if !self.own_presence.custom_status.is_empty() {
 					ui.add_space(10.0);
@@ -581,6 +622,15 @@ impl MessagingUi {
 					}
 				}
 			});
+	}
+
+	/// Opens this account's full profile from the popout and closes the menu behind it.
+	fn open_own_profile(&mut self, state: &State) {
+		let Some(user) = state.user.clone() else {
+			return;
+		};
+		self.profile.open_full(user);
+		self.account_menu.close = true;
 	}
 
 	/// Presence row: status dot, label and a chevron opening the status menu.
@@ -1332,5 +1382,34 @@ mod tests {
 				assert!(view.take_avatar_requests().is_empty());
 			}
 		}
+	}
+
+	#[test]
+	fn identity_card_opens_the_full_profile_and_closes_the_menu() {
+		let ctx = egui::Context::default();
+		design::apply(&ctx);
+		let mut state = test_support::demo_state();
+		let own = state.user.as_ref().unwrap().clone();
+		state.own_profile.data = Some(profiles::synthetic(&own, None));
+		let mut view = MessagingUi::default();
+		let size = vec2(340.0, 760.0);
+		frame(&ctx, &mut view, &mut state, size, vec![]);
+		let text = frame(&ctx, &mut view, &mut state, size, vec![]);
+		click(&ctx, &mut view, &mut state, size, locate(&text, &own.name));
+		for _ in 0..3 {
+			frame(&ctx, &mut view, &mut state, size, vec![]);
+		}
+		let text = frame(&ctx, &mut view, &mut state, size, vec![]);
+		// The handle appears only on the popout's identity card, never in the footer.
+		click(
+			&ctx,
+			&mut view,
+			&mut state,
+			size,
+			locate(&text, "monkado.preview"),
+		);
+		assert_eq!(view.profile.open_user().map(|user| user.id), Some(own.id));
+		assert!(view.profile.take_full_request());
+		assert!(!view.account_menu.open);
 	}
 }
