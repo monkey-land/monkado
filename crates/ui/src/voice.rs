@@ -2068,19 +2068,20 @@ impl MessagingUi {
 		// Discord's LIVE pill marks a streamer on every tile size; strip tiles get a small one
 		// so it never covers the avatar.
 		if entry.participant.streaming {
-			let (pill, font) = if compact {
-				(egui::vec2(30.0, 15.0), 9.0)
-			} else {
-				(egui::vec2(40.0, 20.0), 11.0)
-			};
+			let (height, font) = if compact { (15.0, 9.0) } else { (20.0, 11.0) };
 			let margin = if compact { 5.0 } else { 8.0 };
+			// The pill fits its translated label instead of clipping it.
+			let galley = ui.painter().layout_no_wrap(
+				crate::i18n::translate("voice-live-badge-live").to_string(),
+				egui::FontId::new(font, design::medium_family(ui.ctx())),
+				egui::Color32::WHITE,
+			);
+			let pill = egui::vec2(galley.size().x + height * 0.6, height);
 			let live = egui::Rect::from_min_size(rect.left_top() + egui::Vec2::splat(margin), pill);
 			ui.painter().rect_filled(live, 4, colors.badge_fill());
-			ui.painter().text(
-				live.center(),
-				egui::Align2::CENTER_CENTER,
-				"AO VIVO",
-				egui::FontId::new(font, design::medium_family(ui.ctx())),
+			ui.painter().galley(
+				live.center() - galley.size() * 0.5,
+				galley,
 				egui::Color32::WHITE,
 			);
 		}
@@ -2115,11 +2116,12 @@ impl MessagingUi {
 				self.badge_opacity(),
 			);
 		}
-		// Top-left mark: Monkado logo or Discord disc, once P2P knows this call's clients.
+		// Top-right mark: Monkado logo or Discord disc, once P2P knows this call's clients.
+		// The LIVE pill owns the top-left corner.
 		if self.knows_clients(state, entry.channel) && rect.height() >= 72.0 {
 			let user = entry.participant.user;
 			let mark = egui::Rect::from_min_size(
-				rect.left_top() + egui::vec2(8.0, 8.0),
+				rect.right_top() + egui::vec2(-28.0, 8.0),
 				egui::Vec2::splat(20.0),
 			);
 			paint_client_mark(ui.painter(), mark, self.voice_monkado_users.contains(&user));
