@@ -2,7 +2,8 @@
 use client_core::{
 	State,
 	screen::{
-		Resolution, Settings, Source, SourceId, offered_frame_rates, offered_resolutions, picture,
+		AudioApps, Encoder, Resolution, Settings, Source, SourceId, offered_frame_rates,
+		offered_resolutions, picture,
 	},
 	voice::Phase,
 };
@@ -23,6 +24,8 @@ pub enum Request {
 /// The source and quality chosen when this device's share started.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LiveShare {
+	/// What is being shared, so switching opens the picker on it.
+	pub source: SourceId,
 	/// `None` when the platform picker exposes only a placeholder source name.
 	pub title: Option<String>,
 	pub height: u32,
@@ -63,6 +66,12 @@ pub struct ScreenUi {
 	fps: u32,
 	cursor: bool,
 	audio: bool,
+	/// Encoders this machine offers, `Auto` first; filled by the desktop's source scan.
+	pub encoders: Vec<Encoder>,
+	encoder: Encoder,
+	/// Applications playing audio now, by executable name; filled by the desktop's scan.
+	pub audio_applications: Vec<String>,
+	audio_apps: AudioApps,
 }
 impl Default for ScreenUi {
 	fn default() -> Self {
@@ -91,6 +100,10 @@ impl Default for ScreenUi {
 			fps: 30,
 			cursor: true,
 			audio: cfg!(target_os = "macos"),
+			encoders: Vec::new(),
+			encoder: Encoder::Auto,
+			audio_applications: Vec::new(),
+			audio_apps: AudioApps::default(),
 		}
 	}
 }
@@ -121,7 +134,20 @@ impl ScreenUi {
 		};
 		self.context = Some((state.generation, call.channel, call.request));
 		self.open = true;
-		self.selected = None;
+		// Switching starts on what is live now; the scan keeps it while it is still listed.
+		self.selected = self
+			.started
+			.as_ref()
+			.filter(|_| self.switching)
+			.map(|live| live.source);
+		if let Some(source) = self.selected {
+			self.tab = if is_window(source) {
+				SourceTab::Windows
+			} else {
+				SourceTab::Screens
+			};
+		}
+		self.audio_applications.clear();
 		self.quality_for = None;
 		self.sources.clear();
 		if state.demo {
@@ -152,6 +178,13 @@ impl ScreenUi {
 				]
 			};
 			self.selected = self.sources.first().map(|source| source.id);
+			self.encoders = vec![
+				Encoder::Auto,
+				Encoder::Nvidia,
+				Encoder::Intel,
+				Encoder::Software,
+			];
+			self.audio_applications = vec!["spotify.exe".into(), "jogo-sintetico.exe".into()];
 			self.status = "Prévia offline · nenhuma tela é capturada".into();
 		} else {
 			self.refresh_requested = true;
@@ -214,6 +247,12 @@ impl ScreenUi {
 			fps: self.fps,
 			cursor: self.cursor,
 			audio: self.audio,
+			audio_apps: if self.audio {
+				self.audio_apps
+			} else {
+				AudioApps::default()
+			},
+			encoder: self.encoder,
 		};
 		settings.valid().then_some(settings)
 	}
@@ -282,6 +321,7 @@ impl ScreenUi {
 			&& let Some(settings) = self.settings()
 		{
 			self.started = self.selected_source().map(|source| LiveShare {
+				source: source.id,
 				title: (!matches!(source.id, SourceId::SystemPicker | SourceId::Portal))
 					.then(|| source.name.clone()),
 				height: settings.height,
@@ -382,7 +422,7 @@ impl ScreenUi {
 			Some("screen-body-include-the-pointer-in-the-shared-video"),
 			&mut self.cursor,
 		);
-		if self.supported {
+		if self.supported || state.demo {
 			ui.add_space(6.0);
 			crate::design::switch(
 				ui,
@@ -396,7 +436,11 @@ impl ScreenUi {
 				}),
 				&mut self.audio,
 			);
+			if self.audio {
+				self.audio_app_choices(ui);
+			}
 		}
+		self.encoder_choices(ui);
 		ui.add_space(4.0);
 		ui.add(
 			egui::Label::new(
@@ -426,6 +470,114 @@ impl ScreenUi {
 					);
 				});
 		}
+	}
+
+	/// OBS-style application audio: every application, or only the ones picked here.
+	fn audio_app_choices(&mut self, ui: &mut egui::Ui) {
+		if self.audio_applications.is_empty() && self.audio_apps.is_all() {
+			return;
+		}
+		// Picks that are not listed now stay picked: dropping them could leave the selection
+		// empty, which means every application, and share audio nobody chose.
+		let listed = self
+			.audio_applications
+			.iter()
+			.filter(|name| self.audio_apps.contains(name))
+			.count();
+		let unavailable = self.audio_apps.len().saturating_sub(listed);
+		let colors = crate::design::palette(ui);
+		ui.add_space(8.0);
+		ui.label(crate::design::eyebrow(
+			ui,
+			"Áudio transmitido",
+			colors.muted,
+		));
+		ui.add_space(6.0);
+		ui.horizontal_wrapped(|ui| {
+			ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
+			if segment(ui, "Todos os apps", self.audio_apps.is_all()).clicked() {
+				self.audio_apps = AudioApps::default();
+			}
+			for name in &self.audio_applications {
+				let picked = self.audio_apps.contains(name);
+				let label = name.strip_suffix(".exe").unwrap_or(name);
+				if segment(ui, label, picked).clicked() {
+					if picked {
+						self.audio_apps.remove(name);
+					} else {
+						self.audio_apps.insert(name);
+					}
+				}
+			}
+		});
+		ui.add_space(4.0);
+		ui.add(
+			egui::Label::new(
+				egui::RichText::new(format!(
+					"Escolha até {} apps; só o som deles vai para a transmissão.",
+					client_core::screen::MAX_AUDIO_APPS
+				))
+				.size(12.0)
+				.color(colors.muted),
+			)
+			.wrap(),
+		);
+		if unavailable > 0 {
+			ui.add(
+				egui::Label::new(
+					egui::RichText::new(format!(
+						"{unavailable} app(s) escolhido(s) não está(ão) tocando agora; continua(m) selecionado(s)."
+					))
+					.size(12.0)
+					.color(colors.warning),
+				)
+				.wrap(),
+			);
+		}
+	}
+
+	/// Hardware encoder choice, shown when this machine offers more than Auto.
+	fn encoder_choices(&mut self, ui: &mut egui::Ui) {
+		if self.encoders.len() < 2 {
+			return;
+		}
+		if !self.encoders.contains(&self.encoder) {
+			self.encoder = Encoder::Auto;
+		}
+		let colors = crate::design::palette(ui);
+		ui.add_space(10.0);
+		ui.label(crate::design::eyebrow(
+			ui,
+			"Codificador de vídeo",
+			colors.muted,
+		));
+		ui.add_space(6.0);
+		ui.horizontal_wrapped(|ui| {
+			ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
+			for encoder in self.encoders.clone() {
+				let label = match encoder {
+					Encoder::Auto => "Automático",
+					Encoder::Nvidia => "NVIDIA NVENC",
+					Encoder::Amd => "AMD AMF",
+					Encoder::Intel => "Intel Quick Sync",
+					Encoder::Software => "CPU (software)",
+				};
+				if segment(ui, label, self.encoder == encoder).clicked() {
+					self.encoder = encoder;
+				}
+			}
+		});
+		ui.add_space(4.0);
+		ui.add(
+			egui::Label::new(
+				egui::RichText::new(
+					"Automático prefere a placa de vídeo dedicada. Se o escolhido falhar, a CPU assume.",
+				)
+				.size(12.0)
+				.color(colors.muted),
+			)
+			.wrap(),
+		);
 	}
 
 	/// Discord-style source browser: Screens/Windows tabs over a grid of preview tiles.
@@ -756,6 +908,8 @@ mod tests {
 			fps: 30,
 			cursor: true,
 			audio: false,
+			audio_apps: Default::default(),
+			encoder: Default::default(),
 		};
 		let picked = bound.fitted_to(2560, 1440);
 		assert_eq!((picked.width, picked.height), (2560, 1440));

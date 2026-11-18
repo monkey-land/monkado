@@ -25,6 +25,8 @@ use windows_capture::{
 #[path = "audio_windows.rs"]
 mod audio;
 
+pub(crate) use audio::applications as audio_applications;
+
 fn monitor_id(monitor: &Monitor) -> u64 {
 	u64::try_from(monitor.as_raw_hmonitor() as usize).unwrap_or(0)
 }
@@ -35,7 +37,11 @@ fn window_id(window: &Window) -> u64 {
 
 pub(crate) fn sources() -> Result<Vec<Source>, &'static str> {
 	let mut sources = Vec::with_capacity(MAX_SOURCES);
-	for monitor in Monitor::enumerate().map_err(|_| "Displays could not be enumerated")? {
+	let mut monitors = Monitor::enumerate().map_err(|_| "Displays could not be enumerated")?;
+	// EnumDisplayMonitors has no stable order; list displays by Windows' own numbering
+	// (the DISPLAYn device names), which matches Settings > Display, as Discord does.
+	monitors.sort_by_key(|monitor| monitor.index().unwrap_or(usize::MAX));
+	for monitor in monitors {
 		let (Ok(width), Ok(height)) = (monitor.width(), monitor.height()) else {
 			continue;
 		};
@@ -251,6 +257,7 @@ impl Capture {
 				ready,
 				audio_epoch,
 				window_process,
+				settings.audio_apps,
 			)?);
 		}
 		Ok(capture)

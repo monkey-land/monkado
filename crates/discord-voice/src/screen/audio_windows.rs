@@ -1,4 +1,6 @@
 use crate::screen::{AudioChunk, MAX_AUDIO_SAMPLES};
+#[cfg(target_os = "windows")]
+use client_core::screen::AudioApps;
 use std::sync::{
 	Arc,
 	atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering},
@@ -31,6 +33,7 @@ impl Audio {
 		ready: Arc<AtomicBool>,
 		audio_epoch: Arc<AtomicU64>,
 		window_process: Option<u32>,
+		apps: AudioApps,
 	) -> Result<Self, Cow<'static, str>> {
 		let failed = Arc::new(AtomicBool::new(false));
 		let code = Arc::new(AtomicI32::new(0));
@@ -46,7 +49,7 @@ impl Audio {
 		let thread = std::thread::Builder::new()
 			.name("screen-audio".into())
 			.spawn(move || {
-				if let Err(error) = native::run(&input, started, window_process) {
+				if let Err(error) = native::run(&input, started, window_process, apps) {
 					native::abort(&input, error.code().0);
 				}
 			})
@@ -91,6 +94,13 @@ impl Audio {
 				.as_ref()
 				.is_some_and(std::thread::JoinHandle::is_finished)
 	}
+}
+
+/// Applications playing audio now, by executable name, sorted and bounded, for the share
+/// picker. Monkado's tree, call clients and audio hosts are left out. Empty on any failure.
+#[cfg(target_os = "windows")]
+pub(crate) fn applications() -> Vec<String> {
+	native::playing_applications()
 }
 
 #[cfg(target_os = "windows")]
@@ -615,10 +625,15 @@ mod native {
 		input: &Samples,
 		started: SyncSender<()>,
 		window_process: Option<u32>,
+		apps: AudioApps,
 	) -> Result<()> {
 		// This dedicated thread initializes and releases all COM objects in one MTA.
 		unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
-		let result = if let Some(pid) = window_process.filter(|&pid| shareable_window(pid)) {
+		let result = if !apps.is_all() {
+			// Picked applications replace both the window's own audio and "everything else".
+			note_mode("picked_applications");
+			per_application(input, started, apps)
+		} else if let Some(pid) = window_process.filter(|&pid| shareable_window(pid)) {
 			// A window share carries that application's audio and nothing else.
 			application_tree(input, started, pid)
 		} else {
@@ -683,11 +698,62 @@ mod native {
 	/// captured on its own, as Discord does, and the lanes are mixed.
 	fn system_audio(input: &Samples, started: SyncSender<()>) -> Result<()> {
 		note_mode("per_application");
-		per_application(input, started)
+		per_application(input, started, AudioApps::default())
+	}
+
+	/// The picker's list: applications with a live audio session, minus everything a share
+	/// never carries. Runs its own COM apartment when the thread has none.
+	pub(super) fn playing_applications() -> Vec<String> {
+		let initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
+		let found = discover();
+		if initialized {
+			unsafe { CoUninitialize() };
+		}
+		found.unwrap_or_default()
+	}
+
+	/// Every session owner the share could carry, one entry per executable name. Unlike capture,
+	/// nested processes are kept, so a child such as a game under its launcher stays pickable.
+	fn discover() -> Result<Vec<String>> {
+		let ours = std::process::id();
+		let sessions = render_sessions()?;
+		let (parents, mut excluded) = process_table()?;
+		excluded.push(ours);
+		let mut descendants = HashSet::new();
+		track_descendants(ours, &parents, &mut descendants);
+		let above = lineage(ours, &parents);
+		// Case-insensitive name -> (shown name, any session playing).
+		let mut names: HashMap<String, (String, bool)> = HashMap::new();
+		for (pid, playing) in sessions {
+			if pid == 0
+				|| descendants.contains(&pid)
+				|| above.contains(&pid)
+				|| excluded
+					.iter()
+					.any(|&blocked| within_tree(pid, blocked, &parents))
+			{
+				continue;
+			}
+			let name = image_name(pid);
+			if name == "unknown" || excluded_executable(&name) {
+				continue;
+			}
+			let entry = names
+				.entry(name.to_ascii_lowercase())
+				.or_insert((name, false));
+			entry.1 |= playing;
+		}
+		// Playing first, then by name; the limit applies to unique names only.
+		let mut names: Vec<(String, bool)> = names.into_values().collect();
+		names.sort_by_key(|(name, playing)| (!playing, name.to_ascii_lowercase()));
+		names.truncate(32);
+		let mut names: Vec<String> = names.into_iter().map(|(name, _)| name).collect();
+		names.sort_by_key(|name| name.to_ascii_lowercase());
+		Ok(names)
 	}
 
 	/// Mixes one include-mode loopback per application.
-	fn per_application(input: &Samples, started: SyncSender<()>) -> Result<()> {
+	fn per_application(input: &Samples, started: SyncSender<()>, apps: AudioApps) -> Result<()> {
 		let lanes: Arc<Lanes> = Arc::new(Mutex::new(Vec::new()));
 		let halt = Arc::new(AtomicBool::new(false));
 		let (ready_send, ready) = sync_channel(1);
@@ -695,7 +761,7 @@ mod native {
 			let (input, lanes, halt) = (input.clone(), lanes.clone(), halt.clone());
 			std::thread::Builder::new()
 				.name("screen-audio-sessions".into())
-				.spawn(move || supervise_thread(&input, &lanes, &halt, ready_send))
+				.spawn(move || supervise_thread(&input, &lanes, &halt, ready_send, apps))
 				.map_err(|error| spawn_failure(&error))?
 		};
 		// The share is usable once audio sessions can be listed, even if nothing is playing yet.
@@ -779,10 +845,11 @@ mod native {
 		lanes: &Lanes,
 		halt: &AtomicBool,
 		ready: SyncSender<()>,
+		apps: AudioApps,
 	) -> Result<()> {
 		let result = match unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.ok() {
 			Ok(()) => {
-				let result = supervise(input, lanes, halt, ready);
+				let result = supervise(input, lanes, halt, ready, apps);
 				unsafe { CoUninitialize() };
 				result
 			}
@@ -826,6 +893,7 @@ mod native {
 		lanes: &Lanes,
 		halt: &AtomicBool,
 		ready: SyncSender<()>,
+		apps: AudioApps,
 	) -> Result<()> {
 		let ours = std::process::id();
 		let mut ready = Some(ready);
@@ -852,7 +920,7 @@ mod native {
 		let mut over_capacity: HashSet<u32> = HashSet::new();
 		let result = (|| -> Result<()> {
 			while !halt.load(Ordering::Acquire) && !input.stopped() {
-				let wanted = match applications(ours, &mut descendants) {
+				let wanted = match applications(ours, &mut descendants, apps) {
 					Ok(wanted) => {
 						errors = 0;
 						wanted
@@ -1115,7 +1183,11 @@ mod native {
 	/// started and what started it are left out, so its own playback is never captured. Not
 	/// learning the sessions or the process tree is an error: capturing without the tree
 	/// could pick up Monkado's own audio.
-	fn applications(ours: u32, descendants: &mut HashSet<u32>) -> Result<HashMap<u32, bool>> {
+	fn applications(
+		ours: u32,
+		descendants: &mut HashSet<u32>,
+		apps: AudioApps,
+	) -> Result<HashMap<u32, bool>> {
 		let mut sessions = render_sessions()?;
 		let (parents, mut excluded) = process_table()?;
 		excluded.retain(|&pid| pid != ours);
@@ -1125,6 +1197,15 @@ mod native {
 		// What Monkado started stays excluded after its parent exits and orphans it.
 		track_descendants(ours, &parents, descendants);
 		sessions.retain(|&(pid, _)| !descendants.contains(&pid));
+		if !apps.is_all() {
+			// Only the picked applications' own sessions; their trees still nest as usual.
+			let mut picked: HashMap<u32, bool> = HashMap::new();
+			sessions.retain(|&(pid, _)| {
+				*picked
+					.entry(pid)
+					.or_insert_with(|| apps.contains(&image_name(pid)))
+			});
+		}
 		let pids: Vec<u32> = sessions.iter().map(|&(pid, _)| pid).collect();
 		Ok(select_roots(&pids, &excluded, &parents)
 			.into_iter()

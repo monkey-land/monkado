@@ -521,6 +521,8 @@ mod tests {
 			fps: 30,
 			cursor: true,
 			audio: false,
+			audio_apps: Default::default(),
+			encoder: Default::default(),
 		};
 		Capture::new(
 			settings,
@@ -623,6 +625,8 @@ mod tests {
 				fps: 30,
 				cursor: false,
 				audio: false,
+				audio_apps: Default::default(),
+				encoder: Default::default(),
 			};
 			if !settings.valid() {
 				continue;

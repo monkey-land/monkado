@@ -84,6 +84,8 @@ pub(super) struct Screen {
 	source_scan: Option<SourceScan>,
 	/// Picker previews arriving one by one from the scan thread, for its current sources.
 	thumbnails: Option<mpsc::Receiver<(screen::SourceId, image::RgbaImage)>>,
+	/// Encoders and audio-playing applications for the picker, from the same scan thread.
+	choices: Option<mpsc::Receiver<(Vec<screen::Encoder>, Vec<String>)>>,
 	command: Option<Command>,
 	sequence: u64,
 	/// Owned when it carries a run-time detail such as a Windows error code.
@@ -334,9 +336,21 @@ impl Screen {
 		}
 		if !ui.screen.open {
 			self.thumbnails = None;
+			self.choices = None;
 			ui.screen.thumbnails.clear();
 		}
 		self.receive_thumbnails(ui, ctx);
+		if let Some(choices) = &self.choices {
+			match choices.try_recv() {
+				Ok((encoders, applications)) => {
+					ui.screen.encoders = encoders;
+					ui.screen.audio_applications = applications;
+					self.choices = None;
+				}
+				Err(mpsc::TryRecvError::Empty) => {}
+				Err(mpsc::TryRecvError::Disconnected) => self.choices = None,
+			}
+		}
 
 		if ui.screen.refresh_requested {
 			ui.screen.refresh_requested = false;
@@ -344,6 +358,8 @@ impl Screen {
 				let (send, receive) = mpsc::sync_channel(1);
 				// A few previews in flight; the thread waits for the UI to take them.
 				let (preview_send, previews) = mpsc::sync_channel(4);
+				let (choices_send, choices) = mpsc::sync_channel(1);
+				self.choices = Some(choices);
 				let wake = ctx.clone();
 				self.status = "Procurando telas e janelas…".into();
 				self.thumbnails = Some(previews);
@@ -357,6 +373,11 @@ impl Screen {
 							.map(|sources| sources.iter().map(|source| source.id).collect())
 							.unwrap_or_default();
 						let _ = send.send(sources);
+						wake.request_repaint();
+						let _ = choices_send.send((
+							discord_voice::screen::encoders(),
+							discord_voice::screen::audio_applications(),
+						));
 						wake.request_repaint();
 						for id in ids {
 							let Some(preview) = discord_voice::screen::thumbnail(id) else {
@@ -785,6 +806,8 @@ mod tests {
 				fps: 30,
 				cursor: true,
 				audio: false,
+				audio_apps: Default::default(),
+				encoder: Default::default(),
 			}));
 			let call = Call {
 				generation: state.generation,
@@ -845,6 +868,8 @@ mod tests {
 					fps: 30,
 					cursor: true,
 					audio: false,
+					audio_apps: Default::default(),
+					encoder: Default::default(),
 				},
 			)),
 			..Screen::default()
@@ -890,6 +915,8 @@ mod tests {
 						fps: 30,
 						cursor: true,
 						audio: false,
+						audio_apps: Default::default(),
+						encoder: Default::default(),
 					},
 				)
 			}),

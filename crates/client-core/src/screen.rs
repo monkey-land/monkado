@@ -146,6 +146,81 @@ fn fitted_source(width: u32, height: u32) -> Option<(u32, u32)> {
 	(fitted_width >= 2 && fitted_height >= 2).then_some((fitted_width, fitted_height))
 }
 
+/// Which H.264 encoder a share asks for. Hardware choices are honoured only where the
+/// platform reports them (Windows Media Foundation today); elsewhere they behave like `Auto`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Encoder {
+	/// The dedicated GPU when one is present (NVIDIA, then AMD), then any other hardware
+	/// encoder, then software.
+	#[default]
+	Auto,
+	Nvidia,
+	Amd,
+	Intel,
+	/// openh264 on the CPU, never a hardware encoder.
+	Software,
+}
+
+/// Most applications a share can pick audio from.
+pub const MAX_AUDIO_APPS: usize = 8;
+
+/// Applications whose audio a share carries, by executable name without case. Empty means
+/// every application, as before. Copyable and bounded so `Settings` stays `Copy`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AudioApps {
+	keys: [u64; MAX_AUDIO_APPS],
+	len: u8,
+}
+
+impl AudioApps {
+	/// True when no application was picked, so every application is captured.
+	pub fn is_all(&self) -> bool {
+		self.len == 0
+	}
+
+	pub fn len(&self) -> usize {
+		usize::from(self.len)
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.len == 0
+	}
+
+	pub fn contains(&self, executable: &str) -> bool {
+		let key = app_key(executable);
+		self.keys[..self.len()].contains(&key)
+	}
+
+	/// Adds an application. False when it is already listed or the list is full.
+	pub fn insert(&mut self, executable: &str) -> bool {
+		let key = app_key(executable);
+		if self.keys[..self.len()].contains(&key) || self.len() == MAX_AUDIO_APPS {
+			return false;
+		}
+		self.keys[self.len()] = key;
+		self.len += 1;
+		true
+	}
+
+	pub fn remove(&mut self, executable: &str) {
+		let key = app_key(executable);
+		if let Some(index) = self.keys[..self.len()].iter().position(|k| *k == key) {
+			let len = self.len();
+			self.keys.copy_within(index + 1..len, index);
+			self.len -= 1;
+		}
+	}
+}
+
+/// FNV-1a of the ASCII-lowercased executable name.
+fn app_key(executable: &str) -> u64 {
+	executable
+		.bytes()
+		.fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+			(hash ^ u64::from(byte.to_ascii_lowercase())).wrapping_mul(0x0100_0000_01b3)
+		})
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Settings {
 	pub source: SourceId,
@@ -155,6 +230,9 @@ pub struct Settings {
 	pub cursor: bool,
 	/// Share system audio with the screen; call microphone settings are independent.
 	pub audio: bool,
+	/// Applications whose audio goes out with the share; empty shares every application.
+	pub audio_apps: AudioApps,
+	pub encoder: Encoder,
 }
 impl Settings {
 	/// Narrows a bound chosen before the pick to the picked source's size, never upscaling.

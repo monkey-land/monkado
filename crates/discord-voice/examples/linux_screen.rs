@@ -77,6 +77,8 @@ fn nvenc_exit() {
 		fps: 30,
 		cursor: true,
 		audio: false,
+		audio_apps: Default::default(),
+		encoder: Default::default(),
 	};
 	let stop = Arc::new(AtomicBool::new(false));
 	let worker_stop = stop.clone();
@@ -166,7 +168,7 @@ fn main() {
 		assert!(!x11.property::<bool>("use-damage"));
 		assert_eq!(x11.property::<u64>("xid"), 0, "explicit whole-desktop source");
 		drop(x11);
-		let settings = Settings { source: SourceId::Display(1), width: 1280, height: 720, fps: 30, cursor: true, audio: false };
+		let settings = Settings { source: SourceId::Display(1), width: 1280, height: 720, fps: 30, cursor: true, audio: false, audio_apps: Default::default(), encoder: Default::default() };
 		let stop = Arc::new(AtomicBool::new(false));
 		let ready = Arc::new(AtomicBool::new(false));
 		let keyframe = Arc::new(AtomicBool::new(true));

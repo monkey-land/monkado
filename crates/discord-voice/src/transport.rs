@@ -2762,6 +2762,8 @@ mod tests {
 				fps: 30,
 				cursor: true,
 				audio: true,
+				audio_apps: Default::default(),
+				encoder: Default::default(),
 			},
 			frames,
 			ready: Arc::new(AtomicBool::new(true)),

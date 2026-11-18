@@ -4948,7 +4948,7 @@ fn card_action(
 	let hint = crate::i18n::translate_if_key(hint);
 	let colors = design::palette(ui);
 	let (rect, response) = ui.allocate_exact_size(
-		egui::vec2(width, 40.0),
+		egui::vec2(width, 32.0),
 		if enabled {
 			egui::Sense::click()
 		} else {
@@ -4971,7 +4971,7 @@ fn card_action(
 	crate::icons::paint(
 		ui.painter(),
 		icon,
-		egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(20.0)),
+		egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(18.0)),
 		color,
 	);
 	response
@@ -7146,6 +7146,7 @@ mod tests {
 		messaging.screen.busy = true;
 		messaging.screen.sharing = true;
 		messaging.screen.started = Some(crate::screen::LiveShare {
+			source: client_core::screen::SourceId::Display(1),
 			title: None,
 			height: 720,
 			fps: 60,
