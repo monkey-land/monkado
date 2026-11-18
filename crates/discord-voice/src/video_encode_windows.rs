@@ -68,6 +68,8 @@ pub(crate) struct Encoder {
 	max_buffer_bytes: usize,
 	/// Finished access units, oldest first, not yet handed to the caller.
 	pending: VecDeque<(Vec<u8>, bool)>,
+	/// Keyframe requested for a picture that was skipped and not yet submitted.
+	keyframe_pending: bool,
 }
 
 struct Activated(IMFActivate);
@@ -187,6 +189,7 @@ impl Encoder {
 				have_output: 0,
 				provides_samples,
 				pending: VecDeque::new(),
+				keyframe_pending: false,
 			})
 		}
 	}
@@ -230,11 +233,13 @@ impl Encoder {
 		self.wait_until(|encoder| {
 			encoder.need_input != 0 || encoder.pending.len() >= MAX_PENDING_OUTPUTS
 		})?;
+		// A skipped picture keeps its keyframe request for the next submitted one.
+		self.keyframe_pending |= force_keyframe;
 		if self.need_input == 0 {
 			return Ok(self.pending.pop_front().unwrap_or_default());
 		}
 		self.need_input -= 1;
-		if force_keyframe {
+		if self.keyframe_pending {
 			// SAFETY: Codec control is called on the owning worker before this input sample.
 			unsafe {
 				self.codec
@@ -277,6 +282,7 @@ impl Encoder {
 				.ProcessInput(0, &sample, 0)
 				.map_err(|_| FAILED)?;
 		}
+		self.keyframe_pending = false;
 		// Wait for this picture's output, but stop as soon as the encoder asks for the next
 		// picture instead: a pipelining encoder (Intel Quick Sync especially) emits it a few
 		// frames later, and blocking here made every frame time out and drop to openh264.
