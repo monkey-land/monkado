@@ -705,32 +705,51 @@ mod native {
 	/// never carries. Runs its own COM apartment when the thread has none.
 	pub(super) fn playing_applications() -> Vec<String> {
 		let initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
-		let mut names: Vec<String> = applications(
-			std::process::id(),
-			&mut HashSet::new(),
-			AudioApps::default(),
-		)
-		.map(|found| {
-			// Playing applications first, so idle ones never push them past the limit.
-			let mut found: Vec<(u32, bool)> = found.into_iter().collect();
-			found.sort_by_key(|(_, playing)| !playing);
-			found
-				.into_iter()
-				.map(|(pid, playing)| (image_name(pid), playing))
-				.collect::<Vec<_>>()
-		})
-		.unwrap_or_default()
-		.into_iter()
-		.filter(|(name, _)| name != "unknown" && !excluded_executable(name))
-		.take(32)
-		.map(|(name, _)| name)
-		.collect();
+		let found = discover();
 		if initialized {
 			unsafe { CoUninitialize() };
 		}
+		found.unwrap_or_default()
+	}
+
+	/// Every session owner the share could carry, one entry per executable name. Unlike capture,
+	/// nested processes are kept, so a child such as a game under its launcher stays pickable.
+	fn discover() -> Result<Vec<String>> {
+		let ours = std::process::id();
+		let sessions = render_sessions()?;
+		let (parents, mut excluded) = process_table()?;
+		excluded.push(ours);
+		let mut descendants = HashSet::new();
+		track_descendants(ours, &parents, &mut descendants);
+		let above = lineage(ours, &parents);
+		// Case-insensitive name -> (shown name, any session playing).
+		let mut names: HashMap<String, (String, bool)> = HashMap::new();
+		for (pid, playing) in sessions {
+			if pid == 0
+				|| descendants.contains(&pid)
+				|| above.contains(&pid)
+				|| excluded
+					.iter()
+					.any(|&blocked| within_tree(pid, blocked, &parents))
+			{
+				continue;
+			}
+			let name = image_name(pid);
+			if name == "unknown" || excluded_executable(&name) {
+				continue;
+			}
+			let entry = names
+				.entry(name.to_ascii_lowercase())
+				.or_insert((name, false));
+			entry.1 |= playing;
+		}
+		// Playing first, then by name; the limit applies to unique names only.
+		let mut names: Vec<(String, bool)> = names.into_values().collect();
+		names.sort_by_key(|(name, playing)| (!playing, name.to_ascii_lowercase()));
+		names.truncate(32);
+		let mut names: Vec<String> = names.into_iter().map(|(name, _)| name).collect();
 		names.sort_by_key(|name| name.to_ascii_lowercase());
-		names.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
-		names
+		Ok(names)
 	}
 
 	/// Mixes one include-mode loopback per application.
