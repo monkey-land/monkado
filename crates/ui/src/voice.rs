@@ -1093,6 +1093,7 @@ impl MessagingUi {
 			.active
 			.as_ref()
 			.is_some_and(|call| call.channel == channel);
+		self.voice_stage_drawn = true;
 		let stage = ui.available_rect_before_wrap();
 		ui.painter().rect_filled(stage, 0, STAGE_FILL);
 		let (rect, _) = ui.allocate_exact_size(stage.size(), egui::Sense::hover());
@@ -2418,6 +2419,79 @@ impl MessagingUi {
 			self.open_voice_channel(state, guild, channel, commands);
 		}
 		Ok(())
+	}
+
+	/// A watched screen share keeps playing in a small corner player while the call stage is
+	/// off screen, as in Discord; clicking it returns to the call.
+	pub(super) fn stream_mini_player(
+		&mut self,
+		ctx: &egui::Context,
+		state: &mut State,
+		commands: &mut Vec<Command>,
+		stage_drawn: bool,
+	) {
+		if stage_drawn {
+			return;
+		}
+		let Some(call) = state.voice.active.as_ref() else {
+			return;
+		};
+		let (channel, guild, watching) = (call.channel, call.guild, call.watching);
+		let texture = watching
+			.and_then(|user| {
+				self.voice_stream_views
+					.iter()
+					.find(|(streamer, _)| *streamer == user)
+			})
+			.or_else(|| self.voice_stream_views.first())
+			.map(|(_, texture)| *texture)
+			.or(self.voice_stream_view);
+		let Some(texture) = texture else {
+			return;
+		};
+		let source = texture.size;
+		if source.x <= 0.0 || source.y <= 0.0 {
+			return;
+		}
+		let width = 320.0_f32.min(ctx.content_rect().width() * 0.4).max(160.0);
+		let size = egui::vec2(width, width * source.y / source.x);
+		let mut open = false;
+		egui::Area::new(egui::Id::unique("stream-mini-player"))
+			.order(egui::Order::Foreground)
+			.anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -16.0))
+			.show(ctx, |ui| {
+				egui::Frame::new()
+					.fill(egui::Color32::BLACK)
+					.corner_radius(8)
+					.stroke(egui::Stroke::new(1.0, egui::Color32::from_white_alpha(40)))
+					.show(ui, |ui| {
+						let response = ui.add(
+							egui::Image::from_texture(texture)
+								.fit_to_exact_size(size)
+								.corner_radius(8)
+								.sense(egui::Sense::click()),
+						);
+						response.widget_info(|| {
+							egui::WidgetInfo::labeled(
+								egui::Role::Button,
+								true,
+								"Voltar para a chamada",
+							)
+						});
+						open = response
+							.on_hover_cursor(egui::CursorIcon::PointingHand)
+							.on_hover_text("Clique para voltar à chamada")
+							.clicked();
+					});
+			});
+		if !open {
+			return;
+		}
+		self.voice_chat_open = false;
+		match guild {
+			Some(guild) => self.open_voice_channel(state, guild, channel, commands),
+			None => commands.extend(state.select(channel)),
+		}
 	}
 
 	fn open_voice_channel(
@@ -3965,6 +4039,7 @@ impl MessagingUi {
 					// The children below do not grow this Ui; claim the whole panel so its
 					// background follows a resize and egui keeps the dragged size.
 					ui.expand_to_include_rect(rect);
+					self.voice_stage_drawn = true;
 					let reveal = chrome_reveal(ui, rect, "dm-call-chrome");
 					let top = rect.top() + if header.is_some() { 48.0 } else { 0.0 };
 					let notices = self.stage_notices(state, channel, true);
