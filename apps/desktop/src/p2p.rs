@@ -128,9 +128,15 @@ impl P2p {
 			state.set_p2p_media(Vec::new());
 			ui.voice_monkado_users.clear();
 			ui.voice_stream_views.clear();
+			ui.screen.viewers.clear();
 			self.textures.clear();
 			self.live_times(state, ui, me);
 			return;
+		};
+		ui.screen.viewers = if self.screen.live() {
+			running.mesh.screen_viewers().into_iter().map(Id).collect()
+		} else {
+			Vec::new()
 		};
 		if running.members != members {
 			running.mesh.members(members.clone());

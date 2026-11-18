@@ -90,7 +90,7 @@ impl MessagingUi {
 				let rect = egui::Rect::from_min_size(screen.min, screen.size());
 				ui.painter().rect_filled(rect, 0, STAGE_FILL);
 				match focus {
-					StageFocus::LocalScreen => self.screen_tile(ui, rect, false),
+					StageFocus::LocalScreen => self.screen_tile(ui, state, channel, rect, false),
 					StageFocus::Stream(user) => {
 						self.stream_tile(ui, state, rect, channel, user, true)
 					}
@@ -1454,7 +1454,7 @@ impl MessagingUi {
 		let compact = rect.height() < 132.0;
 		let hint = match tile {
 			Tile::LocalScreen => {
-				self.screen_tile(ui, rect, compact);
+				self.screen_tile(ui, state, channel, rect, compact);
 				self.screen
 					.capture_status
 					.unwrap_or("Sua tela · prévia local")
@@ -1527,7 +1527,14 @@ impl MessagingUi {
 		None
 	}
 
-	fn screen_tile(&self, ui: &mut egui::Ui, rect: egui::Rect, compact: bool) {
+	fn screen_tile(
+		&self,
+		ui: &mut egui::Ui,
+		state: &State,
+		channel: Id,
+		rect: egui::Rect,
+		compact: bool,
+	) {
 		if self.screen.preview_paused {
 			Self::paint_paused_preview(ui, rect);
 			return;
@@ -1548,6 +1555,74 @@ impl MessagingUi {
 		if !compact {
 			name_badge(ui, content, "Sua tela", None, self.badge_opacity());
 		}
+		self.viewers_badge(ui, state, channel, content, compact);
+	}
+
+	/// Top-right count of who watches this device's share; hovering lists their names.
+	fn viewers_badge(
+		&self,
+		ui: &mut egui::Ui,
+		state: &State,
+		channel: Id,
+		content: egui::Rect,
+		compact: bool,
+	) {
+		let viewers = &self.screen.viewers;
+		if viewers.is_empty() {
+			return;
+		}
+		let (height, font) = if compact { (18.0, 10.0) } else { (24.0, 12.0) };
+		let galley = ui.painter().layout_no_wrap(
+			viewers.len().to_string(),
+			egui::FontId::new(font, design::medium_family(ui.ctx())),
+			egui::Color32::WHITE,
+		);
+		let icon = height - 8.0;
+		let width = 6.0 + icon + 4.0 + galley.size().x + 8.0;
+		let margin = if compact { 5.0 } else { 8.0 };
+		let pill = egui::Rect::from_min_size(
+			content.right_top() + egui::vec2(-margin - width, margin),
+			egui::vec2(width, height),
+		);
+		ui.painter()
+			.rect_filled(pill, height * 0.5, egui::Color32::from_black_alpha(180));
+		crate::icons::paint(
+			ui.painter(),
+			crate::icons::Icon::People,
+			egui::Rect::from_min_size(
+				pill.left_top() + egui::vec2(6.0, 4.0),
+				egui::Vec2::splat(icon),
+			),
+			egui::Color32::WHITE,
+		);
+		ui.painter().galley(
+			egui::pos2(
+				pill.left() + 6.0 + icon + 4.0,
+				pill.center().y - galley.size().y * 0.5,
+			),
+			galley,
+			egui::Color32::WHITE,
+		);
+		let names = viewers
+			.iter()
+			.map(|user| {
+				participant_user(state, channel, *user)
+					.map_or_else(|| "Participante".to_owned(), |user| user.name.clone())
+			})
+			.collect::<Vec<_>>()
+			.join(
+				"
+",
+			);
+		ui.interact(
+			pill,
+			ui.scope_id().with("screen-viewers"),
+			egui::Sense::hover(),
+		)
+		.on_hover_text(format!(
+			"Assistindo:
+{names}"
+		));
 	}
 
 	fn paint_paused_preview(ui: &egui::Ui, rect: egui::Rect) {

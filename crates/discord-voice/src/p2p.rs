@@ -286,8 +286,11 @@ enum Control {
 pub struct Mesh {
 	control: mpsc::UnboundedSender<Control>,
 	updates: std::sync::mpsc::Receiver<Update>,
+	viewers: Viewers,
 	task: JoinHandle<()>,
 }
+/// Peers subscribed to this device's screen, with their open subscription count.
+type Viewers = Arc<Mutex<HashMap<u64, usize>>>;
 pub struct MeshConfig {
 	pub channel: u64,
 	pub user: u64,
@@ -315,7 +318,9 @@ impl Mesh {
 			video_receive::spawn_decoder(config.screen_sink.clone())?;
 		let (camera_decoder, camera_lost) =
 			video_receive::spawn_decoder(config.camera_sink.clone())?;
+		let viewers = Viewers::default();
 		let shared = Arc::new(Shared {
+			viewers: viewers.clone(),
 			channel: config.channel,
 			user: config.user,
 			screen: config.screen,
@@ -334,6 +339,7 @@ impl Mesh {
 		Ok(Self {
 			control,
 			updates,
+			viewers,
 			task,
 		})
 	}
@@ -352,6 +358,16 @@ impl Mesh {
 	pub fn updates(&self) -> impl Iterator<Item = Update> + '_ {
 		self.updates.try_iter()
 	}
+	/// Peers currently watching this device's screen share, in ascending ID order.
+	pub fn screen_viewers(&self) -> Vec<u64> {
+		let mut users: Vec<u64> = self
+			.viewers
+			.lock()
+			.map(|viewers| viewers.keys().copied().collect())
+			.unwrap_or_default();
+		users.sort_unstable();
+		users
+	}
 }
 impl Drop for Mesh {
 	fn drop(&mut self) {
@@ -360,6 +376,7 @@ impl Drop for Mesh {
 }
 
 struct Shared {
+	viewers: Viewers,
 	channel: u64,
 	user: u64,
 	screen: Track,
@@ -740,7 +757,7 @@ async fn serve(
 			stream = connection.accept_bi() => {
 				let Ok((send, recv)) = stream else { break };
 				if subscribers.len() < 6 {
-					subscribers.spawn(publish(shared.clone(), send, recv));
+					subscribers.spawn(publish(shared.clone(), user, send, recv));
 				}
 			}
 			Some(_) = subscribers.join_next(), if !subscribers.is_empty() => {}
@@ -752,12 +769,14 @@ async fn serve(
 /// Sends one local track to a subscriber, starting at a keyframe.
 async fn publish(
 	shared: Arc<Shared>,
+	user: u64,
 	mut send: SendStream,
 	mut recv: RecvStream,
 ) -> Result<(), ()> {
 	let mut request = [0u8; 1];
 	recv.read_exact(&mut request).await.map_err(drop)?;
 	let track = shared.track(request[0]).ok_or(())?.clone();
+	let _viewer = (request[0] == SCREEN).then(|| Viewing::start(&shared.viewers, user));
 	let mut frames = track.0.frames.subscribe();
 	track.request_keyframe();
 	let mut asked = Instant::now();
@@ -786,6 +805,35 @@ async fn publish(
 				}
 				Err(RecvError::Closed) => return Ok(()),
 			},
+		}
+	}
+}
+
+/// Counts one screen subscription of `user` for as long as it lives.
+struct Viewing {
+	viewers: Viewers,
+	user: u64,
+}
+impl Viewing {
+	fn start(viewers: &Viewers, user: u64) -> Self {
+		if let Ok(mut viewers) = viewers.lock() {
+			*viewers.entry(user).or_default() += 1;
+		}
+		Self {
+			viewers: viewers.clone(),
+			user,
+		}
+	}
+}
+impl Drop for Viewing {
+	fn drop(&mut self) {
+		if let Ok(mut viewers) = self.viewers.lock()
+			&& let Some(count) = viewers.get_mut(&self.user)
+		{
+			*count -= 1;
+			if *count == 0 {
+				viewers.remove(&self.user);
+			}
 		}
 	}
 }
@@ -994,6 +1042,21 @@ mod tests {
 		assert_eq!(parse_audio_header([1, 0, 0, 0x04, 0xfb]), Ok(1275));
 		assert!(parse_audio_header([1, 0, 0, 0x04, 0xfc]).is_err());
 		assert!(parse_audio_header([0, 0, 0, 0, 9]).is_err());
+	}
+
+	/// A viewer counts while any of its screen subscriptions lives, so a resubscription
+	/// overlapping the old one never drops it from the list.
+	#[test]
+	fn screen_viewers_count_overlapping_subscriptions() {
+		let viewers = Viewers::default();
+		let first = Viewing::start(&viewers, 7);
+		let second = Viewing::start(&viewers, 7);
+		let other = Viewing::start(&viewers, 9);
+		drop(first);
+		assert_eq!(viewers.lock().unwrap().get(&7), Some(&1));
+		drop(second);
+		drop(other);
+		assert!(viewers.lock().unwrap().is_empty());
 	}
 
 	/// Captured system audio becomes Opus packets only while a peer subscribes, and a
