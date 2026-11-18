@@ -66,5 +66,5 @@ libc = "=0.2.189"
 image = { version = "=0.25.10", default-features = false, features = ["jpeg"] }
 gstreamer = "=0.25.3"
 gstreamer-app = "=0.25.2"
-gstreamer-video = "=0.25.3"
+gstreamer-video = "=0.25.4"
 zbus = { version = "=5.19.0", default-features = false, features = ["tokio"] }
