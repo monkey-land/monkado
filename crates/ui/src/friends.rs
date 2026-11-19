@@ -578,6 +578,7 @@ impl MessagingUi {
 					return;
 				}
 				let mut after_hot = false;
+				let offline_available = state.absent_presences_offline();
 				self.scroll
 					.attach(
 						ui,
@@ -607,7 +608,11 @@ impl MessagingUi {
 									let (status, custom, activities, clients) =
 										profiles::presence(state, user.id, None);
 									(
-										profiles::shown_status(state, user.id, status),
+										status.or_else(|| {
+											(offline_available
+												&& state.known_presence_user(user.id))
+											.then_some("offline")
+										}),
 										custom,
 										activities,
 										clients,
