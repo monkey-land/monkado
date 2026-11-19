@@ -84,6 +84,8 @@ pub struct AppPreferences {
 	pub voice_push_to_talk: bool,
 	pub voice_muted: bool,
 	pub voice_deafened: bool,
+	/// The call-switch dialog's "Não aparecer novamente" answer; older preferences ask.
+	pub call_switch_prompt_hidden: bool,
 	pub voice_input: Option<String>,
 	pub voice_output: Option<String>,
 	pub input_percent: u16,
@@ -150,6 +152,7 @@ impl Default for AppPreferences {
 			voice_push_to_talk: false,
 			voice_muted: false,
 			voice_deafened: false,
+			call_switch_prompt_hidden: false,
 			voice_input: None,
 			voice_output: None,
 			input_percent: 100,

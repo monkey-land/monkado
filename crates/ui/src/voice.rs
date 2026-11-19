@@ -2834,6 +2834,11 @@ impl MessagingUi {
 		}
 	}
 
+	/// A switch dropped before an answer must not leave its checkbox ticked for the next dialog.
+	fn forget_call_switch_checkbox(ctx: &egui::Context) {
+		crate::dialog::Confirm::new("switch-call", "", "").discard_checkbox(ctx);
+	}
+
 	pub(super) fn show_call_switch(
 		&mut self,
 		ctx: &egui::Context,
@@ -2848,6 +2853,7 @@ impl MessagingUi {
 			|| !state.can_call(switch.channel)
 		{
 			self.voice_switch = None;
+			Self::forget_call_switch_checkbox(ctx);
 			return;
 		}
 		if let Some(started) = switch.confirmed_at {
@@ -2891,21 +2897,29 @@ impl MessagingUi {
 			!= Some(switch.from)
 		{
 			self.voice_switch = None;
+			Self::forget_call_switch_checkbox(ctx);
 			return;
 		}
 		let name = state
 			.channel(switch.channel)
 			.map_or("o canal selecionado", |channel| channel.name.as_str());
-		match crate::dialog::Confirm::new(
-			"switch-call",
-			"Trocar de chamada?",
-			format!("Você já está em outra chamada. Sair dela e entrar em {name}?"),
-		)
-		.confirm_label("Trocar de chamada")
-		.cancel_label("Continuar na chamada")
-		.show(ctx)
-		{
-			Some(crate::dialog::Choice::Confirmed) => {
+		let choice = if self.call_switch_prompt_hidden {
+			// The dialog's "Não aparecer novamente" was confirmed before: switch without asking.
+			Some((crate::dialog::Choice::Confirmed, true))
+		} else {
+			crate::dialog::Confirm::new(
+				"switch-call",
+				"Trocar de chamada?",
+				format!("Você já está em outra chamada. Sair dela e entrar em {name}?"),
+			)
+			.confirm_label("Trocar de chamada")
+			.cancel_label("Continuar na chamada")
+			.checkbox("Não aparecer novamente")
+			.show_checked(ctx)
+		};
+		match choice {
+			Some((crate::dialog::Choice::Confirmed, hide)) => {
+				self.call_switch_prompt_hidden |= hide;
 				if let Some(command) = state.leave_call() {
 					self.voice_switch
 						.as_mut()
@@ -2914,7 +2928,7 @@ impl MessagingUi {
 					commands.push(command);
 				}
 			}
-			Some(crate::dialog::Choice::Cancelled) => self.voice_switch = None,
+			Some((crate::dialog::Choice::Cancelled, _)) => self.voice_switch = None,
 			None => {}
 		}
 	}
@@ -6064,6 +6078,50 @@ mod tests {
 			}))
 		));
 		assert_eq!((view.guild, state.selected), (Some(Id(10)), Some(Id(25))));
+	}
+
+	#[test]
+	fn hidden_call_switch_prompt_switches_without_asking() {
+		let mut state = test_support::call_demo_state();
+		state.demo = false;
+		state.gateway_connected = true;
+		let mut view = MessagingUi {
+			voice_available: true,
+			voice_switch_ready: true,
+			call_switch_prompt_hidden: true,
+			..Default::default()
+		};
+		let mut commands = Vec::new();
+		view.request_call(&mut state, Id(25), false, &mut commands);
+		let from = view.voice_switch.as_ref().expect("switch waits").from;
+		assert!(commands.is_empty(), "the live call asks first");
+		view.show_call_switch(&egui::Context::default(), &mut state, &mut commands);
+		assert!(
+			view.voice_switch
+				.as_ref()
+				.is_some_and(|switch| switch.confirmed_at.is_some()),
+			"the hidden prompt answers itself"
+		);
+		assert!(matches!(
+			commands.as_slice(),
+			[Command::Voice(client_core::voice::Command::Leave {
+				channel,
+				request,
+			})] if (*channel, *request) == from
+		));
+		state.apply_voice(client_core::voice::Event::Departed {
+			channel: from.0,
+			request: from.1,
+		});
+		view.show_call_switch(&egui::Context::default(), &mut state, &mut commands);
+		assert!(matches!(
+			commands.last(),
+			Some(Command::Voice(client_core::voice::Command::Join {
+				channel: Id(25),
+				..
+			}))
+		));
+		assert!(view.call_switch_prompt_hidden);
 	}
 
 	#[test]

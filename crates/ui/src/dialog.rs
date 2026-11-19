@@ -667,6 +667,7 @@ pub struct Confirm {
 	tone: Tone,
 	enabled: bool,
 	note: Option<(Level, String)>,
+	checkbox: Option<String>,
 }
 
 /// What the user chose in a [`Confirm`].
@@ -690,6 +691,7 @@ impl Confirm {
 			tone: Tone::Neutral,
 			enabled: true,
 			note: None,
+			checkbox: None,
 		}
 	}
 	/// Label of the confirming action.
@@ -717,8 +719,23 @@ impl Confirm {
 		self.note = Some((level, text.into()));
 		self
 	}
+	/// Optional row under the message, for a "don't ask again" answer. Its state belongs to the
+	/// open dialog only: it comes back unchecked even when the answer is not confirmed.
+	pub fn checkbox(mut self, label: impl Into<String>) -> Self {
+		self.checkbox = Some(label.into());
+		self
+	}
+	/// Forget the checkbox state of a dialog that went away without an answer.
+	pub fn discard_checkbox(self, ctx: &egui::Context) {
+		let checkbox_id = self.dialog.id.with("checkbox");
+		ctx.data_mut(|data| data.remove_temp::<bool>(checkbox_id));
+	}
 	/// Returns the choice once the user makes one, otherwise `None`.
 	pub fn show(self, ctx: &egui::Context) -> Option<Choice> {
+		self.show_checked(ctx).map(|(choice, _)| choice)
+	}
+	/// Like [`Self::show`], also returning whether the checkbox was checked when answered.
+	pub fn show_checked(self, ctx: &egui::Context) -> Option<(Choice, bool)> {
 		let Self {
 			dialog,
 			message,
@@ -727,12 +744,14 @@ impl Confirm {
 			tone,
 			enabled,
 			note,
+			checkbox,
 		} = self;
 		let message = crate::i18n::translate_if_key(&message);
 		let dialog_id = dialog.id;
+		let checkbox_id = dialog_id.with("checkbox");
 		let mut choice = None;
 		let response = dialog.show(ctx, |d| {
-			d.content(|ui| {
+			let checked = d.content(|ui| {
 				let colors = design::palette(ui);
 				ui.add(
 					egui::Label::new(RichText::new(&message).size(14.0).color(colors.text)).wrap(),
@@ -741,6 +760,23 @@ impl Confirm {
 					ui.add_space(12.0);
 					notice(ui, *level, text);
 				}
+				let Some(label) = checkbox.as_deref() else {
+					return false;
+				};
+				ui.add_space(12.0);
+				let mut checked = ui
+					.ctx()
+					.data(|data| data.get_temp::<bool>(checkbox_id))
+					.unwrap_or(false);
+				ui.add(egui::Checkbox::new(
+					&mut checked,
+					RichText::new(crate::i18n::translate_if_key(label))
+						.size(14.0)
+						.color(colors.muted),
+				));
+				ui.ctx()
+					.data_mut(|data| data.insert_temp(checkbox_id, checked));
+				checked
 			});
 			d.footer(|ui| {
 				let kind = if tone == Tone::Danger {
@@ -757,12 +793,16 @@ impl Confirm {
 					choice = Some(Choice::Cancelled);
 				}
 			});
+			checked
 		});
 		if response.close {
 			choice.get_or_insert(Choice::Cancelled);
 		}
 		enter_after_shown_frame(ctx, dialog_id, enabled, &mut choice);
-		choice
+		if choice.is_some() {
+			ctx.data_mut(|data| data.remove_temp::<bool>(checkbox_id));
+		}
+		choice.map(|choice| (choice, response.inner))
 	}
 }
 
