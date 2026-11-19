@@ -378,6 +378,10 @@ fn encode_loop(
 	let mut next_frame = Instant::now();
 	let mut latest_frame = None;
 	let mut preview_shown = preview_visible.load(Ordering::Acquire);
+	// The local preview is a glance, not the stream: refreshing it at every captured picture
+	// cost a full-size colour conversion per frame on the encoding thread.
+	let mut next_preview = Instant::now();
+	let mut metrics = crate::diagnostics::Metrics::new(crate::diagnostics::Scope::ScreenVideo);
 
 	while !stop.load(Ordering::Acquire) && !send.is_closed() {
 		#[cfg(target_os = "windows")]
@@ -421,7 +425,8 @@ fn encode_loop(
 				if let Ok(mut slot) = preview.try_lock() {
 					slot.take();
 				}
-			} else {
+			} else if resumed || now >= next_preview {
+				next_preview = now + PREVIEW_INTERVAL;
 				let image = preview_frame(frame)?;
 				if let Ok(mut slot) = preview.try_lock() {
 					*slot = Some(image);
@@ -495,10 +500,16 @@ fn encode_loop(
 			});
 		}
 		let force_keyframe = keyframe.swap(false, Ordering::AcqRel);
-		let (data, is_keyframe) = encoding.as_mut().expect("secure screen encoder").encode(
-			latest_frame.as_ref().expect("latest screen frame"),
-			force_keyframe,
-		)?;
+		let start = metrics.start();
+		// Stamp each picture when it arrived, not when its bytes leave the encoder: encode time
+		// varies, and a pipelining hardware encoder returns a picture a few frames later.
+		let (data, is_keyframe, captured_at) =
+			encoding.as_mut().expect("secure screen encoder").encode(
+				latest_frame.as_ref().expect("latest screen frame"),
+				force_keyframe,
+				now.saturating_duration_since(origin),
+			)?;
+		metrics.finish(crate::diagnostics::Stage::Encode, start);
 		if force_keyframe && (data.is_empty() || !is_keyframe) {
 			keyframe.store(true, Ordering::Release);
 		}
@@ -510,15 +521,25 @@ fn encode_loop(
 		}
 		let frame = EncodedFrame {
 			data,
-			timestamp: (origin.elapsed().as_micros() * 90 / 1000) as u32,
+			timestamp: rtp_timestamp(captured_at),
 			keyframe: is_keyframe,
 		};
-		if send.try_send(frame).is_err() {
+		let dropped = send.try_send(frame).is_err();
+		if dropped {
 			keyframe.store(true, Ordering::Release);
 		}
+		metrics.poll(false, u64::from(dropped), false, 0);
 	}
 	capture_stop.store(true, Ordering::Release);
 	Ok(())
+}
+
+/// How often the local share preview refreshes while visible.
+const PREVIEW_INTERVAL: Duration = Duration::from_millis(66);
+
+/// The 90 kHz RTP clock for a picture captured `elapsed` after the share started; it wraps.
+fn rtp_timestamp(elapsed: Duration) -> u32 {
+	(elapsed.as_micros() * 90 / 1000) as u32
 }
 
 #[cfg(any(test, not(target_os = "linux")))]
@@ -623,20 +644,46 @@ impl ScreenEncoder {
 		Ok(true)
 	}
 
+	/// Encodes `frame`, captured `at` after the share started. Returns the access unit,
+	/// whether it is a keyframe, and the capture time of the picture it encodes.
 	fn encode(
 		&mut self,
 		frame: &RawFrame,
 		force_keyframe: bool,
-	) -> Result<(Vec<u8>, bool), &'static str> {
+		at: Duration,
+	) -> Result<(Vec<u8>, bool, Duration), &'static str> {
 		let (width, height) = (self.settings.width as usize, self.settings.height as usize);
 		let mut software_force = force_keyframe;
 		if let Some(hardware) = self.hardware.as_mut() {
 			#[cfg(target_os = "macos")]
-			let encoded = hardware.encode(&frame.data, (width, height), force_keyframe);
+			let encoded = hardware
+				.encode(&frame.data, (width, height), force_keyframe)
+				.map(|(data, keyframe)| (data, keyframe, at));
 			#[cfg(target_os = "windows")]
-			let encoded = hardware.encode_with(width * height * 3 / 2, force_keyframe, |picture| {
-				convert::bgra_to_yuv420(frame, width, height, convert::Chroma::Interleaved, picture)
-			});
+			let encoded = hardware
+				.encode_at(
+					width * height * 3 / 2,
+					force_keyframe,
+					i64::try_from(at.as_nanos() / 100).unwrap_or(i64::MAX),
+					|picture| {
+						convert::bgra_to_yuv420(
+							frame,
+							width,
+							height,
+							convert::Chroma::Interleaved,
+							picture,
+						)
+					},
+				)
+				.map(|(data, keyframe, time)| {
+					// The unit's own sample time is its picture's capture time.
+					let time = time.and_then(|time| u64::try_from(time).ok());
+					(
+						data,
+						keyframe,
+						time.map_or(at, |time| Duration::from_nanos(time * 100)),
+					)
+				});
 			if let Ok(encoded) = encoded {
 				return Ok(encoded);
 			}
@@ -666,6 +713,7 @@ impl ScreenEncoder {
 			),
 			software_force,
 		)
+		.map(|(data, keyframe)| (data, keyframe, at))
 	}
 }
 

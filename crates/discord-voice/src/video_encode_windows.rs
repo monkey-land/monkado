@@ -53,6 +53,10 @@ impl Drop for Runtime {
 	}
 }
 
+/// One access unit, whether it is a keyframe, and the sample time (100 ns units) of the picture
+/// it encodes when the encoder reported one.
+type Output = (Vec<u8>, bool, Option<i64>);
+
 pub(crate) struct Encoder {
 	transform: IMFTransform,
 	events: IMFMediaEventGenerator,
@@ -67,7 +71,7 @@ pub(crate) struct Encoder {
 	max_bytes: usize,
 	max_buffer_bytes: usize,
 	/// Finished access units, oldest first, not yet handed to the caller.
-	pending: VecDeque<(Vec<u8>, bool)>,
+	pending: VecDeque<Output>,
 	/// Keyframe requested for a picture that was skipped and not yet submitted.
 	keyframe_pending: bool,
 }
@@ -102,6 +106,12 @@ impl Encoder {
 		// before its CoTaskMem allocation is released.
 		unsafe {
 			let activate = Activated(hardware_encoder(preference)?);
+			if crate::diagnostics::enabled() {
+				eprintln!(
+					"[monkado] hardware video encoder: {}",
+					friendly_name(&activate.0)
+				);
+			}
 			let transform: IMFTransform = activate.0.ActivateObject().map_err(|_| UNAVAILABLE)?;
 			let attributes = transform.GetAttributes().map_err(|_| UNAVAILABLE)?;
 			if attributes.GetUINT32(&MF_TRANSFORM_ASYNC).unwrap_or(0) == 0 {
@@ -228,6 +238,21 @@ impl Encoder {
 		force_keyframe: bool,
 		fill: impl FnOnce(&mut [u8]) -> Result<(), &'static str>,
 	) -> Result<(Vec<u8>, bool), &'static str> {
+		let time = self.frame * self.duration;
+		self.encode_at(length, force_keyframe, time, fill)
+			.map(|(data, keyframe, _)| (data, keyframe))
+	}
+
+	/// Like `encode_with`, stamping the picture with `time` (100 ns units, increasing). The
+	/// returned unit carries the time of the picture it encodes, which a pipelining encoder
+	/// emits a few pictures later, so the stream keeps the capture cadence.
+	pub(crate) fn encode_at(
+		&mut self,
+		length: usize,
+		force_keyframe: bool,
+		time: i64,
+		fill: impl FnOnce(&mut [u8]) -> Result<(), &'static str>,
+	) -> Result<Output, &'static str> {
 		// A full FIFO means the caller is behind, not that the transform stalled: hand back
 		// the oldest unit and skip this picture rather than failing over to software.
 		self.wait_until(|encoder| {
@@ -271,9 +296,7 @@ impl Encoder {
 			buffer.SetCurrentLength(native_length).map_err(|_| FAILED)?;
 			let sample = MFCreateSample().map_err(|_| FAILED)?;
 			sample.AddBuffer(&buffer).map_err(|_| FAILED)?;
-			sample
-				.SetSampleTime(self.frame * self.duration)
-				.map_err(|_| FAILED)?;
+			sample.SetSampleTime(time).map_err(|_| FAILED)?;
 			sample
 				.SetSampleDuration(self.duration)
 				.map_err(|_| FAILED)?;
@@ -329,7 +352,7 @@ impl Encoder {
 		}
 	}
 
-	fn take_output(&self) -> Result<(Vec<u8>, bool), &'static str> {
+	fn take_output(&self) -> Result<Output, &'static str> {
 		// SAFETY: The output struct is fully initialized. We take ownership of either the
 		// transform-provided sample or our cloned sample before releasing its native fields.
 		unsafe {
@@ -360,7 +383,7 @@ impl Encoder {
 			let data = sample_bytes(&sample, self.max_bytes)?;
 			crate::video::validate_source(&data).map_err(|_| FAILED)?;
 			let keyframe = crate::video_receive::is_keyframe(&data);
-			Ok((data, keyframe))
+			Ok((data, keyframe, sample.GetSampleTime().ok()))
 		}
 	}
 }
@@ -434,6 +457,23 @@ unsafe fn vendor_of(activate: &IMFActivate) -> Option<Preference> {
 				value
 			})?;
 		Some(vendor_from_id(&vendor))
+	}
+}
+
+/// The encoder's registered name for opt-in diagnostics, bounded to 128 characters.
+unsafe fn friendly_name(activate: &IMFActivate) -> String {
+	unsafe {
+		let mut text = windows::core::PWSTR::null();
+		let mut length = 0;
+		if activate
+			.GetAllocatedString(&MFT_FRIENDLY_NAME_Attribute, &mut text, &mut length)
+			.is_err()
+		{
+			return "unknown".to_owned();
+		}
+		let name = text.to_string().unwrap_or_default();
+		CoTaskMemFree(Some(text.0.cast()));
+		name.chars().take(128).collect()
 	}
 }
 
