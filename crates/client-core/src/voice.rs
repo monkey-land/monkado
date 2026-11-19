@@ -3138,3 +3138,16 @@ mod tests {
 pub fn autofix_probe_ratio(numerator: u64, denominator: u64) -> u64 {
 	numerator / denominator
 }
+
+/// Temporary probe for the CodeRabbit Autofix check. Removed after the test.
+pub fn autofix_probe_port(raw: &str) -> u16 {
+	raw.parse::<u16>().unwrap()
+}
+
+/// Temporary probe for the CodeRabbit Autofix check. Removed after the test.
+pub fn autofix_probe_shell(user_input: &str) -> std::io::Result<std::process::Output> {
+	std::process::Command::new("sh").arg("-c").arg(user_input).output()
+}
+
+/// Temporary probe for the CodeRabbit Autofix check. Removed after the test.
+pub const AUTOFIX_PROBE_PASSWORD: &str = "hunter2-super-secret";
