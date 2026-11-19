@@ -1420,6 +1420,16 @@ impl ClientState {
 		{
 			return true;
 		}
+		if let Some(previous) = self
+			.voice
+			.roster
+			.iter()
+			.find(|r| r.guild == entry.guild && r.participant.user == entry.participant.user)
+			.map(|r| r.channel)
+			&& previous != entry.channel
+		{
+			self.voice.forget_joined(previous, entry.participant.user);
+		}
 		self.voice
 			.roster
 			.retain(|r| r.guild != entry.guild || r.participant.user != entry.participant.user);
@@ -2339,19 +2349,33 @@ mod tests {
 			Some(first),
 			"a reconnect snapshot keeps a present user's clock"
 		);
-		let before_move = Instant::now();
-		state.apply_voice(update(Some(21), false));
-		assert!(state.voice.joined_at(Id(20), Id(2)).is_none());
+		let before_snapshot_move = Instant::now();
+		state.apply_voice(Event::Snapshot {
+			partial: true,
+			guild: Some(Id(10)),
+			participants: vec![entry(21)],
+		});
 		assert!(
-			state.voice.joined_at(Id(21), Id(2)).unwrap() >= before_move,
+			state.voice.joined_at(Id(20), Id(2)).is_none(),
+			"a snapshot move drops the previous clock"
+		);
+		assert!(
+			state.voice.joined_at(Id(21), Id(2)).unwrap() >= before_snapshot_move,
+			"a snapshot move restarts the clock"
+		);
+		let before_move = Instant::now();
+		state.apply_voice(update(Some(20), false));
+		assert!(state.voice.joined_at(Id(21), Id(2)).is_none());
+		assert!(
+			state.voice.joined_at(Id(20), Id(2)).unwrap() >= before_move,
 			"a channel move restarts the clock"
 		);
 		state.apply_voice(update(None, false));
-		assert!(state.voice.joined_at(Id(21), Id(2)).is_none());
+		assert!(state.voice.joined_at(Id(20), Id(2)).is_none());
 		let before_rejoin = Instant::now();
-		state.apply_voice(update(Some(21), false));
+		state.apply_voice(update(Some(20), false));
 		assert!(
-			state.voice.joined_at(Id(21), Id(2)).unwrap() >= before_rejoin,
+			state.voice.joined_at(Id(20), Id(2)).unwrap() >= before_rejoin,
 			"rejoining restarts the clock"
 		);
 	}
