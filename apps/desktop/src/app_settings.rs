@@ -517,6 +517,7 @@ mod tests {
 		ui.blur = defaults.blur;
 		ui.preload_on_hover = defaults.preload_on_hover;
 		ui.auto_idle = defaults.auto_idle;
+		ui.voice_participant_timers = defaults.voice_participant_timers;
 		ui.custom_title_bar = defaults.custom_title_bar;
 		ui.setup_pending = !defaults.setup_done;
 		ui.startup_default_pending = !defaults.startup_default_applied;
