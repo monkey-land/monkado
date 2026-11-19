@@ -487,7 +487,7 @@ impl MessagingUi {
 			.as_ref()
 			.filter(|c| c.channel == channel.id);
 		let connected = call.is_some_and(|c| matches!(c.phase, Phase::Waiting | Phase::Connected));
-		let elapsed = call.and_then(elapsed_label);
+		let elapsed = call.and_then(|call| elapsed_label(state, call));
 		let access = state.channel_access(channel.id);
 		let viewable = !access.hidden();
 		let (rect, response) = ui
@@ -4847,7 +4847,7 @@ impl MessagingUi {
 		let guild_id = call.guild;
 		let camera = call.camera;
 		let connected = matches!(phase, Phase::Connected | Phase::Waiting);
-		let elapsed = elapsed_label(call);
+		let elapsed = elapsed_label(state, call);
 		let error = call.error;
 		let reconnecting = call.reconnecting;
 		let reconnecting_title =
@@ -5842,15 +5842,12 @@ fn gain_controls(ui: &mut egui::Ui, gain: &mut crate::VoiceGain) -> [egui::Respo
 	}
 }
 
-pub(crate) fn elapsed_label(call: &client_core::voice::Call) -> Option<String> {
+pub(crate) fn elapsed_label(state: &State, call: &client_core::voice::Call) -> Option<String> {
 	if !matches!(call.phase, Phase::Waiting | Phase::Connected) {
 		return None;
 	}
-	let seconds = call
-		.connected_at
-		.or(call.channel_started_at)?
-		.elapsed()
-		.as_secs();
+	let own = state.user.as_ref().map(|user| user.id);
+	let seconds = state.voice.call_started_at(call, own)?.elapsed().as_secs();
 	Some(format_elapsed(seconds))
 }
 
@@ -7051,32 +7048,44 @@ mod tests {
 				..
 			})]
 		));
-		let call = state.voice.active.as_mut().unwrap();
-		assert!(elapsed_label(call).is_none());
+		let mut call = state.voice.active.take().unwrap();
+		assert!(elapsed_label(&state, &call).is_none());
 		call.connected_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(3663));
 		call.phase = Phase::Waiting;
-		assert_eq!(elapsed_label(call).as_deref(), Some("1:01:03"));
+		assert_eq!(elapsed_label(&state, &call).as_deref(), Some("1:01:03"));
 		call.connected_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(65));
-		assert_eq!(elapsed_label(call).as_deref(), Some("1:05"));
+		assert_eq!(elapsed_label(&state, &call).as_deref(), Some("1:05"));
 		call.connected_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(3599));
-		assert_eq!(elapsed_label(call).as_deref(), Some("59:59"));
+		assert_eq!(elapsed_label(&state, &call).as_deref(), Some("59:59"));
 		call.connected_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(3600));
-		assert_eq!(elapsed_label(call).as_deref(), Some("1:00:00"));
+		assert_eq!(elapsed_label(&state, &call).as_deref(), Some("1:00:00"));
 		call.channel_started_at =
 			Some(std::time::Instant::now() - std::time::Duration::from_secs(7540));
 		assert_eq!(
-			elapsed_label(call).as_deref(),
-			Some("1:00:00"),
-			"the local connection wins over the channel's age"
-		);
-		call.connected_at = None;
-		assert_eq!(
-			elapsed_label(call).as_deref(),
+			elapsed_label(&state, &call).as_deref(),
 			Some("2:05:40"),
-			"the channel age is the fallback"
+			"the channel's age wins over the local connection"
+		);
+		call.channel_started_at = None;
+		state.voice.observe_joined(
+			call.channel,
+			Id(99),
+			std::time::Instant::now() - std::time::Duration::from_secs(507),
+		);
+		assert_eq!(
+			elapsed_label(&state, &call).as_deref(),
+			Some("1:00:00"),
+			"the older timestamp still wins when local connection is older"
+		);
+		call.connected_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(269));
+		assert_eq!(
+			elapsed_label(&state, &call).as_deref(),
+			Some("8:27"),
+			"falls back to the earliest observed participant in the channel"
 		);
 		call.phase = Phase::Failed;
-		assert!(elapsed_label(call).is_none());
+		assert!(elapsed_label(&state, &call).is_none());
+		state.voice.active = Some(call);
 		state.demo = true;
 		for width in [640.0, 1120.0] {
 			let mut output = context.run_ui(
