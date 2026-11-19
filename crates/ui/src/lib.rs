@@ -484,8 +484,8 @@ pub struct MessagingUi {
 	pub remove_attachment_index: Option<usize>,
 	/// Downscaled pixels per selected file (`None` for non-images), produced off the render thread.
 	pub attachment_previews: Vec<Option<std::sync::Arc<egui::ColorImage>>>,
-	/// GPU copies of `attachment_previews`, keyed by the pixel buffer they were uploaded from.
-	attachment_textures: Vec<Option<(usize, egui::TextureHandle)>>,
+	/// GPU copies of `attachment_previews`; the retained `Arc` keeps identity valid.
+	attachment_textures: Vec<Option<(std::sync::Arc<egui::ColorImage>, egui::TextureHandle)>>,
 	pub attach_requested: bool,
 	pub host_attachment_requested: Option<usize>,
 	pub attachment_paste_requested: Option<AttachmentPaste>,
@@ -1002,17 +1002,16 @@ impl MessagingUi {
 					self.attachment_textures[index] = None;
 					return None;
 				};
-				let key = std::sync::Arc::as_ptr(&image) as usize;
 				if self.attachment_textures[index]
 					.as_ref()
-					.is_none_or(|(k, _)| *k != key)
+					.is_none_or(|(cached, _)| !std::sync::Arc::ptr_eq(cached, &image))
 				{
 					let handle = ctx.load_texture(
 						format!("attachment-preview-{index}"),
-						egui::ImageData::Color(image),
+						egui::ImageData::Color(image.clone()),
 						egui::TextureOptions::LINEAR,
 					);
-					self.attachment_textures[index] = Some((key, handle));
+					self.attachment_textures[index] = Some((image, handle));
 				}
 				self.attachment_textures[index]
 					.as_ref()
@@ -10229,6 +10228,28 @@ mod composer_tests {
 				&& !view.remove_attachment_requested
 				&& !view.cancel_upload_requested
 		);
+	}
+
+	#[test]
+	fn attachment_textures_follow_preview_identity() {
+		let ctx = egui::Context::default();
+		let mut view = MessagingUi::default();
+		view.preview_attachment(
+			"synthetic.png",
+			100,
+			Some(egui::ColorImage::filled([2, 2], egui::Color32::WHITE)),
+		);
+		let first = view.attachment_textures(&ctx)[0].clone().unwrap();
+		let reused = view.attachment_textures(&ctx)[0].clone().unwrap();
+		assert_eq!(first.id(), reused.id());
+		// A new buffer at the same index uploads again, even if the allocator
+		// hands it the address the old one had.
+		view.attachment_previews[0] = Some(std::sync::Arc::new(egui::ColorImage::filled(
+			[2, 2],
+			egui::Color32::BLACK,
+		)));
+		let replaced = view.attachment_textures(&ctx)[0].clone().unwrap();
+		assert_ne!(first.id(), replaced.id());
 	}
 
 	#[test]

@@ -283,6 +283,10 @@ impl VideoUi {
 			return false;
 		}
 		let bytes = rgba.len();
+		// One frame larger than the whole budget would survive every eviction below.
+		if bytes > POSTER_BUDGET {
+			return false;
+		}
 		// Reinserting refreshes recency; eviction below drops textures (GPU freed).
 		self.evict_poster(&id);
 		while self.poster_bytes + bytes > POSTER_BUDGET || self.posters.len() >= POSTER_MAX {
@@ -1317,5 +1321,11 @@ mod tests {
 		assert!(!video.posters.contains_key(&Id(4)));
 		assert!(!video.poster_seen.contains(&Id(3)));
 		assert!(video.poster_bytes <= POSTER_BUDGET);
+		// Larger than the whole budget: refused without evicting what is cached.
+		let oversized = vec![7; 1921 * 1093 * 4];
+		assert!(oversized.len() > POSTER_BUDGET);
+		assert!(!video.accept_poster(&ctx, Id(6), 1921, 1093, &oversized));
+		assert_eq!(video.poster_bytes, big.len());
+		assert!(video.posters.contains_key(&Id(5)));
 	}
 }
