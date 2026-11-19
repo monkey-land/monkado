@@ -513,29 +513,176 @@ fn enter_workspace() -> Result<(), String> {
 		.ok_or("Workspace manifest has no parent")?;
 	std::env::set_current_dir(root).map_err(|e| e.to_string())
 }
+/// Formatting, strict Clippy, tests, the no-default-features build and policy. `packages`
+/// limits Clippy and tests to those workspace packages; `None` checks the whole workspace.
+fn check(packages: Option<&[String]>) -> Result<(), String> {
+	run(&["fmt", "--all", "--", "--check"])?;
+	let scope: Vec<&str> = match packages {
+		None => vec!["--workspace"],
+		Some(packages) => packages
+			.iter()
+			.flat_map(|package| ["-p", package.as_str()])
+			.collect(),
+	};
+	if packages.is_none_or(|packages| !packages.is_empty()) {
+		let mut clippy = vec!["clippy"];
+		clippy.extend(&scope);
+		clippy.extend(["--all-targets", "--locked", "--", "-D", "warnings"]);
+		run(&clippy)?;
+		let mut test = vec!["test"];
+		test.extend(&scope);
+		test.push("--locked");
+		run(&test)?;
+	}
+	if packages.is_none_or(|packages| packages.iter().any(|package| package == "monkado")) {
+		run(&[
+			"check",
+			"-p",
+			"monkado",
+			"--no-default-features",
+			"--locked",
+		])?;
+	}
+	policy()
+}
+
+/// `check` for the packages this branch changed against `origin/main` and every workspace
+/// package that depends on them. A change outside package directories (lockfile, toolchain,
+/// vendored crates, Cargo configuration) checks everything. The full check still gates merges.
+fn check_changed() -> Result<(), String> {
+	let base = output("git", &["merge-base", "HEAD", "origin/main"])?;
+	let mut files: Vec<String> = output("git", &["diff", "--name-only", base.trim()])?
+		.lines()
+		.chain(output("git", &["ls-files", "--others", "--exclude-standard"])?.lines())
+		.map(|line| line.replace('\\', "/"))
+		.collect();
+	files.sort();
+	files.dedup();
+	let metadata: serde_json::Value = serde_json::from_str(&output(
+		"cargo",
+		&["metadata", "--format-version", "1", "--locked"],
+	)?)
+	.map_err(|e| e.to_string())?;
+	let root = metadata["workspace_root"]
+		.as_str()
+		.ok_or("cargo metadata has no workspace root")?
+		.replace('\\', "/");
+	let members: Vec<&str> = metadata["workspace_members"]
+		.as_array()
+		.ok_or("cargo metadata has no workspace members")?
+		.iter()
+		.filter_map(serde_json::Value::as_str)
+		.collect();
+	// (id, name, directory relative to the workspace root)
+	let packages: Vec<(&str, &str, String)> = metadata["packages"]
+		.as_array()
+		.ok_or("cargo metadata has no packages")?
+		.iter()
+		.filter(|package| members.contains(&package["id"].as_str().unwrap_or_default()))
+		.filter_map(|package| {
+			let manifest = package["manifest_path"].as_str()?.replace('\\', "/");
+			let directory = manifest
+				.strip_prefix(&root)?
+				.trim_start_matches('/')
+				.strip_suffix("Cargo.toml")?
+				.to_owned();
+			Some((
+				package["id"].as_str()?,
+				package["name"].as_str()?,
+				directory,
+			))
+		})
+		.collect();
+	let mut selected = std::collections::BTreeSet::new();
+	for file in &files {
+		let owner = packages
+			.iter()
+			.filter(|(_, _, directory)| {
+				!directory.is_empty() && file.starts_with(directory.as_str())
+			})
+			.max_by_key(|(_, _, directory)| directory.len());
+		match owner {
+			Some((id, _, _)) => {
+				selected.insert(*id);
+			}
+			None if changes_everything(file) => {
+				println!("{file} affects every package; running the full check");
+				return check(None);
+			}
+			None => {}
+		}
+	}
+	// Add workspace dependents until nothing new appears.
+	let nodes = metadata["resolve"]["nodes"]
+		.as_array()
+		.ok_or("cargo metadata has no resolve graph")?;
+	loop {
+		let before = selected.len();
+		for node in nodes {
+			let Some(id) = node["id"].as_str() else {
+				continue;
+			};
+			if !members.contains(&id) || selected.contains(id) {
+				continue;
+			}
+			let depends = node["dependencies"].as_array().is_some_and(|deps| {
+				deps.iter()
+					.any(|dep| selected.contains(dep.as_str().unwrap_or_default()))
+			});
+			if depends {
+				selected.insert(id);
+			}
+		}
+		if selected.len() == before {
+			break;
+		}
+	}
+	let names: Vec<String> = packages
+		.iter()
+		.filter(|(id, _, _)| selected.contains(id))
+		.map(|(_, name, _)| (*name).to_owned())
+		.collect();
+	println!(
+		"Checking changed packages and dependents: {}",
+		names.join(", ")
+	);
+	check(Some(&names))
+}
+
+/// Root files that change how every package builds.
+fn changes_everything(file: &str) -> bool {
+	file == "Cargo.toml"
+		|| file == "Cargo.lock"
+		|| file.starts_with("rust-toolchain")
+		|| file.starts_with(".cargo/")
+		|| file.starts_with("vendor/")
+		|| file == "clippy.toml"
+		|| file == "rustfmt.toml"
+		|| file == ".rustfmt.toml"
+}
+
+fn output(program: &str, args: &[&str]) -> Result<String, String> {
+	let output = Command::new(program)
+		.args(args)
+		.stderr(Stdio::inherit())
+		.output()
+		.map_err(|e| e.to_string())?;
+	if !output.status.success() {
+		return Err(format!("{program} {} failed", args.join(" ")));
+	}
+	String::from_utf8(output.stdout).map_err(|e| e.to_string())
+}
+
 fn main() -> ExitCode {
 	let result = enter_workspace().and_then(|()| {
 		match std::env::args().nth(1).as_deref().unwrap_or("check") {
-			"check" => run(&["fmt", "--all", "--", "--check"])
-				.and_then(|_| {
-					run(&[
-						"clippy",
-						"--workspace",
-						"--all-targets",
-						"--locked",
-						"--",
-						"-D",
-						"warnings",
-					])
-				})
-				.and_then(|_| run(&["test", "--workspace", "--locked"]))
-				.and_then(|_| run(&["check", "-p", "monkado", "--no-default-features", "--locked"]))
-				.and_then(|_| policy()),
+			"check" if std::env::args().nth(2).as_deref() == Some("--changed") => check_changed(),
+			"check" => check(None),
 			"policy" => policy(),
 			"licenses" => licenses(),
 			"fuzz" => fuzz(),
 			"package" => package(),
-			_ => Err("Use cargo xtask [check|policy|licenses|fuzz|package]".into()),
+			_ => Err("Use cargo xtask [check [--changed]|policy|licenses|fuzz|package]".into()),
 		}
 	});
 	match result {
