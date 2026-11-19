@@ -748,6 +748,7 @@ impl MessagingUi {
 			+ usize::from(browse.is_some());
 		let previous_spacing = ui.spacing().item_spacing.y;
 		ui.spacing_mut().item_spacing.y = 0.0;
+		let offline_available = dm_list && state.absent_presences_offline();
 		let mut drop_rows = Vec::new();
 		let output = self
 			.scroll
@@ -1139,6 +1140,7 @@ impl MessagingUi {
 							);
 							inner.spacing_mut().item_spacing.x = if dm_list { 12.0 } else { 6.0 };
 							let mut glyph = None;
+							let mut dm_subtitle = None;
 							if channel.guild.is_none() {
 								if channel.kind == 3 {
 									let avatar = self
@@ -1170,10 +1172,18 @@ impl MessagingUi {
 								} else if let Some(user) = channel.recipients.first() {
 									let avatar =
 										self.avatars.show(&mut inner, user, 32.0, state.demo);
-									let (status, _, _, clients) =
+									let (status, custom, activities, clients) =
 										crate::profiles::presence(state, user.id, None);
-									let status =
-										crate::profiles::shown_status(state, user.id, status);
+									if dm_list && channel.kind == 1 {
+										dm_subtitle = crate::profiles::subtitle(custom, activities);
+									}
+									let status = if dm_list && channel.kind == 1 {
+										status.or_else(|| {
+											(visible && offline_available).then_some("offline")
+										})
+									} else {
+										crate::profiles::shown_status(state, user.id, status)
+									};
 									if channel.kind == 1
 										&& state
 											.direct_typing(channel.id, std::time::Instant::now())
@@ -1254,11 +1264,7 @@ impl MessagingUi {
 								label.push_str(" · unavailable");
 							}
 							let subtitle = if dm_list && channel.kind == 1 {
-								channel.recipients.first().and_then(|user| {
-									let (_, custom, activities, _) =
-										crate::profiles::presence(state, user.id, None);
-									crate::profiles::subtitle(custom, activities)
-								})
+								dm_subtitle
 							} else {
 								(dm_list && channel.kind == 3).then(|| {
 									format!(

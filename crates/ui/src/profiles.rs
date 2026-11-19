@@ -6242,6 +6242,42 @@ mod tests {
 	}
 
 	#[test]
+	fn dm_recipient_without_presence_shows_offline_past_256_direct_users() {
+		let mut state = State {
+			gateway_connected: true,
+			..State::default()
+		};
+		for id in 10..310 {
+			state.channels.push(model::Channel {
+				user_limit: None,
+				slowmode: 0,
+				last_message: None,
+				id: Id(1000 + id),
+				guild: None,
+				parent_id: None,
+				position: 0,
+				name: String::new(),
+				kind: 1,
+				recipients: vec![model::User {
+					id: Id(id),
+					name: format!("User {id}"),
+					avatar: None,
+					discriminator: 0,
+					kind: Default::default(),
+					webhook: false,
+					primary_guild: None,
+					cosmetics: None,
+				}],
+				member_list_id: None,
+				tags: None,
+				message_count: None,
+				icon: None,
+			});
+		}
+		assert_eq!(shown_status(&state, Id(300), None), Some("offline"));
+	}
+
+	#[test]
 	fn docked_card_keeps_its_frame_inside_the_panel_and_scrolls() {
 		let ctx = egui::Context::default();
 		let state = test_support::demo_state();

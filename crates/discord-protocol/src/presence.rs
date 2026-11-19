@@ -20,7 +20,7 @@ pub struct PresenceUpdate {
 
 #[derive(Deserialize)]
 pub struct Friends<'a>(
-	#[serde(borrow, deserialize_with = "crate::read_state::entries")]
+	#[serde(borrow, deserialize_with = "crate::read_state::account_entries")]
 	pub  Vec<&'a serde_json::value::RawValue>,
 );
 
@@ -217,6 +217,47 @@ impl Activity {
 		(!text.is_empty()).then(|| text.to_owned())
 	}
 }
+fn activity_richness(activity: &RichActivity) -> (u8, u8, u8, bool) {
+	let image_rank = |image: &Option<ActivityImage>| match image {
+		Some(ActivityImage::Asset { .. } | ActivityImage::Proxy(_) | ActivityImage::Spotify(_)) => {
+			2
+		}
+		Some(ActivityImage::Application(_)) => 1,
+		None => 0,
+	};
+	(
+		u8::from(activity.details.is_some()) + u8::from(activity.state.is_some()),
+		image_rank(&activity.image),
+		image_rank(&activity.small_image),
+		activity.started_at.is_some(),
+	)
+}
+
+fn push_activity(
+	activity: Activity,
+	custom: &mut Option<String>,
+	found_custom: &mut bool,
+	rich: &mut Vec<RichActivity>,
+) {
+	if activity.kind == 4 && !*found_custom {
+		*custom = activity.custom_status();
+		*found_custom = true;
+	} else if let Some(activity) = activity.rich_activity() {
+		// ponytail: match display names; retain application identity if same-name games need separating.
+		if let Some(existing) = rich.iter_mut().find(|existing| {
+			activity.kind == 0
+				&& existing.kind == 0
+				&& existing.name.eq_ignore_ascii_case(&activity.name)
+		}) {
+			if activity_richness(&activity) > activity_richness(existing) {
+				*existing = activity;
+			}
+		} else if rich.len() < MAX_RICH_ACTIVITIES {
+			rich.push(activity);
+		}
+	}
+}
+
 impl<'de> Deserialize<'de> for Activities {
 	fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
 		struct Bounded;
@@ -228,30 +269,6 @@ impl<'de> Deserialize<'de> for Activities {
 			fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Activities, A::Error> {
 				let mut custom = None;
 				let mut rich: Vec<RichActivity> = Vec::new();
-				let richness = |activity: &RichActivity| {
-					(
-						u8::from(activity.details.is_some()) + u8::from(activity.state.is_some()),
-						match &activity.image {
-							Some(
-								ActivityImage::Asset { .. }
-								| ActivityImage::Proxy(_)
-								| ActivityImage::Spotify(_),
-							) => 2,
-							Some(ActivityImage::Application(_)) => 1,
-							None => 0,
-						},
-						match &activity.small_image {
-							Some(
-								ActivityImage::Asset { .. }
-								| ActivityImage::Proxy(_)
-								| ActivityImage::Spotify(_),
-							) => 2,
-							Some(ActivityImage::Application(_)) => 1,
-							None => 0,
-						},
-						activity.started_at.is_some(),
-					)
-				};
 				let mut found = false;
 				let mut count = 0;
 				while let Some(Object(activity)) = seq.next_element::<Object<Activity>>()? {
@@ -259,24 +276,7 @@ impl<'de> Deserialize<'de> for Activities {
 						return Err(serde::de::Error::custom("Activity count exceeds capacity"));
 					}
 					count += 1;
-					if activity.kind == 4 && !found {
-						custom = activity.custom_status();
-						found = true;
-					} else if let Some(activity) = activity.rich_activity() {
-						// ponytail: match display names; retain application identity if same-name games need separating.
-						if let Some(existing) = rich.iter_mut().find(|existing| {
-							activity.kind == 0
-								&& existing.kind == 0 && existing
-								.name
-								.eq_ignore_ascii_case(&activity.name)
-						}) {
-							if richness(&activity) > richness(existing) {
-								*existing = activity;
-							}
-						} else if rich.len() < MAX_RICH_ACTIVITIES {
-							rich.push(activity);
-						}
-					}
+					push_activity(activity, &mut custom, &mut found, &mut rich);
 				}
 				Ok(Activities(custom, rich))
 			}
@@ -345,10 +345,31 @@ struct PresenceDto {
 	client_status: Patch<ClientStatus>,
 }
 
-pub fn decode(bytes: &[u8]) -> Result<PresenceUpdate, DecodeError> {
-	let presence: PresenceDto = crate::decode(bytes)?;
-	let avatar = match presence
-		.user
+#[derive(Deserialize)]
+struct LenientPresenceDto<'a> {
+	#[serde(default)]
+	guild_id: Option<Id>,
+	#[serde(default)]
+	user: Option<Identity>,
+	#[serde(default)]
+	user_id: Option<Id>,
+	#[serde(default, borrow)]
+	status: Patch<&'a serde_json::value::RawValue>,
+	#[serde(default, borrow)]
+	activities: Patch<&'a serde_json::value::RawValue>,
+	#[serde(default, borrow)]
+	client_status: Patch<&'a serde_json::value::RawValue>,
+}
+
+fn finish_decode(
+	guild: Option<Id>,
+	identity: Option<Identity>,
+	user_id: Option<Id>,
+	status: Patch<String>,
+	(custom_status, activities): (Patch<String>, Patch<Vec<RichActivity>>),
+	clients: Patch<ClientPlatforms>,
+) -> Result<PresenceUpdate, DecodeError> {
+	let avatar = match identity
 		.as_ref()
 		.map_or(Patch::Absent, |u| u.avatar.clone())
 	{
@@ -357,15 +378,15 @@ pub fn decode(bytes: &[u8]) -> Result<PresenceUpdate, DecodeError> {
 		Patch::Null => Patch::Null,
 		Patch::Absent => Patch::Absent,
 	};
-	let embedded = presence.user.map(|user| user.id);
-	if embedded.zip(presence.user_id).is_some_and(|(a, b)| a != b) {
+	let embedded = identity.map(|user| user.id);
+	if embedded.zip(user_id).is_some_and(|(a, b)| a != b) {
 		return Err(DecodeError);
 	}
 	let user = embedded
-		.or(presence.user_id)
+		.or(user_id)
 		.filter(|id| id.0 != 0)
 		.ok_or(DecodeError)?;
-	let status = match presence.status {
+	let status = match status {
 		Patch::Value(status)
 			if matches!(status.as_str(), "online" | "idle" | "dnd" | "offline") =>
 		{
@@ -374,6 +395,19 @@ pub fn decode(bytes: &[u8]) -> Result<PresenceUpdate, DecodeError> {
 		Patch::Absent => Patch::Absent,
 		_ => Patch::Null,
 	};
+	Ok(PresenceUpdate {
+		guild,
+		user,
+		avatar,
+		status,
+		custom_status,
+		activities,
+		clients,
+	})
+}
+
+pub fn decode(bytes: &[u8]) -> Result<PresenceUpdate, DecodeError> {
+	let presence: PresenceDto = crate::decode(bytes)?;
 	let (custom_status, activities) = match presence.activities {
 		Patch::Absent => (Patch::Absent, Patch::Absent),
 		Patch::Null => (Patch::Null, Patch::Null),
@@ -386,15 +420,74 @@ pub fn decode(bytes: &[u8]) -> Result<PresenceUpdate, DecodeError> {
 		Patch::Null => Patch::Null,
 		Patch::Value(status) => Patch::Value(status.platforms()),
 	};
-	Ok(PresenceUpdate {
-		guild: presence.guild_id,
-		user,
-		avatar,
+	finish_decode(
+		presence.guild_id,
+		presence.user,
+		presence.user_id,
+		presence.status,
+		(custom_status, activities),
+		clients,
+	)
+}
+
+/// Decodes presence for Gateway startup/updates without letting malformed optional activity or
+/// client-platform fields drop the user's online/offline status.
+pub fn decode_lenient(bytes: &[u8]) -> Result<PresenceUpdate, DecodeError> {
+	if let Ok(update) = decode(bytes) {
+		return Ok(update);
+	}
+	if bytes.len() > crate::MAX_WIRE {
+		return Err(DecodeError);
+	}
+	let presence: LenientPresenceDto<'_> =
+		serde_json::from_slice(bytes).map_err(|_| DecodeError)?;
+	let status = match presence.status {
+		Patch::Absent => Patch::Absent,
+		Patch::Null => Patch::Null,
+		Patch::Value(raw) => match serde_json::from_str::<String>(raw.get()) {
+			Ok(value) => Patch::Value(value),
+			Err(_) => Patch::Absent,
+		},
+	};
+	let activities = match presence.activities {
+		Patch::Absent => (Patch::Absent, Patch::Absent),
+		Patch::Null => (Patch::Null, Patch::Null),
+		Patch::Value(raw) => match serde_json::from_str::<Activities>(raw.get()) {
+			Ok(Activities(custom, rich)) => {
+				(custom.map_or(Patch::Null, Patch::Value), Patch::Value(rich))
+			}
+			Err(_) => match serde_json::from_str::<Vec<&serde_json::value::RawValue>>(raw.get()) {
+				Ok(items) => {
+					let mut custom = None;
+					let mut found = false;
+					let mut rich = Vec::new();
+					for item in items.into_iter().take(64) {
+						if let Ok(Object(activity)) =
+							serde_json::from_str::<Object<Activity>>(item.get())
+						{
+							push_activity(activity, &mut custom, &mut found, &mut rich);
+						}
+					}
+					(custom.map_or(Patch::Null, Patch::Value), Patch::Value(rich))
+				}
+				Err(_) => (Patch::Absent, Patch::Absent),
+			},
+		},
+	};
+	let clients = match presence.client_status {
+		Patch::Absent => Patch::Absent,
+		Patch::Null => Patch::Null,
+		Patch::Value(raw) => serde_json::from_str::<ClientStatus>(raw.get())
+			.map_or(Patch::Absent, |status| Patch::Value(status.platforms())),
+	};
+	finish_decode(
+		presence.guild_id,
+		presence.user,
+		presence.user_id,
 		status,
-		custom_status,
 		activities,
 		clients,
-	})
+	)
 }
 
 #[cfg(test)]
@@ -1029,5 +1122,36 @@ mod tests {
 				Id(u64::MAX)
 			);
 		}
+	}
+
+	#[test]
+	fn lenient_decode_preserves_status_and_valid_activities_when_optional_fields_fail() {
+		let oversized = "x".repeat(4097);
+		let wire = serde_json::json!({
+			"user_id": "2",
+			"status": "idle",
+			"activities": [
+				{"type": 0, "name": oversized},
+				{"type": 0, "name": "Valid Game"},
+				{"type": 4, "state": "Valid Custom"}
+			],
+			"client_status": false
+		})
+		.to_string();
+		assert!(decode(wire.as_bytes()).is_err());
+		let update = decode_lenient(wire.as_bytes()).unwrap();
+		assert_eq!(update.user, Id(2));
+		assert_eq!(update.status, Patch::Value("idle".into()));
+		assert_eq!(update.custom_status, Patch::Value("Valid Custom".into()));
+		assert!(
+			matches!(&update.activities, Patch::Value(list) if list.len() == 1 && list[0].name == "Valid Game")
+		);
+		assert_eq!(update.clients, Patch::Absent);
+
+		let malformed_activities = br#"{"user_id":"3","status":"dnd","activities":false}"#;
+		let update = decode_lenient(malformed_activities).unwrap();
+		assert_eq!(update.status, Patch::Value("dnd".into()));
+		assert_eq!(update.activities, Patch::Absent);
+		assert!(decode_lenient(br#"{"user":{"id":"0"},"status":"online"}"#).is_err());
 	}
 }
