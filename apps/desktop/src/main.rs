@@ -1696,6 +1696,13 @@ impl Desktop {
 					.any(|arg| matches!(arg.as_str(), "--demo-call" | "--demo-call-stream"))
 				{
 					test_support::call_demo_state()
+				} else if std::env::args().any(|arg| arg == "--demo-call-switch") {
+					// Capture fixture: the call is active and joins are allowed, so the switch
+					// prompt is reachable. Synthetic data; no host call ever starts.
+					let mut state = test_support::call_demo_state();
+					state.demo = false;
+					state.gateway_connected = true;
+					state
 				} else if std::env::args().any(|arg| {
 					matches!(
 						arg.as_str(),
