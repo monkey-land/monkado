@@ -576,7 +576,7 @@ pub struct MessagingUi {
 	stream_preview_hover: Option<((Id, Id, Id), egui::Rect)>,
 	stream_preview_request: Option<(Id, Id, Id)>,
 	stream_preview_watch: Option<(Id, Id)>,
-	/// Guild voice channel double-clicked in the channel list, joined after selection applies.
+	/// Guild voice channel clicked in the channel list, joined after selection applies.
 	voice_join: Option<Id>,
 	pub voice_inputs: Vec<(String, String)>,
 	pub voice_outputs: Vec<(String, String)>,
