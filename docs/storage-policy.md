@@ -741,8 +741,9 @@ and graphics API are fixed enum values in this same device-local record. Unknown
 keys from newer builds fall back to Automatic without rejecting the other settings. The Linux
 hide-window-decorations boolean is stored in this same record and defaults to false. The home
 list's collapsed message requests section is another boolean in this record; closing it persists
-until the owner reopens it. These survive restart/logout; demo controls never read or write them.
-Save failures remain visible.
+until the owner reopens it. The optional per-participant voice call timer is another boolean,
+which defaults to on, including for records saved before it existed. These survive
+restart/logout; demo controls never read or write them. Save failures remain visible.
 The optional voice profile preserves older records: an absent profile migrates the legacy
 suppression boolean to Custom with RNNoise/Off, AEC on, and no AGC/sensitivity gate.
 The selected profile and retained Custom settings are saved together; suppression strength

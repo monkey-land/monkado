@@ -949,6 +949,17 @@ impl MessagingUi {
 		design::group(ui, &title, |ui| self.startup_switches(ui));
 		let title = language.text("general-window");
 		design::group(ui, &title, |ui| self.window_switches(ui));
+		let title = language.text("general-calls");
+		design::group(ui, &title, |ui| {
+			let label = language.text("general-participant-timers");
+			let description = language.text("general-participant-timers-description");
+			design::switch(
+				ui,
+				&label,
+				Some(&description),
+				&mut self.voice_participant_timers,
+			);
+		});
 		let title = language.text("general-graphics");
 		design::group(ui, &title, |ui| {
 			let restart = language.text("general-gpu-restart");
