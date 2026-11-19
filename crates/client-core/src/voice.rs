@@ -589,7 +589,8 @@ impl ClientState {
 			Some(_) => (self.voice.dm_participants(channel).len(), false),
 			None => (0, false),
 		};
-		if count >= MAX_PARTICIPANTS {
+		// Being in the channel already, from another device, takes no extra place even at the cap.
+		if !present && count >= MAX_PARTICIPANTS {
 			return Some(CALL_FULL);
 		}
 		let limit = self.channel(channel).and_then(|c| c.user_limit)?;
@@ -2000,13 +2001,24 @@ mod tests {
 			state.apply_voice(Event::Snapshot {
 				guild: None,
 				partial: false,
-				participants: (1..=MAX_PARTICIPANTS as u64)
+				participants: (2..=(MAX_PARTICIPANTS as u64 + 1))
 					.map(|user| entry(user, 20))
 					.collect(),
 			});
 			state.leave_call();
 			state.gateway_connected = true;
 			assert!(state.start_call(Id(20), false).is_none());
+			// Already in the full room (another device): no extra slot is needed.
+			state.apply_voice(Event::Snapshot {
+				guild: None,
+				partial: false,
+				participants: (1..=MAX_PARTICIPANTS as u64)
+					.map(|user| entry(user, 20))
+					.collect(),
+			});
+			assert_eq!(state.call_full(Id(20)), None);
+			assert!(state.start_call(Id(20), false).is_some());
+			state.leave_call();
 			state.apply(Envelope {
 				generation: state.generation,
 				event: CoreEvent::Unavailable(Id(20)),
