@@ -847,6 +847,18 @@ pub fn voice_demo_state() -> State {
 	.collect();
 	// Fern streams in the fixture so the LIVE pill and watch action render offline.
 	state.voice.roster[2].participant.streaming = true;
+	let now = Instant::now();
+	for (channel, user, seconds) in [
+		(25, 1, 3663),
+		(25, 2, 3862),
+		(25, 3, 727),
+		(26, 4, 340),
+		(26, 5, 47),
+	] {
+		state
+			.voice
+			.observe_joined(Id(channel), Id(user), now - Duration::from_secs(seconds));
+	}
 	state.voice.active = Some(Call {
 		camera: false,
 		watching: None,
@@ -908,6 +920,13 @@ pub fn call_demo_state() -> State {
 		error: None,
 		reconnecting: None,
 	});
+	let now = Instant::now();
+	state
+		.voice
+		.observe_joined(Id(22), Id(1), now - Duration::from_secs(754));
+	state
+		.voice
+		.observe_joined(Id(22), Id(2), now - Duration::from_secs(512));
 	state.status = "Offline call fixture · no microphone or network access";
 	state
 }
