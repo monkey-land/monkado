@@ -411,6 +411,8 @@ channel-list-heading-direct-messages = Direct Messages
 # Context: key
 channel-list-heading-favorites = Favorites
 # Context: key
+channel-list-heading-active-now = Active Now
+# Context: key
 channel-list-heading-pinned = Pinned
 # Context: key
 channel-list-heading-message-requests = Message Requests

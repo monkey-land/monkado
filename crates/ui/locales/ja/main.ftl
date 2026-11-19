@@ -394,6 +394,8 @@ channel-list-heading-direct-messages = ダイレクトメッセージ
 # Context: key
 channel-list-heading-favorites = お気に入り
 # Context: key
+channel-list-heading-active-now = アクティブ中
+# Context: key
 channel-list-heading-pinned = 固定された
 # Context: key
 channel-list-heading-message-requests = メッセージリクエスト

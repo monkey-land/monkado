@@ -393,6 +393,8 @@ channel-list-heading-direct-messages = Mensajes directos
 # Context: key
 channel-list-heading-favorites = Favoritos
 # Context: key
+channel-list-heading-active-now = Activo ahora
+# Context: key
 channel-list-heading-pinned = Fijado
 # Context: key
 channel-list-heading-message-requests = Solicitudes de mensajes

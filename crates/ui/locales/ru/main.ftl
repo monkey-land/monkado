@@ -394,6 +394,8 @@ channel-list-heading-direct-messages = Личные сообщения
 # Context: key
 channel-list-heading-favorites = Избранное
 # Context: key
+channel-list-heading-active-now = Активно сейчас
+# Context: key
 channel-list-heading-pinned = Закреплено
 # Context: key
 channel-list-heading-message-requests = Запросы на переписку

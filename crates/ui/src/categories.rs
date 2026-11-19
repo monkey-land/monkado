@@ -21,6 +21,7 @@ fn sidebar_rank(channel: &Channel) -> (bool, i32, Id) {
 enum Slot {
 	Tree,
 	Roster(Shortcut),
+	ActiveNow,
 	/// A pending message request in the home list's collapsible requests section.
 	Request,
 }
@@ -269,11 +270,52 @@ fn rows_at<'a>(
 		.collect();
 	categories.sort_unstable_by_key(|c| (c.position, c.id));
 	let category_ids: BTreeSet<_> = categories.iter().map(|c| c.id).collect();
+	let active_voice: BTreeSet<Id> = guild
+		.map(|guild| {
+			state
+				.voice
+				.roster
+				.iter()
+				.filter(|entry| entry.guild == guild)
+				.map(|entry| entry.channel)
+				.collect()
+		})
+		.unwrap_or_default();
+	let active_now: Vec<&Channel> = if let Some(guild) = guild {
+		let category_order: BTreeMap<Id, (i32, Id)> = categories
+			.iter()
+			.map(|c| (c.id, (c.position, c.id)))
+			.collect();
+		let mut active: Vec<_> = channels
+			.iter()
+			.filter(|c| {
+				c.guild == Some(guild)
+					&& c.kind == 2 && active_voice.contains(&c.id)
+					&& (show_hidden || state.can_view(c.id))
+					&& !roster.lifted(c.id)
+					&& !state.channel_followed(c)
+			})
+			.collect();
+		active.sort_unstable_by_key(|c| {
+			(
+				c.parent_id
+					.and_then(|id| category_order.get(&id).copied())
+					.unwrap_or((i32::MIN, Id(0))),
+				c.position,
+				c.id,
+			)
+		});
+		active
+	} else {
+		Vec::new()
+	};
+	let active_now_ids: BTreeSet<Id> = active_now.iter().map(|c| c.id).collect();
 	let mut groups: BTreeMap<Option<Id>, Vec<&Channel>> = BTreeMap::new();
 	let admitted = |c: &Channel| {
 		scope.admits(c, state)
 			&& (show_hidden || state.can_view(c.id))
 			&& !roster.lifted(c.id)
+			&& !active_now_ids.contains(&c.id)
 			&& state.channel_listed(c)
 	};
 	// Threads appear only beneath their parents, following Discord's relevance rules.
@@ -340,6 +382,12 @@ fn rows_at<'a>(
 			append(channel, Slot::Roster(section.kind), false, &mut rows);
 		}
 	}
+	if !active_now.is_empty() {
+		rows.push(Row::Heading(Heading::ActiveNow));
+		for channel in active_now {
+			append(channel, Slot::ActiveNow, false, &mut rows);
+		}
+	}
 	let mut tree = Vec::new();
 	for channel in groups.remove(&None).unwrap_or_default() {
 		append(channel, Slot::Tree, false, &mut tree);
@@ -351,11 +399,13 @@ fn rows_at<'a>(
 			continue;
 		}
 		tree.push(Row::Category(category, count(&children)));
+		let category_collapsed = collapsed.contains(&category.id);
 		for channel in children {
+			let keep_active_voice = channel.kind == 2 && active_voice.contains(&channel.id);
 			append(
 				channel,
 				Slot::Tree,
-				collapsed.contains(&category.id),
+				category_collapsed && !keep_active_voice,
 				&mut tree,
 			);
 		}
@@ -504,13 +554,15 @@ fn shelf_row(rows: &[CachedRow], index: usize) -> bool {
 	match rows.get(index).copied() {
 		Some(CachedRow::Heading(heading)) => heading.shelf(),
 		Some(CachedRow::Requests(..)) => true,
-		Some(CachedRow::Channel(_, Slot::Roster(_) | Slot::Request, _)) => true,
+		Some(CachedRow::Channel(_, Slot::Roster(_) | Slot::ActiveNow | Slot::Request, _)) => true,
 		Some(CachedRow::Participant(_)) => rows[..index]
 			.iter()
 			.rev()
 			.find_map(|row| match row {
 				CachedRow::Participant(_) => None,
-				CachedRow::Channel(_, slot, _) => Some(matches!(slot, Slot::Roster(_))),
+				CachedRow::Channel(_, slot, _) => {
+					Some(matches!(slot, Slot::Roster(_) | Slot::ActiveNow))
+				}
 				_ => Some(false),
 			})
 			.unwrap_or(false),
@@ -2977,5 +3029,118 @@ mod tests {
 				}
 			)]
 		));
+	}
+
+	#[test]
+	fn active_voice_channels_surface_in_active_now_when_unlisted_and_stay_under_collapsed_categories()
+	 {
+		let mut state = test_support::voice_demo_state();
+		state.voice.active = None;
+		let mut hidden_voice = channel(29, 2, 3, Some(Id(24)));
+		hidden_voice.guild = Some(Id(10));
+		state.channels.push(hidden_voice);
+		state.invalidate_navigation();
+		// Channel 29 has no permission record -> can_view is false and must never appear in Active Now.
+		state.voice.roster.push(client_core::voice::RosterEntry {
+			guild: Id(10),
+			channel: Id(29),
+			participant: client_core::voice::Participant {
+				user: Id(99),
+				muted: false,
+				deafened: false,
+				server_muted: false,
+				server_deafened: false,
+				video: false,
+				streaming: false,
+			},
+			member: None,
+		});
+		// Opt-in mode following only text channel 20: active voice channels 25 & 26 lift to Active Now.
+		state
+			.apply_notification_preferences(client_core::notifications::Event::Settings {
+				entries: vec![client_core::notifications::Setting {
+					overrides_known: true,
+					guild: Some(Id(10)),
+					channels: vec![(Id(20), None, None)],
+					flags: Some(client_core::channel_list::OPT_IN_CHANNELS_ON),
+					channel_flags: vec![(Id(20), client_core::channel_list::OPT_IN_ENABLED)],
+					..Default::default()
+				}],
+				replace: true,
+			})
+			.unwrap();
+		fn list<'a>(state: &'a State, collapsed: &BTreeSet<Id>) -> Vec<Row<'a>> {
+			rows(
+				state,
+				Scope::Guild(Id(10)),
+				&Roster::default(),
+				collapsed,
+				false,
+				false,
+			)
+		}
+		let active_rows = list(&state, &BTreeSet::new());
+		assert!(matches!(
+			active_rows.first(),
+			Some(Row::Heading(Heading::ActiveNow))
+		));
+		assert_eq!(
+			active_rows
+				.iter()
+				.filter_map(|row| match row {
+					Row::Channel(c, Slot::ActiveNow, false) => Some(c.id),
+					_ => None,
+				})
+				.collect::<Vec<_>>(),
+			vec![Id(25), Id(26)]
+		);
+		// Focusing an Active Now voice channel keeps it there without duplicating it in the tree.
+		state.selected = Some(Id(25));
+		let focused_rows = list(&state, &BTreeSet::new());
+		assert_eq!(
+			focused_rows
+				.iter()
+				.filter(|row| matches!(row, Row::Channel(c, ..) if c.id == Id(25)))
+				.count(),
+			1
+		);
+		// Following category 24 moves active rooms into the category; collapsing keeps them visible.
+		state
+			.apply_notification_preferences(client_core::notifications::Event::Settings {
+				entries: vec![client_core::notifications::Setting {
+					overrides_known: true,
+					guild: Some(Id(10)),
+					channels: vec![(Id(24), None, None)],
+					flags: Some(client_core::channel_list::OPT_IN_CHANNELS_ON),
+					channel_flags: vec![(Id(24), client_core::channel_list::OPT_IN_ENABLED)],
+					..Default::default()
+				}],
+				replace: true,
+			})
+			.unwrap();
+		let collapsed_rows = list(&state, &BTreeSet::from([Id(24)]));
+		assert!(
+			!collapsed_rows
+				.iter()
+				.any(|row| matches!(row, Row::Heading(Heading::ActiveNow)))
+		);
+		assert_eq!(
+			collapsed_rows
+				.iter()
+				.filter_map(|row| match row {
+					Row::Channel(c, Slot::Tree, false) => Some(c.id),
+					_ => None,
+				})
+				.collect::<Vec<_>>(),
+			vec![Id(25), Id(26)]
+		);
+		// Emptying the voice roster hides the rooms inside the collapsed category again.
+		state.voice.roster.clear();
+		let empty_collapsed = list(&state, &BTreeSet::from([Id(24)]));
+		assert!(
+			!empty_collapsed
+				.iter()
+				.any(|row| matches!(row, Row::Channel(..)))
+		);
 	}
 }

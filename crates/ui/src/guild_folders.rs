@@ -304,11 +304,11 @@ fn guild_voice(
 	guild: Id,
 	streaming: bool,
 ) -> impl Clone + Iterator<Item = &client_core::voice::RosterEntry> {
-	state
-		.voice
-		.roster
-		.iter()
-		.filter(move |entry| entry.guild == guild && (!streaming || entry.participant.streaming))
+	state.voice.roster.iter().filter(move |entry| {
+		entry.guild == guild
+			&& state.can_view(entry.channel)
+			&& (!streaming || entry.participant.streaming)
+	})
 }
 
 impl MessagingUi {

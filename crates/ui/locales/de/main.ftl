@@ -393,6 +393,8 @@ channel-list-heading-direct-messages = Direktnachrichten
 # Context: key
 channel-list-heading-favorites = Favoriten
 # Context: key
+channel-list-heading-active-now = Jetzt aktiv
+# Context: key
 channel-list-heading-pinned = Angepinnt
 # Context: key
 channel-list-heading-message-requests = Nachrichtenanfragen
