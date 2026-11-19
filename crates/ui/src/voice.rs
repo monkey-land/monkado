@@ -647,8 +647,14 @@ impl MessagingUi {
 		});
 		response.on_hover_text_with(|| {
 			format!(
-				"{} · Entrar no canal de voz{}{}{}",
+				"{}{}{}{}{}",
 				channel.name,
+				// Clicking the connected room cannot join it again, so do not offer it.
+				if connected {
+					""
+				} else {
+					" · Entrar no canal de voz"
+				},
 				occupancy.map_or(String::new(), |(people, limit)| format!(
 					" · {people} of {limit} people"
 				)),
@@ -2609,7 +2615,13 @@ impl MessagingUi {
 		if let Some(channel) = self.voice_join.take() {
 			self.request_call(state, channel, false, commands);
 			// A clicked row has no disabled button to explain why nothing joined.
-			if let Some(full) = state.call_full(channel) {
+			// Clicking the room already joined is a no-op, not a failure.
+			let joined = state
+				.voice
+				.active
+				.as_ref()
+				.is_some_and(|call| call.channel == channel);
+			if let Some(full) = state.call_full(channel).filter(|_| !joined) {
 				self.toasts.push(crate::design::Level::Error, full);
 			}
 		}
