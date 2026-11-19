@@ -725,6 +725,11 @@ impl Confirm {
 		self.checkbox = Some(label.into());
 		self
 	}
+	/// Forget the checkbox state of a dialog that went away without an answer.
+	pub fn discard_checkbox(self, ctx: &egui::Context) {
+		let checkbox_id = self.dialog.id.with("checkbox");
+		ctx.data_mut(|data| data.remove_temp::<bool>(checkbox_id));
+	}
 	/// Returns the choice once the user makes one, otherwise `None`.
 	pub fn show(self, ctx: &egui::Context) -> Option<Choice> {
 		self.show_checked(ctx).map(|(choice, _)| choice)

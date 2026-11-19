@@ -2795,6 +2795,11 @@ impl MessagingUi {
 		}
 	}
 
+	/// A switch dropped before an answer must not leave its checkbox ticked for the next dialog.
+	fn forget_call_switch_checkbox(ctx: &egui::Context) {
+		crate::dialog::Confirm::new("switch-call", "", "").discard_checkbox(ctx);
+	}
+
 	pub(super) fn show_call_switch(
 		&mut self,
 		ctx: &egui::Context,
@@ -2809,6 +2814,7 @@ impl MessagingUi {
 			|| !state.can_call(switch.channel)
 		{
 			self.voice_switch = None;
+			Self::forget_call_switch_checkbox(ctx);
 			return;
 		}
 		if let Some(started) = switch.confirmed_at {
@@ -2852,6 +2858,7 @@ impl MessagingUi {
 			!= Some(switch.from)
 		{
 			self.voice_switch = None;
+			Self::forget_call_switch_checkbox(ctx);
 			return;
 		}
 		let name = state
