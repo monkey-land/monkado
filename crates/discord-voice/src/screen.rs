@@ -381,6 +381,8 @@ fn encode_loop(
 	// The local preview is a glance, not the stream: refreshing it at every captured picture
 	// cost a full-size colour conversion per frame on the encoding thread.
 	let mut next_preview = Instant::now();
+	// A captured picture the preview has not shown yet.
+	let mut preview_stale = false;
 	let mut metrics = crate::diagnostics::Metrics::new(crate::diagnostics::Scope::ScreenVideo);
 
 	while !stop.load(Ordering::Acquire) && !send.is_closed() {
@@ -417,30 +419,11 @@ fn encode_loop(
 		let visible = preview_visible.load(Ordering::Acquire);
 		let resumed = visible && !preview_shown;
 		preview_shown = visible;
-		if let Some(frame) = &frame {
+		if frame.is_some() {
 			if first_frame_deadline.take().is_some() {
 				captured.store(true, Ordering::Release);
 			}
-			if !visible {
-				if let Ok(mut slot) = preview.try_lock() {
-					slot.take();
-				}
-			} else if resumed || now >= next_preview {
-				next_preview = now + PREVIEW_INTERVAL;
-				let image = preview_frame(frame)?;
-				if let Ok(mut slot) = preview.try_lock() {
-					*slot = Some(image);
-				}
-				wake();
-			}
-		} else if resumed && let Some(frame) = &latest_frame {
-			// A change-driven capture does not emit again while the picture is still.
-			// The encode path already kept that frame.
-			let image = preview_frame(frame)?;
-			if let Ok(mut slot) = preview.try_lock() {
-				*slot = Some(image);
-			}
-			wake();
+			preview_stale = true;
 		}
 		let encode = retain_screen_frame(
 			&mut latest_frame,
@@ -448,6 +431,23 @@ fn encode_loop(
 			ready.load(Ordering::Acquire),
 			keyframe.load(Ordering::Acquire),
 		)?;
+		if !visible {
+			if preview_stale && let Ok(mut slot) = preview.try_lock() {
+				slot.take();
+			}
+		} else if (resumed || (preview_stale && now >= next_preview))
+			&& let Some(frame) = &latest_frame
+		{
+			// A change-driven capture does not emit again while the picture is still, so a
+			// throttled picture is shown from the retained frame on a later (timeout) pass.
+			next_preview = now + PREVIEW_INTERVAL;
+			preview_stale = false;
+			let image = preview_frame(frame)?;
+			if let Ok(mut slot) = preview.try_lock() {
+				*slot = Some(image);
+			}
+			wake();
+		}
 		// Local capture remains available while alone; only secure media is encoded or queued.
 		if !ready.load(Ordering::Acquire) {
 			encoding = None;
@@ -681,7 +681,8 @@ impl ScreenEncoder {
 					(
 						data,
 						keyframe,
-						time.map_or(at, |time| Duration::from_nanos(time * 100)),
+						time.and_then(|time| time.checked_mul(100))
+							.map_or(at, Duration::from_nanos),
 					)
 				});
 			if let Ok(encoded) = encoded {
