@@ -591,6 +591,8 @@ pub struct MessagingUi {
 	/// Device-local voice intent, retained between calls and restarts.
 	pub voice_muted: bool,
 	pub voice_deafened: bool,
+	/// The call-switch dialog's "Não aparecer novamente" answer: later switches do not ask.
+	pub call_switch_prompt_hidden: bool,
 	pub voice_processing: model::voice_settings::VoiceProcessing,
 	pub voice_preview_requested: bool,
 	pub voice_preview_level: Option<f32>,
