@@ -48,6 +48,9 @@ pub struct AppPreferences {
 	pub update_nightly: bool,
 	pub notification_options: model::notification_preferences::Device,
 	pub show_hidden_channels: bool,
+	/// Device-local opt-out of each voice participant's elapsed-time label; older
+	/// preferences show it.
+	pub voice_participant_timers: bool,
 	/// Keep custom emoji that need Nitro out of suggestions and lock them in the picker.
 	pub hide_nitro_emojis: bool,
 	/// Device-local opt-in; older saved preferences deserialize with conversion off.
@@ -129,6 +132,7 @@ impl Default for AppPreferences {
 			update_nightly: false,
 			notification_options: Default::default(),
 			show_hidden_channels: false,
+			voice_participant_timers: true,
 			hide_nitro_emojis: false,
 			convert_emoticons: false,
 			hide_blocked_messages: false,
@@ -2393,6 +2397,7 @@ mod tests {
 			let saved = store.app_preferences().unwrap();
 			assert_eq!(saved.graphics_api, model::GraphicsApi::Automatic);
 			assert!(saved.steady_refresh_rate);
+			assert!(saved.voice_participant_timers);
 		}
 	}
 	use super::*;

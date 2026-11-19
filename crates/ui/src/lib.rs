@@ -383,6 +383,8 @@ pub struct MessagingUi {
 	pub hide_blocked_messages: bool,
 	pub hide_ignored_messages: bool,
 	pub show_hidden_channels: bool,
+	/// Device preference: show how long each voice participant has been in the channel.
+	pub voice_participant_timers: bool,
 	/// Folds the home list's message requests away; the device preference restores it.
 	pub message_requests_collapsed: bool,
 	/// Custom emoji that need Nitro stay out of `:` suggestions and are locked in pickers.
@@ -574,7 +576,7 @@ pub struct MessagingUi {
 	stream_preview_hover: Option<((Id, Id, Id), egui::Rect)>,
 	stream_preview_request: Option<(Id, Id, Id)>,
 	stream_preview_watch: Option<(Id, Id)>,
-	/// Guild voice channel double-clicked in the channel list, joined after selection applies.
+	/// Guild voice channel clicked in the channel list, joined after selection applies.
 	voice_join: Option<Id>,
 	pub voice_inputs: Vec<(String, String)>,
 	pub voice_outputs: Vec<(String, String)>,
@@ -3172,6 +3174,21 @@ impl MessagingUi {
 							)
 							.selectable(false),
 						);
+						if let Some(elapsed) =
+							state.voice.active.as_ref().and_then(voice::elapsed_label)
+						{
+							ui.add(
+								egui::Label::new(
+									RichText::new(elapsed)
+										.monospace()
+										.size(12.0)
+										.color(colors.muted),
+								)
+								.selectable(false),
+							);
+							ui.ctx()
+								.request_repaint_after(std::time::Duration::from_secs(1));
+						}
 					}
 				});
 			});

@@ -986,8 +986,6 @@ impl MessagingUi {
 								self.preload.conversation(&response, || Some(channel.id));
 								if response.clicked() {
 									selected = Some(channel.id);
-								}
-								if response.double_clicked() {
 									self.voice_join = Some(channel.id);
 								}
 								paint_shelf_rule(
@@ -2865,7 +2863,7 @@ mod tests {
 	}
 
 	#[test]
-	fn double_clicking_voice_row_joins_through_call_request() {
+	fn clicking_voice_row_joins_through_call_request() {
 		fn walk(shape: &egui::Shape, rows: &mut BTreeMap<String, egui::Pos2>) {
 			match shape {
 				egui::Shape::Text(text) => {
@@ -2920,62 +2918,55 @@ mod tests {
 			view.apply_voice_join(state, &mut commands);
 			(picked, commands, rows)
 		};
-		let mut click = |view: &mut MessagingUi, state: &mut State, name: &str, times| {
+		let mut click = |view: &mut MessagingUi, state: &mut State, name: &str| {
 			// Separate scenarios fall outside egui's double-click window.
 			let (_, _, rows) = frame(view, state, 1.0, vec![]);
 			let pos = rows[name];
 			frame(view, state, 0.05, vec![egui::Event::PointerMoved(pos)]);
 			let mut picked = None;
 			let mut commands = Vec::new();
-			for _ in 0..times {
-				for pressed in [true, false] {
-					let (row, sent, _) = frame(
-						view,
-						state,
-						0.05,
-						vec![egui::Event::PointerButton {
-							pos,
-							button: egui::PointerButton::Primary,
-							pressed,
-							modifiers: egui::Modifiers::NONE,
-						}],
-					);
-					picked = row.or(picked);
-					commands.extend(sent);
-				}
+			for pressed in [true, false] {
+				let (row, sent, _) = frame(
+					view,
+					state,
+					0.05,
+					vec![egui::Event::PointerButton {
+						pos,
+						button: egui::PointerButton::Primary,
+						pressed,
+						modifiers: egui::Modifiers::NONE,
+					}],
+				);
+				picked = row.or(picked);
+				commands.extend(sent);
 			}
 			(picked, commands)
 		};
 
-		// A single click opens the channel without touching the call.
-		let (picked, commands) = click(&mut view, &mut state, "Quiet room", 1);
-		assert_eq!(picked, Some(Id(26)));
-		assert!(commands.is_empty() && view.voice_switch.is_none());
-
-		// From another call, a double-click still waits for the switch confirmation.
-		let (picked, commands) = click(&mut view, &mut state, "Quiet room", 2);
+		// A single click picks the row and asks to switch calls.
+		let (picked, commands) = click(&mut view, &mut state, "Quiet room");
 		assert_eq!(picked, Some(Id(26)));
 		assert!(commands.is_empty() && view.voice_switch.is_some());
 		view.voice_switch = None;
 
 		// A full room refuses before any switch would leave the current call.
 		limit(&mut state, Some(2));
-		let (_, commands) = click(&mut view, &mut state, "Quiet room", 2);
+		let (_, commands) = click(&mut view, &mut state, "Quiet room");
 		assert!(commands.is_empty() && view.voice_switch.is_none());
 		limit(&mut state, None);
 
-		// Double-clicking the current call's channel is a no-op.
-		let (_, commands) = click(&mut view, &mut state, "Room 3,5", 2);
+		// Clicking the current call's channel is a no-op.
+		let (_, commands) = click(&mut view, &mut state, "Room 3,5");
 		assert!(commands.is_empty() && view.voice_switch.is_none());
 
 		// Unavailable voice never joins.
 		view.voice_available = false;
 		state.voice.active = None;
-		let (_, commands) = click(&mut view, &mut state, "Quiet room", 2);
+		let (_, commands) = click(&mut view, &mut state, "Quiet room");
 		assert!(commands.is_empty() && view.voice_switch.is_none());
 
 		view.voice_available = true;
-		let (_, commands) = click(&mut view, &mut state, "Quiet room", 2);
+		let (_, commands) = click(&mut view, &mut state, "Quiet room");
 		assert!(matches!(
 			commands.as_slice(),
 			[client_core::Command::Voice(

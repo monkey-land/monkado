@@ -647,8 +647,14 @@ impl MessagingUi {
 		});
 		response.on_hover_text_with(|| {
 			format!(
-				"{} · Ver canal de voz{}{}{}",
+				"{}{}{}{}{}",
 				channel.name,
+				// Clicking the connected room cannot join it again, so do not offer it.
+				if connected {
+					""
+				} else {
+					" · Entrar no canal de voz"
+				},
 				occupancy.map_or(String::new(), |(people, limit)| format!(
 					" · {people} of {limit} people"
 				)),
@@ -693,7 +699,17 @@ impl MessagingUi {
 						entry.participant.user,
 					));
 				}
-				row.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, name));
+				let call_elapsed = self
+					.voice_participant_timers
+					.then(|| participant_elapsed(state, entry))
+					.flatten()
+					.map(|since| format_elapsed(since.elapsed().as_secs()));
+				row.widget_info(|| {
+					let label = call_elapsed
+						.as_ref()
+						.map_or_else(|| name.to_owned(), |elapsed| format!("{name} · {elapsed}"));
+					egui::WidgetInfo::labeled(egui::Role::Button, true, label)
+				});
 				let hovered = row.contains_pointer() || row.has_focus();
 				if hovered {
 					ui.painter().rect_filled(
@@ -777,6 +793,20 @@ impl MessagingUi {
 						if let Some(elapsed) = self.live_elapsed(ui, entry.participant.user) {
 							ui.label(RichText::new(elapsed).size(11.0).color(colors.muted));
 						}
+					} else if let Some(elapsed) = &call_elapsed {
+						// A LIVE row already carries its stream clock; the call clock stays
+						// in that row's tooltip so the name keeps its width.
+						ui.add(
+							egui::Label::new(
+								RichText::new(elapsed)
+									.monospace()
+									.size(10.5)
+									.color(colors.muted),
+							)
+							.selectable(false),
+						);
+						ui.ctx()
+							.request_repaint_after(std::time::Duration::from_secs(1));
 					}
 					// Only participants on the original Discord client get a mark here.
 					if self.knows_clients(state, entry.channel)
@@ -787,6 +817,9 @@ impl MessagingUi {
 						paint_client_mark(ui.painter(), mark, false);
 						response.on_hover_text("Sem equivalente no Discord");
 					}
+					let tooltip = call_elapsed
+						.as_ref()
+						.map_or_else(|| name.to_owned(), |elapsed| format!("{name} · {elapsed}"));
 					ui.allocate_ui_with_layout(
 						egui::vec2(ui.available_width(), 28.0),
 						egui::Layout::left_to_right(egui::Align::Center),
@@ -797,7 +830,7 @@ impl MessagingUi {
 									.show_tooltip_when_elided(false)
 									.selectable(false),
 							)
-							.on_hover_text(name);
+							.on_hover_text(tooltip);
 						},
 					);
 				});
@@ -2608,8 +2641,14 @@ impl MessagingUi {
 	pub(super) fn apply_voice_join(&mut self, state: &mut State, commands: &mut Vec<Command>) {
 		if let Some(channel) = self.voice_join.take() {
 			self.request_call(state, channel, false, commands);
-			// A double-clicked row has no disabled button to explain why nothing joined.
-			if let Some(full) = state.call_full(channel) {
+			// A clicked row has no disabled button to explain why nothing joined.
+			// Clicking the room already joined is a no-op, not a failure.
+			let joined = state
+				.voice
+				.active
+				.as_ref()
+				.is_some_and(|call| call.channel == channel);
+			if let Some(full) = state.call_full(channel).filter(|_| !joined) {
 				self.toasts.push(crate::design::Level::Error, full);
 			}
 		}
@@ -4808,6 +4847,7 @@ impl MessagingUi {
 		let guild_id = call.guild;
 		let camera = call.camera;
 		let connected = matches!(phase, Phase::Connected | Phase::Waiting);
+		let elapsed = elapsed_label(call);
 		let error = call.error;
 		let reconnecting = call.reconnecting;
 		let reconnecting_title =
@@ -4902,6 +4942,16 @@ impl MessagingUi {
 							&& let Some(command) = state.leave_call()
 						{
 							commands.push(command);
+						}
+						if let Some(elapsed) = &elapsed {
+							ui.add(
+								egui::Label::new(
+									RichText::new(elapsed).monospace().size(11.0).color(colors.muted),
+								)
+								.selectable(false),
+							);
+							ui.ctx()
+								.request_repaint_after(std::time::Duration::from_secs(1));
 						}
 						ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
 							ui.vertical(|ui| {
@@ -5670,6 +5720,25 @@ fn shown_participant(state: &State, entry: &RosterEntry) -> Participant {
 	participant
 }
 
+/// Time this participant has been in the channel. The local user counts from the media
+/// connection, so ringing and negotiation do not inflate the label.
+fn participant_elapsed(state: &State, entry: &RosterEntry) -> Option<std::time::Instant> {
+	let own = state
+		.user
+		.as_ref()
+		.is_some_and(|own| own.id == entry.participant.user);
+	if own
+		&& let Some(call) = state
+			.voice
+			.active
+			.as_ref()
+			.filter(|call| call.channel == entry.channel)
+	{
+		return call.connected_at;
+	}
+	state.voice.joined_at(entry.channel, entry.participant.user)
+}
+
 fn inactive_recipient(state: &State, channel: Id, user: Id) -> bool {
 	state.voice.active.as_ref().is_some_and(|call| {
 		call.channel == channel
@@ -5773,27 +5842,16 @@ fn gain_controls(ui: &mut egui::Ui, gain: &mut crate::VoiceGain) -> [egui::Respo
 	}
 }
 
-fn elapsed_label(call: &client_core::voice::Call) -> Option<String> {
+pub(crate) fn elapsed_label(call: &client_core::voice::Call) -> Option<String> {
 	if !matches!(call.phase, Phase::Waiting | Phase::Connected) {
 		return None;
 	}
 	let seconds = call
-		.channel_started_at
-		.or(call.connected_at)?
+		.connected_at
+		.or(call.channel_started_at)?
 		.elapsed()
 		.as_secs();
-	Some(if seconds < 600 {
-		format!("{:01}:{:02}", seconds / 60, seconds % 60)
-	} else if seconds < 3600 {
-		format!("{:02}:{:02}", seconds / 60, seconds % 60)
-	} else {
-		format!(
-			"{:02}:{:02}:{:02}",
-			seconds / 3600,
-			seconds / 60 % 60,
-			seconds % 60
-		)
-	})
+	Some(format_elapsed(seconds))
 }
 
 fn status_icon(ui: &mut egui::Ui, icon: crate::icons::Icon, color: egui::Color32, label: &str) {
@@ -6997,16 +7055,26 @@ mod tests {
 		assert!(elapsed_label(call).is_none());
 		call.connected_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(3663));
 		call.phase = Phase::Waiting;
-		assert_eq!(elapsed_label(call).as_deref(), Some("01:01:03"));
+		assert_eq!(elapsed_label(call).as_deref(), Some("1:01:03"));
 		call.connected_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(65));
 		assert_eq!(elapsed_label(call).as_deref(), Some("1:05"));
 		call.connected_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(3599));
 		assert_eq!(elapsed_label(call).as_deref(), Some("59:59"));
 		call.connected_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(3600));
-		assert_eq!(elapsed_label(call).as_deref(), Some("01:00:00"));
+		assert_eq!(elapsed_label(call).as_deref(), Some("1:00:00"));
 		call.channel_started_at =
 			Some(std::time::Instant::now() - std::time::Duration::from_secs(7540));
-		assert_eq!(elapsed_label(call).as_deref(), Some("02:05:40"));
+		assert_eq!(
+			elapsed_label(call).as_deref(),
+			Some("1:00:00"),
+			"the local connection wins over the channel's age"
+		);
+		call.connected_at = None;
+		assert_eq!(
+			elapsed_label(call).as_deref(),
+			Some("2:05:40"),
+			"the channel age is the fallback"
+		);
 		call.phase = Phase::Failed;
 		assert!(elapsed_label(call).is_none());
 		state.demo = true;

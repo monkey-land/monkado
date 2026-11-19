@@ -5,7 +5,11 @@ use crate::{
 	screen,
 };
 use model::{Id, Member};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	fmt,
+	time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
 pub const MAX_PARTICIPANTS: usize = 64;
 /// Why a join into a room already holding [`MAX_PARTICIPANTS`] people is refused.
 pub const CALL_FULL: &str = "O canal de voz excede o limite de 64 participantes";
@@ -15,7 +19,8 @@ pub const MAX_DM_CALLS: usize = 64;
 pub const MAX_DM_CALL_BYTES: usize = MAX_DM_CALLS * size_of::<Id>();
 pub const MAX_ROSTER: usize = 4096;
 pub const MAX_ROSTER_BYTES: usize = 1024 * 1024;
-use std::fmt;
+/// One observation per user per roster the map can see, with no separate retention.
+pub const MAX_JOINED_AT: usize = MAX_ROSTER + MAX_DM_CALLS * MAX_PARTICIPANTS;
 use zeroize::Zeroizing;
 
 pub struct Secret(Zeroizing<String>);
@@ -176,6 +181,9 @@ pub struct State {
 	pub(crate) dm_ringing: Vec<(Id, Vec<Id>)>,
 	pub ring_error: Option<(Id, u64, &'static str)>,
 	pub roster: Vec<RosterEntry>,
+	/// First instant this device saw each `(channel, user)` in voice. Discord sends no join
+	/// timestamp, so this is an observation clock, not the service's.
+	joined_at: BTreeMap<(Id, Id), Instant>,
 	pub preview: Option<StreamPreview>,
 	/// Media Monkado peers announced over P2P, outside Discord's voice state. Bounded by the
 	/// call's participant limit and replaced as a whole by the desktop.
@@ -219,6 +227,25 @@ impl State {
 			.iter()
 			.find(|(id, _)| *id == channel)
 			.map_or(&[], |(_, recipients)| recipients)
+	}
+	/// First instant this device saw `user` in `channel`, for its elapsed-time label.
+	pub fn joined_at(&self, channel: Id, user: Id) -> Option<Instant> {
+		self.joined_at.get(&(channel, user)).copied()
+	}
+	fn note_joined(&mut self, channel: Id, user: Id) {
+		self.observe_joined(channel, user, Instant::now());
+	}
+	/// Records a first observation. A known pair keeps its earlier instant.
+	pub fn observe_joined(&mut self, channel: Id, user: Id, at: Instant) {
+		if self.joined_at.len() < MAX_JOINED_AT {
+			self.joined_at.entry((channel, user)).or_insert(at);
+		}
+	}
+	fn forget_joined(&mut self, channel: Id, user: Id) {
+		self.joined_at.remove(&(channel, user));
+	}
+	fn forget_joined_channel(&mut self, channel: Id) {
+		self.joined_at.retain(|(known, _), _| *known != channel);
 	}
 }
 #[derive(Clone, Copy, Debug)]
@@ -957,6 +984,26 @@ impl ClientState {
 						break;
 					}
 				}
+				// A full snapshot is the guild roster now; drop observations it omits. READY
+				// carries every guild in one batch, so a missing guild filter means all.
+				if !partial {
+					let channels: BTreeSet<Id> = self
+						.channels
+						.iter()
+						.filter(|c| c.guild.is_some() && c.kind == 2)
+						.filter(|c| guild.is_none_or(|guild| c.guild == Some(guild)))
+						.map(|c| c.id)
+						.collect();
+					let live: BTreeSet<(Id, Id)> = self
+						.voice
+						.roster
+						.iter()
+						.map(|r| (r.channel, r.participant.user))
+						.collect();
+					self.voice
+						.joined_at
+						.retain(|key, _| !channels.contains(&key.0) || live.contains(key));
+				}
 				if self.voice.preview.as_ref().is_some_and(|preview| {
 					!self.voice.roster.iter().any(|entry| {
 						entry.guild == preview.guild
@@ -1009,6 +1056,7 @@ impl ClientState {
 						let evicted = self.voice.dm_calls.remove(0);
 						self.voice.dm_participants.retain(|(id, _)| *id != evicted);
 						self.voice.dm_ringing.retain(|(id, _)| *id != evicted);
+						self.voice.forget_joined_channel(evicted);
 					}
 					self.voice.dm_calls.push(channel);
 				}
@@ -1137,8 +1185,14 @@ impl ClientState {
 						.voice
 						.roster
 						.iter()
-						.find(|r| r.guild == guild && r.participant.user == user)
-						.and_then(|r| r.member.clone());
+						.find(|r| r.guild == guild && r.participant.user == user);
+					let previous_channel = previous.map(|r| r.channel);
+					let previous_member = previous.and_then(|r| r.member.clone());
+					if let Some(old) = previous_channel
+						&& channel != Some(old)
+					{
+						self.voice.forget_joined(old, user);
+					}
 					self.voice
 						.roster
 						.retain(|r| r.guild != guild || r.participant.user != user);
@@ -1147,13 +1201,24 @@ impl ClientState {
 							guild,
 							channel,
 							participant,
-							member: member.map(|member| *member).or(previous),
+							member: member.map(|member| *member).or(previous_member),
 						});
 					}
 				}
 				if guild.is_none() {
 					if channel.is_some_and(|channel| !self.dm_call_participant(channel, user)) {
 						return;
+					}
+					// A private user leaves every known call at once; otherwise the new
+					// channel starts their clock and the previous one is dropped.
+					let known_calls = self.voice.dm_calls.clone();
+					for known in known_calls {
+						if channel != Some(known) {
+							self.voice.forget_joined(known, user);
+						}
+					}
+					if let Some(channel) = channel {
+						self.voice.note_joined(channel, user);
 					}
 					// A private call announces a share with its stream key, not with
 					// `self_stream`, so a mute or camera update keeps the announced state.
@@ -1355,9 +1420,21 @@ impl ClientState {
 		{
 			return true;
 		}
+		if let Some(previous) = self
+			.voice
+			.roster
+			.iter()
+			.find(|r| r.guild == entry.guild && r.participant.user == entry.participant.user)
+			.map(|r| r.channel)
+			&& previous != entry.channel
+		{
+			self.voice.forget_joined(previous, entry.participant.user);
+		}
 		self.voice
 			.roster
 			.retain(|r| r.guild != entry.guild || r.participant.user != entry.participant.user);
+		self.voice
+			.note_joined(entry.channel, entry.participant.user);
 		if self.voice.roster.len() >= MAX_ROSTER
 			|| self
 				.voice
@@ -1411,6 +1488,13 @@ impl ClientState {
 		if participants.len() > MAX_PARTICIPANTS || !self.voice.has_dm_call(channel) {
 			return;
 		}
+		let present: BTreeSet<Id> = participants.iter().map(|p| p.user).collect();
+		self.voice
+			.joined_at
+			.retain(|(known, user), _| *known != channel || present.contains(user));
+		for participant in &participants {
+			self.voice.note_joined(channel, participant.user);
+		}
 		self.voice.dm_participants.retain(|(id, _)| *id != channel);
 		while self.voice.dm_participants.len() >= MAX_DM_CALLS {
 			self.voice.dm_participants.remove(0);
@@ -1435,6 +1519,7 @@ impl ClientState {
 		self.voice.dm_participants.retain(|(id, _)| *id != channel);
 		self.voice.dm_ringing.retain(|(id, _)| *id != channel);
 		self.voice.roster.retain(|r| r.channel != channel);
+		self.voice.forget_joined_channel(channel);
 		if self
 			.voice
 			.preview
@@ -2151,6 +2236,150 @@ mod tests {
 		}
 	}
 
+	#[test]
+	fn voice_clocks_stay_within_their_bound() {
+		let mut voice = State::default();
+		let now = Instant::now();
+		for user in 1..=MAX_JOINED_AT as u64 + 1 {
+			voice.observe_joined(Id(1), Id(user), now);
+		}
+		assert_eq!(voice.joined_at.len(), MAX_JOINED_AT);
+		assert!(voice.joined_at(Id(1), Id(MAX_JOINED_AT as u64)).is_some());
+		assert!(
+			voice
+				.joined_at(Id(1), Id(MAX_JOINED_AT as u64 + 1))
+				.is_none()
+		);
+	}
+
+	#[test]
+	fn voice_clocks_follow_roster_updates_and_restart_on_rejoin() {
+		let mut state = ClientState {
+			auth: AuthState::Authenticated,
+			gateway_connected: true,
+			user: Some(User {
+				primary_guild: None,
+				cosmetics: None,
+				id: Id(1),
+				name: "Owner".into(),
+				avatar: None,
+				webhook: false,
+				kind: Default::default(),
+				discriminator: 0,
+			}),
+			guilds: vec![model::Guild {
+				banner: None,
+				default_message_notifications: None,
+				stickers: None,
+				id: Id(10),
+				name: "Synthetic".into(),
+				icon: None,
+				emojis: None,
+			}],
+			channels: [20, 21]
+				.into_iter()
+				.map(|id| Channel {
+					user_limit: None,
+					slowmode: 0,
+					id: Id(id),
+					guild: Some(Id(10)),
+					kind: 2,
+					name: "Room".into(),
+					last_message: None,
+					parent_id: None,
+					position: 0,
+					recipients: vec![],
+					icon: None,
+					member_list_id: None,
+					tags: None,
+					message_count: None,
+				})
+				.collect(),
+			..ClientState::default()
+		};
+		crate::tests::grant_permissions(&mut state);
+		let entry = |channel| RosterEntry {
+			guild: Id(10),
+			channel: Id(channel),
+			participant: Participant {
+				user: Id(2),
+				muted: false,
+				deafened: false,
+				server_muted: false,
+				server_deafened: false,
+				video: false,
+				streaming: false,
+			},
+			member: None,
+		};
+		let update = |channel: Option<u64>, muted| Event::State {
+			guild: Some(Id(10)),
+			member: None,
+			server_muted: false,
+			server_deafened: false,
+			request: None,
+			channel: channel.map(Id),
+			user: Id(2),
+			session: None,
+			negotiation_revision: None,
+			muted,
+			deafened: false,
+			video: false,
+			streaming: false,
+		};
+		state.apply_voice(Event::Snapshot {
+			partial: false,
+			guild: Some(Id(10)),
+			participants: vec![entry(20)],
+		});
+		let first = state.voice.joined_at(Id(20), Id(2)).expect("joined");
+		state.apply_voice(update(Some(20), true));
+		assert_eq!(
+			state.voice.joined_at(Id(20), Id(2)),
+			Some(first),
+			"a mute update keeps the clock"
+		);
+		state.apply_voice(Event::Snapshot {
+			partial: false,
+			guild: Some(Id(10)),
+			participants: vec![entry(20)],
+		});
+		assert_eq!(
+			state.voice.joined_at(Id(20), Id(2)),
+			Some(first),
+			"a reconnect snapshot keeps a present user's clock"
+		);
+		let before_snapshot_move = Instant::now();
+		state.apply_voice(Event::Snapshot {
+			partial: true,
+			guild: Some(Id(10)),
+			participants: vec![entry(21)],
+		});
+		assert!(
+			state.voice.joined_at(Id(20), Id(2)).is_none(),
+			"a snapshot move drops the previous clock"
+		);
+		assert!(
+			state.voice.joined_at(Id(21), Id(2)).unwrap() >= before_snapshot_move,
+			"a snapshot move restarts the clock"
+		);
+		let before_move = Instant::now();
+		state.apply_voice(update(Some(20), false));
+		assert!(state.voice.joined_at(Id(21), Id(2)).is_none());
+		assert!(
+			state.voice.joined_at(Id(20), Id(2)).unwrap() >= before_move,
+			"a channel move restarts the clock"
+		);
+		state.apply_voice(update(None, false));
+		assert!(state.voice.joined_at(Id(20), Id(2)).is_none());
+		let before_rejoin = Instant::now();
+		state.apply_voice(update(Some(20), false));
+		assert!(
+			state.voice.joined_at(Id(20), Id(2)).unwrap() >= before_rejoin,
+			"rejoining restarts the clock"
+		);
+	}
+
 	fn dm_state() -> ClientState {
 		ClientState {
 			auth: AuthState::Authenticated,
@@ -2193,6 +2422,63 @@ mod tests {
 			..ClientState::default()
 		}
 	}
+	#[test]
+	fn private_call_updates_keep_known_clocks_and_drop_leavers() {
+		let mut state = dm_state();
+		let mut extra = state.channels[0].recipients[0].clone();
+		extra.id = Id(4);
+		extra.name = "Other".into();
+		state.channels[0].recipients.push(extra);
+		// A one-to-one DM admits a single recipient; two participants need a group.
+		state.channels[0].kind = 3;
+		let participant = |user| Participant {
+			user: Id(user),
+			muted: false,
+			deafened: false,
+			server_muted: false,
+			server_deafened: false,
+			video: false,
+			streaming: false,
+		};
+		let call = |participants| Event::Call {
+			channel: Id(2),
+			ringing: Some(vec![]),
+			participants: Some(participants),
+			unavailable: false,
+		};
+		state.apply_voice(call(vec![participant(3)]));
+		let first = state.voice.joined_at(Id(2), Id(3)).expect("joined");
+		state.apply_voice(call(vec![participant(3), participant(4)]));
+		assert_eq!(
+			state.voice.joined_at(Id(2), Id(3)),
+			Some(first),
+			"an update keeps known members"
+		);
+		assert!(state.voice.joined_at(Id(2), Id(4)).is_some());
+		state.apply_voice(call(vec![participant(4)]));
+		assert!(
+			state.voice.joined_at(Id(2), Id(3)).is_none(),
+			"a leaver's clock is dropped"
+		);
+		assert!(state.voice.joined_at(Id(2), Id(4)).is_some());
+		state.apply_voice(Event::State {
+			guild: None,
+			member: None,
+			server_muted: false,
+			server_deafened: false,
+			request: None,
+			channel: None,
+			user: Id(4),
+			session: None,
+			negotiation_revision: None,
+			muted: false,
+			deafened: false,
+			video: false,
+			streaming: false,
+		});
+		assert!(state.voice.joined_at(Id(2), Id(4)).is_none());
+	}
+
 	#[test]
 	fn ringing_metadata_has_fixed_call_and_byte_budgets() {
 		let mut state = dm_state();
