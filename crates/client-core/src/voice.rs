@@ -3133,3 +3133,8 @@ mod tests {
 		);
 	}
 }
+
+/// Temporary probe for the CodeRabbit Autofix check. Removed after the test.
+pub fn autofix_probe_ratio(numerator: u64, denominator: u64) -> u64 {
+	numerator / denominator
+}
