@@ -395,6 +395,8 @@ channel-list-heading-direct-messages = 私訊
 # Context: key
 channel-list-heading-favorites = 最愛
 # Context: key
+channel-list-heading-active-now = 目前動態
+# Context: key
 channel-list-heading-pinned = 釘選
 # Context: key
 channel-list-heading-message-requests = 訊息請求

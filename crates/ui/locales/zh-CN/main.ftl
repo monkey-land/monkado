@@ -395,6 +395,8 @@ channel-list-heading-direct-messages = 私信
 # Context: key
 channel-list-heading-favorites = 收藏
 # Context: key
+channel-list-heading-active-now = 当前活动
+# Context: key
 channel-list-heading-pinned = 置顶
 # Context: key
 channel-list-heading-message-requests = 消息请求

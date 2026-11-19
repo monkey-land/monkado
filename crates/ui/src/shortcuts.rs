@@ -56,6 +56,7 @@ pub(crate) enum Heading {
 	Pinned,
 	DirectMessages,
 	Favorites,
+	ActiveNow,
 }
 
 impl Heading {
@@ -65,11 +66,12 @@ impl Heading {
 			Self::Pinned => "channel-list-heading-pinned",
 			Self::DirectMessages => "channel-list-heading-direct-messages",
 			Self::Favorites => "channel-list-heading-favorites",
+			Self::ActiveNow => "channel-list-heading-active-now",
 		}
 	}
 
 	pub fn shelf(self) -> bool {
-		matches!(self, Self::Pinned | Self::Favorites)
+		matches!(self, Self::Pinned | Self::Favorites | Self::ActiveNow)
 	}
 }
 

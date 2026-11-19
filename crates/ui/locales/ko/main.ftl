@@ -411,6 +411,8 @@ channel-list-heading-direct-messages = 다이렉트 메시지
 # Context: key
 channel-list-heading-favorites = 즐겨찾기
 # Context: key
+channel-list-heading-active-now = 현재 활동 중
+# Context: key
 channel-list-heading-pinned = 고정됨
 # Context: key
 channel-list-heading-message-requests = 메시지 요청
