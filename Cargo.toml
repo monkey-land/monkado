@@ -62,6 +62,16 @@ codegen-units = 1
 strip = "symbols"
 debug = "line-tables-only"
 
+[profile.dev]
+# Smaller target/: line tables keep backtraces, drop full DWARF.
+debug = "line-tables-only"
+
+# Quick optimized build (no LTO): `cargo build --profile release-fast`.
+[profile.release-fast]
+inherits = "release"
+lto = "off"
+codegen-units = 16
+
 # Real-time echo processing must also keep up in otherwise unoptimized dev builds.
 [profile.dev.package.sonora]
 opt-level = 3
