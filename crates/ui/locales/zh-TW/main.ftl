@@ -5050,3 +5050,7 @@ moderation-confirm-timeout = 禁言
 # Context: moderation
 moderation-confirm-ban = 停權
 voice-voice-participant-camera-on = 鏡頭已開啟
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = 此擴充功能目前沒有可顯示的內容。

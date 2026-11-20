@@ -4958,3 +4958,7 @@ moderation-confirm-timeout = Timeout
 # Context: moderation
 moderation-confirm-ban = Bannen
 voice-voice-participant-camera-on = Kamera an
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Dieses Plugin hat noch nichts anzuzeigen.

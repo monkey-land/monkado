@@ -5081,3 +5081,7 @@ moderation-confirm-timeout = Oddechový čas
 # Context: moderation
 moderation-confirm-ban = Zabanovat
 voice-voice-participant-camera-on = Kamera zapnutá
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Tento zásuvný modul zatím nemá co zobrazit.

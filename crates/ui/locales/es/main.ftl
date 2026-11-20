@@ -4956,3 +4956,7 @@ moderation-confirm-timeout = Aislar
 # Context: moderation
 moderation-confirm-ban = Banear
 voice-voice-participant-camera-on = Cámara encendida
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Este complemento todavía no tiene nada que mostrar.

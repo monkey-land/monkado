@@ -4955,3 +4955,7 @@ moderation-confirm-timeout = Przerwa
 # Context: moderation
 moderation-confirm-ban = Zbanuj
 voice-voice-participant-camera-on = Kamera włączona
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Ta wtyczka nie ma jeszcze nic do pokazania.

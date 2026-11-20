@@ -4939,3 +4939,7 @@ moderation-confirm-timeout = Zaman aşımı
 # Context: moderation
 moderation-confirm-ban = Yasakla
 voice-voice-participant-camera-on = Kamera açık
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Bu eklentinin henüz gösterecek bir şeyi yok.

@@ -4936,3 +4936,7 @@ moderation-confirm-timeout = タイムアウト
 # Context: moderation
 moderation-confirm-ban = BAN
 voice-voice-participant-camera-on = カメラオン
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = このプラグインにはまだ表示するものがありません。

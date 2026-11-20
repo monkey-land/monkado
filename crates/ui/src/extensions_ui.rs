@@ -243,6 +243,8 @@ fn result_invocation(result: &ResultPanel, action: String) -> Invocation {
 	invocation.selected_message = None;
 	invocation.selected_message_ref = None;
 	invocation.menu_target = None;
+	// A follow-up button in the result window is its own click, never the row's double.
+	invocation.double_clicked = false;
 	invocation.values = result.values.clone();
 	invocation
 }
@@ -1075,18 +1077,7 @@ impl ExtensionUi {
 		);
 	}
 	fn invoke_panel(&mut self, ctx: &egui::Context, state: &State, id: String, action: String) {
-		let declared = self.entries.iter().any(|entry| {
-			entry.manifest.id == id
-				&& entry.manifest.kind == ExtensionKind::Plugin
-				&& entry.enabled
-				&& !entry.cleanup_pending
-				&& entry
-					.manifest
-					.actions
-					.iter()
-					.any(|declared| declared.id == action && declared.surface == Surface::Panel)
-		});
-		if !declared {
+		if !self.panel_action_declared(&id, &action) {
 			return;
 		}
 		self.details = None;
@@ -1096,6 +1087,50 @@ impl ExtensionUi {
 				id,
 				invocation: Invocation {
 					action,
+					..Default::default()
+				},
+				context: ExtensionContext::panel(state),
+			},
+		);
+	}
+
+	/// Whether `id` is an enabled plugin declaring `action` as a panel action.
+	pub(crate) fn panel_action_declared(&self, id: &str, action: &str) -> bool {
+		self.entries.iter().any(|entry| {
+			entry.manifest.id == id
+				&& entry.manifest.kind == ExtensionKind::Plugin
+				&& entry.enabled
+				&& !entry.cleanup_pending
+				&& entry
+					.manifest
+					.actions
+					.iter()
+					.any(|declared| declared.id == action && declared.surface == Surface::Panel)
+		})
+	}
+
+	/// Routes an interface-row click exactly like a panel button: the owning plugin's declared
+	/// `interface_click` panel action runs with the row's id in `values` and `double_clicked`
+	/// set for double clicks. Rows of a plugin without the declaration are inert.
+	pub(crate) fn invoke_interface_row(
+		&mut self,
+		ctx: &egui::Context,
+		state: &State,
+		id: &str,
+		row: &str,
+		double_clicked: bool,
+	) {
+		if !self.panel_action_declared(id, extensions::INTERFACE_CLICK_ACTION) {
+			return;
+		}
+		self.queue(
+			ctx,
+			ExtensionRequest::Invoke {
+				id: id.into(),
+				invocation: Invocation {
+					action: extensions::INTERFACE_CLICK_ACTION.into(),
+					double_clicked,
+					values: [("id".into(), row.into())].into(),
 					..Default::default()
 				},
 				context: ExtensionContext::panel(state),
@@ -3285,6 +3320,10 @@ fn capability_label(capability: Capability) -> &'static str {
 		Capability::ContextMenus => "Adicionar ações aos menus de usuário, canal, servidor e cargo",
 		Capability::InterfaceTweaks => {
 			"Mudar a aparência ou o comportamento de partes da interface"
+		}
+		Capability::InterfaceUi => "Substituir os painéis principais pela lista de linhas do plug-in",
+		Capability::StartScreen => {
+			"Substituir o logo e o texto da tela inicial pelas imagens e textos do plug-in, neste dispositivo, antes do login"
 		}
 		Capability::Composer => "Ler meu rascunho e propor alterações no texto",
 		Capability::Storage => "Armazenar até 1 MiB de dados locais para esta conta",

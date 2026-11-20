@@ -5050,3 +5050,7 @@ moderation-confirm-timeout = 禁言
 # Context: moderation
 moderation-confirm-ban = 封禁
 voice-voice-participant-camera-on = 摄像头已开启
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = 此插件暂时没有可显示的内容。
