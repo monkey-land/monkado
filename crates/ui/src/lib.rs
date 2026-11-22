@@ -10019,6 +10019,8 @@ mod composer_tests {
 		view.voice_available = true;
 		let mut commands = vec![];
 		// A refused join (here a full room) keeps the card open and goes nowhere.
+		let own = state.user.as_ref().map(|user| user.id).unwrap();
+		state.voice.roster[0].participant.user = Id(99);
 		let mut crowd = state.voice.roster[2].clone();
 		for id in 100..161 {
 			crowd.participant.user = Id(id);
@@ -10048,6 +10050,11 @@ mod composer_tests {
 			view.join_from_profile(&mut state, Id(10), Id(25), &mut commands),
 			Err(client_core::voice::CALL_FULL.to_owned())
 		);
+		// Already in the full room (another device): no place is taken, so it is not refused.
+		state.voice.roster.last_mut().unwrap().participant.user = own;
+		assert_eq!(state.call_full(Id(25)), None);
+		assert_eq!(agree(&view, &state), None);
+		state.voice.roster[0].participant.user = own;
 		state.voice.roster.truncate(3);
 		view.profile_action(
 			&egui::Context::default(),
