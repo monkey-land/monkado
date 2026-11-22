@@ -3173,8 +3173,11 @@ impl MessagingUi {
 							)
 							.selectable(false),
 						);
-						if let Some(elapsed) =
-							state.voice.active.as_ref().and_then(voice::elapsed_label)
+						if let Some(elapsed) = state
+							.voice
+							.active
+							.as_ref()
+							.and_then(|call| voice::elapsed_label(state, call))
 						{
 							ui.add(
 								egui::Label::new(

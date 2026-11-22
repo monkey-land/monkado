@@ -232,6 +232,20 @@ impl State {
 	pub fn joined_at(&self, channel: Id, user: Id) -> Option<Instant> {
 		self.joined_at.get(&(channel, user)).copied()
 	}
+	/// Earliest instant known for `call`: channel start time, local connection, or earliest
+	/// other participant observed in the channel.
+	pub fn call_started_at(&self, call: &Call, own: Option<Id>) -> Option<Instant> {
+		let earliest_other = self
+			.joined_at
+			.range((call.channel, Id(0))..=(call.channel, Id(u64::MAX)))
+			.filter(|((_, user), _)| Some(*user) != own)
+			.map(|(_, at)| *at)
+			.min();
+		[call.channel_started_at, call.connected_at, earliest_other]
+			.into_iter()
+			.flatten()
+			.min()
+	}
 	fn note_joined(&mut self, channel: Id, user: Id) {
 		self.observe_joined(channel, user, Instant::now());
 	}
@@ -2249,6 +2263,48 @@ mod tests {
 			voice
 				.joined_at(Id(1), Id(MAX_JOINED_AT as u64 + 1))
 				.is_none()
+		);
+	}
+
+	#[test]
+	fn call_started_at_picks_earliest_excluding_own_handshake_clock() {
+		let now = Instant::now();
+		let own = Id(1);
+		let older_peer = Id(2);
+		let newer_peer = Id(3);
+		let other_channel_peer = Id(4);
+		let mut voice = State::default();
+		// Own handshake observation slightly predates connected_at and must not inflate solo calls.
+		voice.observe_joined(Id(20), own, now - Duration::from_secs(275));
+		voice.observe_joined(Id(21), other_channel_peer, now - Duration::from_secs(900));
+		let mut call = Call {
+			channel: Id(20),
+			guild: Some(Id(10)),
+			connected_at: Some(now - Duration::from_secs(269)),
+			channel_started_at: None,
+			server_muted: false,
+			server_deafened: false,
+			request: 1,
+			phase: Phase::Connected,
+			muted: false,
+			deafened: false,
+			participants: Vec::new(),
+			camera: false,
+			watching: None,
+			error: None,
+			reconnecting: None,
+		};
+		assert_eq!(voice.call_started_at(&call, Some(own)), call.connected_at);
+		voice.observe_joined(Id(20), newer_peer, now - Duration::from_secs(262));
+		voice.observe_joined(Id(20), older_peer, now - Duration::from_secs(507));
+		assert_eq!(
+			voice.call_started_at(&call, Some(own)),
+			Some(now - Duration::from_secs(507))
+		);
+		call.channel_started_at = Some(now - Duration::from_secs(800));
+		assert_eq!(
+			voice.call_started_at(&call, Some(own)),
+			Some(now - Duration::from_secs(800))
 		);
 	}
 
