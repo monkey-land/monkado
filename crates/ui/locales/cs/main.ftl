@@ -410,6 +410,8 @@ channel-list-heading-direct-messages = Přímé zprávy
 # Context: key
 channel-list-heading-favorites = Oblíbené
 # Context: key
+channel-list-heading-active-now = Právě aktivní
+# Context: key
 channel-list-heading-pinned = Připnuté
 # Context: key
 channel-list-heading-message-requests = Žádosti o zprávy

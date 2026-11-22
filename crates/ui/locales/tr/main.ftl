@@ -394,6 +394,8 @@ channel-list-heading-direct-messages = Doğrudan Mesajlar
 # Context: key
 channel-list-heading-favorites = Favoriler
 # Context: key
+channel-list-heading-active-now = Şu An Aktif
+# Context: key
 channel-list-heading-pinned = Sabitlendi
 # Context: key
 channel-list-heading-message-requests = Mesaj İstekleri
