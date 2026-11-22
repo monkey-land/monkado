@@ -1812,6 +1812,11 @@ impl MessagingUi {
 		// is announced.
 		let mut announced = false;
 		let mut visible = 0usize..0;
+		let offline_available = guild.is_none() && state.absent_presences_offline();
+		let own_presence_status = match self.shown_presence_status() {
+			model::PresenceStatus::Invisible => "offline",
+			status => status.wire(),
+		};
 		let mut area = egui::ScrollArea::vertical().auto_shrink([false, false]);
 		if reset_scroll {
 			area = area.vertical_scroll_offset(0.0);
@@ -1898,6 +1903,24 @@ impl MessagingUi {
 								.unwrap_or_else(|| state.user_display_name(&member.user));
 							let (status, custom, activities, clients) =
 								profiles::member_presence(state, member, guild);
+							let status = if guild.is_none() {
+								if (state.gateway_connected || state.demo)
+									&& state
+										.user
+										.as_ref()
+										.is_some_and(|own| own.id == member.user.id)
+								{
+									status.or(Some(own_presence_status))
+								} else {
+									status.or_else(|| {
+										(offline_available
+											&& state.known_presence_user(member.user.id))
+										.then_some("offline")
+									})
+								}
+							} else {
+								status
+							};
 							let subtitle = profiles::subtitle(custom, activities);
 							let in_voice = voice_users.contains(&member.user.id);
 							let voice_label = in_voice.then(|| language.text("member-in-voice"));
@@ -10472,6 +10495,155 @@ mod composer_tests {
 			"clearing at the slot limit must free capacity"
 		);
 		assert_eq!(messaging.draft_changes, [Id(1), Id(1)]);
+	}
+
+	#[test]
+	fn dm_list_and_group_dm_members_show_offline_badges_past_256_direct_users() {
+		let user = |id: u64, name: &str| model::User {
+			id: Id(id),
+			name: name.into(),
+			avatar: None,
+			discriminator: 0,
+			kind: Default::default(),
+			webhook: false,
+			primary_guild: None,
+			cosmetics: None,
+		};
+		let mut state = State {
+			gateway_connected: true,
+			freshness: Freshness::Fresh,
+			user: Some(user(1, "Owner")),
+			selected: Some(Id(10)),
+			..Default::default()
+		};
+		state.channels.push(model::Channel {
+			user_limit: None,
+			slowmode: 0,
+			last_message: Some(Id(9000)),
+			id: Id(10),
+			guild: None,
+			parent_id: None,
+			position: 0,
+			name: "Group".into(),
+			kind: 3,
+			recipients: vec![user(2, "Peer")],
+			member_list_id: None,
+			tags: None,
+			message_count: None,
+			icon: None,
+		});
+		for id in 100..400 {
+			state.channels.push(model::Channel {
+				user_limit: None,
+				slowmode: 0,
+				last_message: Some(Id(8000 - id)),
+				id: Id(1000 + id),
+				guild: None,
+				parent_id: None,
+				position: 0,
+				name: String::new(),
+				kind: 1,
+				recipients: vec![user(id, &format!("DM {id}"))],
+				member_list_id: None,
+				tags: None,
+				message_count: None,
+				icon: None,
+			});
+		}
+		let _ = state.request_members();
+
+		let ctx = egui::Context::default();
+		ctx.enable_accesskit();
+		design::apply(&ctx);
+		let mut view = MessagingUi::default();
+		view.own_presence.status = model::PresenceStatus::Invisible;
+
+		let mut has_offline_circle = false;
+		let mut labels = Vec::new();
+		for _ in 0..2 {
+			let output = ctx.run_ui(
+				egui::RawInput {
+					screen_rect: Some(egui::Rect::from_min_size(
+						egui::Pos2::ZERO,
+						egui::vec2(800.0, 600.0),
+					)),
+					..Default::default()
+				},
+				|ui| {
+					ui.horizontal(|ui| {
+						ui.allocate_ui(egui::vec2(240.0, 600.0), |ui| {
+							view.channel_list(ui, &mut state);
+						});
+						ui.allocate_ui(egui::vec2(240.0, 600.0), |ui| {
+							view.member_rows(ui, &mut state, &mut vec![]);
+						});
+					});
+				},
+			);
+			fn find_offline_circle(shape: &egui::Shape) -> bool {
+				match shape {
+					egui::Shape::Circle(circle) => {
+						circle.fill == egui::Color32::from_rgb(128, 132, 142)
+					}
+					egui::Shape::Vec(shapes) => shapes.iter().any(find_offline_circle),
+					_ => false,
+				}
+			}
+			has_offline_circle = output
+				.shapes
+				.iter()
+				.any(|clipped| find_offline_circle(&clipped.shape));
+			labels = output
+				.platform_output
+				.accesskit_update
+				.as_ref()
+				.map(|update| {
+					update
+						.nodes
+						.iter()
+						.filter_map(|(_, node)| node.label().map(str::to_owned))
+						.collect()
+				})
+				.unwrap_or_default();
+			output.drop_without_applying_deltas();
+		}
+		assert!(has_offline_circle, "offline presence badge was not painted");
+		assert!(labels.iter().any(|label| label == "Peer, Offline"));
+		assert!(labels.iter().any(|label| label == "Owner, Offline"));
+		assert!(
+			!labels
+				.iter()
+				.any(|label| label.contains("Presence unavailable"))
+		);
+
+		view.own_presence.status = model::PresenceStatus::DoNotDisturb;
+		let output = ctx.run_ui(
+			egui::RawInput {
+				screen_rect: Some(egui::Rect::from_min_size(
+					egui::Pos2::ZERO,
+					egui::vec2(800.0, 600.0),
+				)),
+				..Default::default()
+			},
+			|ui| {
+				view.member_rows(ui, &mut state, &mut vec![]);
+			},
+		);
+		let dnd_labels: Vec<_> = output
+			.platform_output
+			.accesskit_update
+			.as_ref()
+			.unwrap()
+			.nodes
+			.iter()
+			.filter_map(|(_, node)| node.label().map(str::to_owned))
+			.collect();
+		output.drop_without_applying_deltas();
+		assert!(
+			dnd_labels
+				.iter()
+				.any(|label| label == "Owner, Do Not Disturb")
+		);
 	}
 }
 

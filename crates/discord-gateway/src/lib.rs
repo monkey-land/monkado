@@ -1802,11 +1802,19 @@ async fn run_recoverable(
 										warnings.entries |= ready.skipped;
 										let (read_entries,read_version,partial)=ready.read_state.take().map_or((None,None,false),|snapshot|(Some(snapshot.entries.into_iter().filter(|e|e.kind==0).map(|e|(e.id,e.last_message_id,e.mention_count)).collect()),snapshot.version,snapshot.partial));
 										if guilds.len() + channels.len() > MAX_NAV { return Err(Failure::CapacityAt("Account navigation exceeds 131,072 entries; connection stopped")); }
-										direct_presence.bootstrap_users=friends.as_ref().into_iter().flatten().map(|(u,_)|u.id).chain(channels.iter().filter(|c|c.guild.is_none() && matches!(c.kind,1|3)).flat_map(|c|c.recipients.iter().map(|u|u.id))).take(client_core::presence::MAX_DIRECT_PRESENCES).collect();
-										// DM recipients who are not friends are reported only through shared guilds.
-										shared_presence.bootstrap_users=channels.iter().filter(|c|c.guild.is_none() && matches!(c.kind,1|3)).flat_map(|c|c.recipients.iter().map(|u|u.id)).filter(|id|!friends.as_ref().into_iter().flatten().any(|(u,_)|u.id==*id)).take(client_core::presence::MAX_DIRECT_PRESENCES).collect();
 										for (user,_) in friends.iter().flatten() { shared_presence.set_friend(user.id,true); }
 										for user in channels.iter().filter(|c|c.guild.is_none() && matches!(c.kind,1|3)).flat_map(|c|&c.recipients) { shared_presence.add_recipient(user.id); }
+										for id in friends.as_ref().into_iter().flatten().map(|(u,_)|u.id).chain(channels.iter().filter(|c|c.guild.is_none() && matches!(c.kind,1|3)).flat_map(|c|c.recipients.iter().map(|u|u.id))) {
+											if direct_presence.bootstrap_users.len() >= client_core::presence::MAX_DIRECT_PRESENCE_USERS { break; }
+											direct_presence.bootstrap_users.insert(id);
+										}
+										// DM recipients who are not friends are reported only through shared guilds.
+										for id in channels.iter().filter(|c|c.guild.is_none() && matches!(c.kind,1|3)).flat_map(|c|c.recipients.iter().map(|u|u.id)) {
+											if shared_presence.bootstrap_users.len() >= client_core::presence::MAX_DIRECT_PRESENCE_USERS { break; }
+											if !shared_presence.is_friend(id) {
+												shared_presence.bootstrap_users.insert(id);
+											}
+										}
 										calls.allowed=channels.iter().filter(|c|(c.guild.is_none() && channel_events::private_call(c.kind,c.recipients.len())) || (c.guild.is_some() && c.kind==2)).map(|c|(c.id,c.guild)).collect();
 										if was_ready { emit(Event::Resync)?; }
 										emit(Event::Interaction(client_core::interactions::Event::Session(state.session.clone().ok_or(Failure::Protocol)?)))?;
@@ -1928,7 +1936,7 @@ async fn run_recoverable(
 										}
 									}
 									"PRESENCE_UPDATE" => {
-										if let Ok(update)=discord_protocol::presence::decode(packet.d.get().as_bytes()) {
+										if let Ok(update)=discord_protocol::presence::decode_lenient(packet.d.get().as_bytes()) {
 											if update.guild.is_none() { direct_presence.push(update,Instant::now()); }
 											else {
 												shared_presence.push(update.clone(),Instant::now());

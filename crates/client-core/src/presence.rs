@@ -1,8 +1,9 @@
 use crate::{Freshness, Id, State};
 use model::{ClientPlatforms, MemberPresence, Patch, RichActivity};
 
-pub const MAX_DIRECT_PRESENCES: usize = 256;
-pub const MAX_DIRECT_PRESENCE_BYTES: usize = 512 * 1024;
+pub const MAX_DIRECT_PRESENCE_USERS: usize = 4096;
+pub const MAX_DIRECT_PRESENCES: usize = 1024;
+pub const MAX_DIRECT_PRESENCE_BYTES: usize = 1024 * 1024;
 
 pub const MAX_LOCAL_GAME_ACTIVITY_BYTES: usize = 4 * 1024;
 
@@ -180,7 +181,7 @@ impl State {
 	fn friend_presence_user(&self, user: Id) -> bool {
 		self.friend_username(user).is_some() && self.user_blocked(user) == Some(false)
 	}
-	fn known_presence_user(&self, user: Id) -> bool {
+	pub fn known_presence_user(&self, user: Id) -> bool {
 		if self.friend_presence_user(user) {
 			return true;
 		}
@@ -192,26 +193,51 @@ impl State {
 		})
 	}
 	pub fn presence_for(&self, user: Id) -> Option<&MemberPresence> {
-		if !self.gateway_connected || !self.known_presence_user(user) {
+		if !self.gateway_connected {
 			return None;
 		}
-		self.direct_presences.iter().find(|p| p.user == user)
+		let presence = self.direct_presences.iter().find(|p| p.user == user)?;
+		self.known_presence_user(user).then_some(presence)
 	}
 	/// Discord sends no presence for an offline friend or DM recipient, so one without a record is
-	/// offline. Not once the bounded store has dropped a record, READY's presence was reported
-	/// unavailable, or it tracks more people than the gateway bootstraps; then it is unknown.
+	/// offline. Not once the bounded store has dropped an online record, READY's presence was
+	/// reported unavailable, or it tracks more people than the gateway bootstraps; then it is unknown.
+	pub fn absent_presences_offline(&self) -> bool {
+		if !self.gateway_connected || self.direct_presence_lossy {
+			return false;
+		}
+		let raw_count = self.friend_count()
+			+ self
+				.channels
+				.iter()
+				.filter(|c| c.guild.is_none() && matches!(c.kind, 1 | 3))
+				.map(|c| c.recipients.len())
+				.sum::<usize>();
+		if raw_count <= MAX_DIRECT_PRESENCE_USERS {
+			return true;
+		}
+		let mut seen = std::collections::BTreeSet::new();
+		for user in self.friends() {
+			seen.insert(user.id);
+			if seen.len() > MAX_DIRECT_PRESENCE_USERS {
+				return false;
+			}
+		}
+		for recipient in self
+			.channels
+			.iter()
+			.filter(|c| c.guild.is_none() && matches!(c.kind, 1 | 3))
+			.flat_map(|c| &c.recipients)
+		{
+			seen.insert(recipient.id);
+			if seen.len() > MAX_DIRECT_PRESENCE_USERS {
+				return false;
+			}
+		}
+		true
+	}
 	pub fn absent_presence_offline(&self, user: Id) -> bool {
-		self.gateway_connected
-			&& !self.direct_presence_lossy
-			&& self.known_presence_user(user)
-			&& self.friend_count()
-				+ self
-					.channels
-					.iter()
-					.filter(|c| c.guild.is_none() && matches!(c.kind, 1 | 3))
-					.map(|c| c.recipients.len())
-					.sum::<usize>()
-				<= MAX_DIRECT_PRESENCES
+		self.absent_presences_offline() && self.known_presence_user(user)
 	}
 	pub(crate) fn apply_direct_presence(&mut self, updates: &[Update]) {
 		self.apply_presence(updates, false);
@@ -322,26 +348,59 @@ impl State {
 			if index.is_some_and(|i| self.direct_presences[i] == resolved) {
 				continue;
 			}
-			membership_changed |=
-				index.is_some_and(|i| online(&self.direct_presences[i])) != online(&resolved);
+			let was_online = index.is_some_and(|i| online(&self.direct_presences[i]));
+			let is_online = online(&resolved);
+			let fits = |len: usize, bytes: usize, added: usize| {
+				len < MAX_DIRECT_PRESENCES
+					&& bytes + added + MAX_DIRECT_PRESENCES * size_of::<MemberPresence>()
+						<= MAX_DIRECT_PRESENCE_BYTES
+			};
+			let resolved_bytes = resolved.heap_bytes();
+			if index.is_none()
+				&& !is_online
+				&& !fits(self.direct_presences.len(), retained_bytes, resolved_bytes)
+			{
+				while let Some(evict_index) = self.direct_presences.iter().position(|p| !online(p))
+				{
+					let evicted = self.direct_presences.remove(evict_index);
+					self.shared_presence_users.remove(&evicted.user);
+					retained_bytes -= evicted.heap_bytes();
+					if fits(self.direct_presences.len(), retained_bytes, resolved_bytes) {
+						break;
+					}
+				}
+				if !fits(self.direct_presences.len(), retained_bytes, resolved_bytes) {
+					continue;
+				}
+			}
+			membership_changed |= was_online != is_online;
 			if let Some(index) = index {
 				retained_bytes -= self.direct_presences.remove(index).heap_bytes();
 			}
-			// ponytail: at most 256 records; FIFO eviction avoids a second cache index.
+			// ponytail: at most 1024 records; evict offline entries first so offline churn never drops online users.
 			while !self.direct_presences.is_empty()
-				&& (self.direct_presences.len() >= MAX_DIRECT_PRESENCES
-					|| retained_bytes
-						+ resolved.heap_bytes()
-						+ MAX_DIRECT_PRESENCES * size_of::<MemberPresence>()
-						> MAX_DIRECT_PRESENCE_BYTES)
+				&& !fits(self.direct_presences.len(), retained_bytes, resolved_bytes)
 			{
-				let evicted = self.direct_presences.remove(0);
+				let evict_index = self
+					.direct_presences
+					.iter()
+					.position(|p| !online(p))
+					.unwrap_or(0);
+				let evicted = self.direct_presences.remove(evict_index);
 				self.shared_presence_users.remove(&evicted.user);
-				self.direct_presence_lossy = true;
-				membership_changed |= online(&evicted);
+				if online(&evicted) {
+					self.direct_presence_lossy = true;
+					membership_changed = true;
+				}
 				retained_bytes -= evicted.heap_bytes();
 			}
-			retained_bytes += resolved.heap_bytes();
+			if !fits(self.direct_presences.len(), retained_bytes, resolved_bytes) {
+				if is_online {
+					self.direct_presence_lossy = true;
+				}
+				continue;
+			}
+			retained_bytes += resolved_bytes;
 			if shared {
 				self.shared_presence_users.insert(resolved.user);
 			}
@@ -1160,6 +1219,45 @@ mod tests {
 		let recipient = state.channels[0].recipients[0].clone();
 		assert!(state.absent_presence_offline(recipient.id));
 		assert!(!state.absent_presence_offline(Id(424_242)));
+		// More than 256 overlapping friends + DMs must stay eligible up to MAX_DIRECT_PRESENCE_USERS.
+		let extra_friends: Vec<_> = (10_000..10_300)
+			.map(|id| {
+				(
+					model::User {
+						id: Id(id),
+						..recipient.clone()
+					},
+					format!("friend{id}"),
+				)
+			})
+			.collect();
+		befriend_many(&mut state, extra_friends);
+		state.gateway_connected = true;
+		let dm_template = state.channels[0].clone();
+		for id in 10_000..10_300 {
+			let mut dm = dm_template.clone();
+			dm.id = Id(20_000 + id);
+			dm.recipients = vec![model::User {
+				id: Id(id),
+				..recipient.clone()
+			}];
+			state.channels.push(dm);
+		}
+		assert!(state.absent_presence_offline(recipient.id));
+		// Duplicate DM recipients exceeding raw MAX_DIRECT_PRESENCE_USERS still deduplicate.
+		let mut dup_group = dm_template.clone();
+		dup_group.id = Id(30_000);
+		dup_group.kind = 3;
+		dup_group.recipients = (0..MAX_DIRECT_PRESENCE_USERS as u64)
+			.map(|offset| model::User {
+				id: Id(10_000 + (offset % 100)),
+				..recipient.clone()
+			})
+			.collect();
+		state.channels.push(dup_group);
+		assert!(state.absent_presence_offline(recipient.id));
+		state.channels.pop();
+		state.channels.truncate(1);
 		apply(
 			&mut state,
 			Event::DirectPresence(
@@ -1185,7 +1283,7 @@ mod tests {
 		state.gateway_connected = true;
 		assert!(!state.absent_presence_offline(recipient.id));
 		state.direct_presence_lossy = false;
-		state.channels[0].recipients = (0..=MAX_DIRECT_PRESENCES as u64)
+		state.channels[0].recipients = (0..=MAX_DIRECT_PRESENCE_USERS as u64)
 			.map(|id| model::User {
 				id: Id(recipient.id.0 + id),
 				..recipient.clone()
@@ -1195,6 +1293,19 @@ mod tests {
 		state.gateway_connected = false;
 		state.channels[0].recipients.truncate(1);
 		assert!(!state.absent_presence_offline(recipient.id));
+	}
+	fn befriend_many(state: &mut State, users: Vec<(model::User, String)>) {
+		let ids: Vec<_> = users.iter().map(|(u, _)| u.id).collect();
+		state.apply(crate::Envelope {
+			generation: state.generation,
+			event: crate::Event::UserAction(crate::user_actions::Event::Friends(Some(users))),
+		});
+		state.apply(crate::Envelope {
+			generation: state.generation,
+			event: crate::Event::UserAction(crate::user_actions::Event::Relationships(Some(
+				ids.into_iter().map(|id| (id, false)).collect(),
+			))),
+		});
 	}
 	#[test]
 	fn shared_guild_presence_stands_in_only_for_dm_recipients_who_are_not_friends() {
@@ -1441,13 +1552,14 @@ mod tests {
 		{
 			let mut state = direct_state();
 			let channel = state.channels[0].clone();
-			for id in 3..=300 {
+			let last_id = MAX_DIRECT_PRESENCES as u64 + 44;
+			for id in 3..=last_id {
 				let mut channel = channel.clone();
 				channel.id = Id(1000 + id);
 				channel.recipients[0].id = Id(id);
 				state.channels.push(channel);
 			}
-			for id in 2..=300 {
+			for id in 2..=last_id {
 				apply(
 					&mut state,
 					Event::DirectPresence(vec![direct_update(
@@ -1467,6 +1579,8 @@ mod tests {
 					<= MAX_DIRECT_PRESENCE_BYTES
 			);
 			assert!(state.presence_for(Id(2)).is_none());
+			assert!(state.direct_presence_lossy);
+			state.direct_presence_lossy = false;
 			let epoch = state.direct_presence_epoch();
 			apply(
 				&mut state,
@@ -1476,21 +1590,69 @@ mod tests {
 					Patch::Absent,
 				)]),
 			);
-			assert!(
-				state.direct_presence_epoch() > epoch,
-				"offline insertion evicts an online entry at the item cap"
+			assert_eq!(
+				state.direct_presence_epoch(),
+				epoch,
+				"offline update when full of online entries must not evict an online entry"
 			);
+			assert_eq!(state.direct_presences.len(), MAX_DIRECT_PRESENCES);
+			assert!(!state.direct_presence_lossy);
 			let epoch = state.direct_presence_epoch();
 			apply(
 				&mut state,
 				Event::RecipientRemoved {
-					channel: Id(1300),
-					user: Id(300),
+					channel: Id(1000 + last_id),
+					user: Id(last_id),
 				},
 			);
-			assert!(state.presence_for(Id(300)).is_none());
-			assert!(!state.direct_presences.iter().any(|p| p.user == Id(300)));
+			assert!(state.presence_for(Id(last_id)).is_none());
+			assert!(!state.direct_presences.iter().any(|p| p.user == Id(last_id)));
 			assert!(state.direct_presence_epoch() > epoch);
+		}
+		{
+			let mut state = direct_state();
+			let channel = state.channels[0].clone();
+			let last_id = MAX_DIRECT_PRESENCES as u64 + 2;
+			for id in 3..=last_id {
+				let mut channel = channel.clone();
+				channel.id = Id(1000 + id);
+				channel.recipients[0].id = Id(id);
+				state.channels.push(channel);
+			}
+			// Fill the store with one offline entry and the rest online entries.
+			apply(
+				&mut state,
+				Event::DirectPresence(vec![direct_update(
+					2,
+					Patch::Value("offline".into()),
+					Patch::Absent,
+				)]),
+			);
+			for id in 3..=MAX_DIRECT_PRESENCES as u64 + 1 {
+				apply(
+					&mut state,
+					Event::DirectPresence(vec![direct_update(
+						id,
+						Patch::Value("online".into()),
+						Patch::Absent,
+					)]),
+				);
+			}
+			assert_eq!(state.direct_presences.len(), MAX_DIRECT_PRESENCES);
+			assert!(!state.direct_presence_lossy);
+			apply(
+				&mut state,
+				Event::DirectPresence(vec![direct_update(
+					last_id,
+					Patch::Value("online".into()),
+					Patch::Absent,
+				)]),
+			);
+			assert!(
+				!state.direct_presence_lossy,
+				"evicting an offline record for an online user must not mark the store lossy"
+			);
+			assert!(state.absent_presence_offline(Id(2)));
 		}
 	}
 

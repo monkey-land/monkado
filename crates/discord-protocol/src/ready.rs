@@ -280,20 +280,13 @@ fn optional<'a, T: Deserialize<'a>>(raw: Option<&'a RawValue>, warning: &mut boo
 }
 
 fn checked_presences(raw: Option<&RawValue>, warning: &mut bool) -> Option<Box<RawValue>> {
-	raw.and_then(|raw| {
-		let valid = serde_json::from_str::<presence::Friends<'_>>(raw.get()).is_ok_and(|friends| {
-			friends
-				.0
-				.iter()
-				.all(|friend| presence::decode(friend.get().as_bytes()).is_ok())
-		});
-		if valid {
-			Some(raw.to_owned())
-		} else {
-			*warning = true;
-			None
-		}
-	})
+	let raw = raw?;
+	if serde_json::from_str::<presence::Friends<'_>>(raw.get()).is_ok() {
+		Some(raw.to_owned())
+	} else {
+		*warning = true;
+		None
+	}
 }
 
 // Only READY tolerates unavailable optional catalogs. Ordinary guild responses remain strict.
@@ -651,7 +644,7 @@ mod tests {
 			payload["user_guild_settings"] =
 				json!({"entries":[{"guild_id":"1","muted":"invalid"}]});
 			payload["sessions"] = json!([{"status":false}]);
-			payload["presences"] = json!([{"user_id":"3","activities":false}]);
+			payload["presences"] = json!(false);
 			payload["merged_presences"] = json!({"friends":false});
 			payload["guilds"][0]["emojis"] = json!([{"id":"4","name":"invalid emoji name"}]);
 			payload["guilds"]
@@ -746,13 +739,17 @@ mod tests {
 				payload["read_state"] = json!({"entries":(1..=4001).map(|id| json!({"id":id.to_string(),"last_message_id":"7"})).collect::<Vec<_>>()});
 				payload["user_guild_settings"] = json!({"entries":[{"guild_id":"1","muted":false,"channel_overrides":(1..=4001).map(|id| json!({"channel_id":id.to_string(),"muted":false})).collect::<Vec<_>>()}]});
 				payload["sessions"] = json!([{"status":"online"}]);
-				payload["presences"] = json!([{"user_id":"3","status":"online"}]);
+				payload["presences"] = json!([
+					{"user_id":"3","status":"online","activities":false},
+					{"user_id":false}
+				]);
 				let bytes = serde_json::to_vec(&payload).unwrap();
 				let envelope = decode(&bytes).unwrap();
 				let permissions = envelope.permissions().unwrap();
 				assert_eq!(permissions.channels.len(), guild_count * 100);
 				let (mut ready, warnings) = envelope.navigation().unwrap();
 				assert_eq!(warnings, Warnings::default());
+				assert!(ready.presences.is_some());
 				assert_eq!(ready.read_state.as_ref().unwrap().entries.len(), 4001);
 				assert_eq!(ready.sessions.as_ref().unwrap().dnd(), Some(false));
 				let (guilds, channels) = ready.navigation().unwrap();

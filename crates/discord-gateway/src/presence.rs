@@ -8,7 +8,7 @@ use std::{
 };
 
 /// Bounds each shared-presence eligibility set; one `Id` per entry.
-const MAX_SHARED_USERS: usize = 4096;
+const MAX_SHARED_USERS: usize = client_core::presence::MAX_DIRECT_PRESENCE_USERS;
 
 #[derive(Default)]
 pub(crate) struct Pending {
@@ -53,6 +53,9 @@ impl Pending {
 		} else if self.friends.len() < MAX_SHARED_USERS {
 			self.friends.insert(user);
 		}
+	}
+	pub fn is_friend(&self, user: Id) -> bool {
+		self.friends.contains(&user)
 	}
 	fn insert(&mut self, update: PresenceUpdate, now: Instant) {
 		let update = Update {
@@ -160,7 +163,8 @@ impl Pending {
 			return Ok(());
 		};
 		for friend in friends.0 {
-			if let Ok(update) = discord_protocol::presence::decode(friend.get().as_bytes()) {
+			if let Ok(update) = discord_protocol::presence::decode_lenient(friend.get().as_bytes())
+			{
 				if !self.bootstrap_users.contains(&update.user) {
 					continue;
 				}
@@ -329,5 +333,83 @@ mod tests {
 			.borrow_mut()
 			.extend(updates.into_iter().map(|u| u.user));
 		assert_eq!(*received.borrow(), (100..=255).map(Id).collect::<Vec<_>>());
+	}
+
+	#[test]
+	fn bootstrap_retains_more_than_256_friends_and_dm_recipients() {
+		let now = Instant::now();
+		let mut direct = Pending::default();
+		for id in 1..=300 {
+			if direct.bootstrap_users.len() >= client_core::presence::MAX_DIRECT_PRESENCE_USERS {
+				break;
+			}
+			direct.bootstrap_users.insert(Id(id));
+		}
+		// Overlapping DM recipient does not reduce capacity for distinct later recipients.
+		for id in (1..=50).chain(301..=310) {
+			if direct.bootstrap_users.len() >= client_core::presence::MAX_DIRECT_PRESENCE_USERS {
+				break;
+			}
+			direct.bootstrap_users.insert(Id(id));
+		}
+		assert!(direct.bootstrap_users.contains(&Id(300)));
+		assert!(direct.bootstrap_users.contains(&Id(310)));
+		let friends: Vec<_> = (1..=310)
+			.map(|id| serde_json::json!({"user_id":id.to_string(),"status":"online"}))
+			.collect();
+		let bytes =
+			serde_json::to_vec(&serde_json::json!({"merged_presences":{"friends":friends}}))
+				.unwrap();
+		let received = std::cell::RefCell::new(Vec::new());
+		direct
+			.supplemental(&bytes, now, &|event| {
+				let Event::DirectPresence(updates) = event else {
+					panic!()
+				};
+				received
+					.borrow_mut()
+					.extend(updates.into_iter().map(|u| u.user));
+				Ok(())
+			})
+			.unwrap();
+		if let Some(Event::DirectPresence(updates)) = direct.take() {
+			received
+				.borrow_mut()
+				.extend(updates.into_iter().map(|u| u.user));
+		}
+		assert!(received.borrow().contains(&Id(300)));
+		assert!(received.borrow().contains(&Id(310)));
+		assert_eq!(received.borrow().len(), 310);
+	}
+
+	#[test]
+	fn supplemental_preserves_status_when_one_friend_has_malformed_activities() {
+		let now = Instant::now();
+		let mut direct = Pending::default();
+		direct.bootstrap_users.extend([Id(3), Id(4)]);
+		let bytes = serde_json::to_vec(&serde_json::json!({
+			"merged_presences": {
+				"friends": [
+					{"user_id": "3", "status": "idle", "activities": false, "client_status": 42},
+					{"user_id": false},
+					{"user_id": "4", "status": "online", "activities": [{"type": 0, "name": "Game"}]}
+				]
+			}
+		}))
+		.unwrap();
+		direct.supplemental(&bytes, now, &|_| Ok(())).unwrap();
+		let Some(Event::DirectPresence(updates)) = direct.take() else {
+			panic!()
+		};
+		assert_eq!(updates.len(), 2);
+		assert_eq!(
+			(updates[0].user, &updates[0].status),
+			(Id(3), &Patch::Value("idle".into()))
+		);
+		assert_eq!(updates[0].activities, Patch::Absent);
+		assert_eq!(
+			(updates[1].user, &updates[1].status),
+			(Id(4), &Patch::Value("online".into()))
+		);
 	}
 }
