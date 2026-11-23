@@ -44,6 +44,7 @@ requests are squashed from the PR head that was reviewed; all of them are unmerg
 | 0024 | [#8698](https://github.com/emilk/egui/pull/8698) | `epaint`, `egui` | Right-to-left runs get one glyph per char instead of `2n - 1`, so editor cursors stay inside the text (End then Ctrl+ArrowLeft in Arabic text no longer overflows). Merged with 0009's direction override, and ported to harfrust 0.15's in-place `Buffer`, which the PR head predates. |
 | 0025 | Monkado | `epaint` | Laying out a multi-paragraph job one paragraph at a time keeps an empty first section, which carries `Label`'s wrap indentation, so text continuing a line after an inline widget (a heading after a channel chip) is no longer painted over that line. |
 | 0027 | Monkado | `egui-winit` | A pasted lone file path also sends the image copied beside it, described under image paste below. |
+| 0028 | Monkado | `egui` | Exposes an explicit TextEdit undo checkpoint for the message composer. |
 
 ## Monkado patch: RTL shaping metadata
 
