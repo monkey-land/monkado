@@ -89,13 +89,20 @@ enum Read {
 }
 
 fn read(request: ui::AttachmentPaste) -> Result<Read, &'static str> {
+	let ui::AttachmentPaste {
+		target: _,
+		text,
+		image,
+	} = request;
+	// A copied file also offers its path as text, so the file list outranks delivered
+	// text; the image re-read comes after it, see `resolve`.
 	let mut clipboard = match arboard::Clipboard::new() {
 		Ok(clipboard) => clipboard,
 		Err(_) => {
 			// egui already transferred text/image clipboard data through the focused
 			// Wayland surface. Do not make that data depend on arboard's headless
 			// data-control backend, which may be unavailable in a sandbox.
-			return supplied_content(request).ok_or("Área de transferência indisponível")?;
+			return supplied_content(text, image).ok_or("Área de transferência indisponível")?;
 		}
 	};
 	match clipboard.get().file_list() {
@@ -114,32 +121,46 @@ fn read(request: ui::AttachmentPaste) -> Result<Read, &'static str> {
 		}
 		Err(arboard::Error::ContentNotAvailable) | Ok(_) => {}
 		Err(_) => {
-			return match supplied_content(request) {
-				Some(content) => content,
-				None => Err("Não foi possível ler os arquivos copiados; cole de novo"),
-			};
+			return supplied_content(text, image)
+				.unwrap_or(Err("Não foi possível ler os arquivos copiados; cole de novo"));
 		}
 	}
-	if let Some(image) = request.image {
-		return supplied_image(image);
-	}
-	if let Ok(image) = clipboard.get_image() {
-		return png(&image.bytes, image.width, image.height);
-	}
-	if let Some(text) = request.text.or_else(|| clipboard.get_text().ok()) {
-		return supplied_text(text);
-	}
-	let image = clipboard
-		.get_image()
-		.map_err(|_| "Copie um arquivo, imagem ou texto antes de colar")?;
-	png(&image.bytes, image.width, image.height)
+	resolve(text, image, || {
+		if let Ok(image) = clipboard.get_image() {
+			return Ok(Some(png(&image.bytes, image.width, image.height)));
+		}
+		Ok(clipboard.get_text().ok().map(supplied_text))
+	})
 }
 
-fn supplied_content(request: ui::AttachmentPaste) -> Option<Result<Read, &'static str>> {
-	if let Some(image) = request.image {
-		return Some(supplied_image(image));
+/// Resolves a paste from what the triggering key delivered and one read of the system
+/// clipboard. Delivered text wins over a system image: the key read the selection through
+/// the focused surface, the freshest view, while arboard re-reads through its own backend.
+/// On Wayland without data-control that is the XWayland bridge, which keeps serving an
+/// image copied in this client after newer text took the Wayland selection; reading the
+/// image first pasted that stale image instead of a link copied afterwards.
+fn resolve(
+	text: Option<String>,
+	image: Option<std::sync::Arc<egui::ColorImage>>,
+	system: impl FnOnce() -> Result<Option<Result<Read, &'static str>>, &'static str>,
+) -> Result<Read, &'static str> {
+	if let Some(text) = text {
+		return supplied_text(text);
 	}
-	request.text.map(supplied_text)
+	if let Some(image) = image {
+		return supplied_image(image);
+	}
+	system()?.unwrap_or(Err("Copie um arquivo, imagem ou texto antes de colar"))
+}
+
+fn supplied_content(
+	text: Option<String>,
+	image: Option<std::sync::Arc<egui::ColorImage>>,
+) -> Option<Result<Read, &'static str>> {
+	if let Some(text) = text {
+		return Some(supplied_text(text));
+	}
+	image.map(supplied_image)
 }
 
 fn supplied_image(image: std::sync::Arc<egui::ColorImage>) -> Result<Read, &'static str> {
@@ -250,5 +271,36 @@ mod tests {
 		assert!(super::png(&[], 4096, 4096).is_err());
 		assert!(super::png(&[], 1, 1).is_err());
 		assert!(super::png(&[], 0, 0).is_err());
+	}
+
+	/// Regression: a link copied after an image was copied in this client pasted the image.
+	/// On Wayland without data-control, arboard's XWayland-bridge view kept serving the
+	/// older image while the key delivered the newer text through the focused surface.
+	#[test]
+	fn delivered_text_outranks_a_stale_system_image() {
+		let stale_image = || Ok(Some(super::png(&[255, 0, 0, 255], 1, 1)));
+		let super::Read::Content(super::Content::Text(text)) =
+			super::resolve(Some("https://example.com/link".into()), None, stale_image).unwrap()
+		else {
+			panic!("Expected the delivered link")
+		};
+		assert_eq!(text, "https://example.com/link");
+
+		// Without delivered text the system image is the paste, as before.
+		let super::Read::Content(super::Content::File(files)) =
+			super::resolve(None, None, stale_image).unwrap()
+		else {
+			panic!("Expected the system image")
+		};
+		assert_eq!(files[0].filename(), "pasted-image.png");
+	}
+
+	#[test]
+	fn nothing_to_paste_is_reported_instead_of_a_stale_image() {
+		let empty = || Ok(None);
+		assert!(matches!(
+			super::resolve(None, None, empty),
+			Err("Copie um arquivo, imagem ou texto antes de colar")
+		));
 	}
 }
