@@ -27,7 +27,7 @@ const MAX_PACKAGE: usize = 16 * 1024 * 1024;
 const MAX_RECORD: usize = MAX_PACKAGE + 64 * 1024;
 const MAX_CATALOG: usize = 1024 * 1024;
 const MAX_STORAGE: usize = 1024 * 1024;
-const MAX_PER_SCOPE: usize = 8;
+const MAX_PER_SCOPE: usize = 40;
 const MAX_ACCOUNTS: usize = 8;
 const MAX_QUEUE: usize = 4;
 
@@ -1047,9 +1047,9 @@ fn install_stored(
 		return Err("A limpeza das extensões da conta está incompleta; abra Extensões de novo para tentar outra vez".into());
 	}
 	if !directory.exists() && count_directories(&parent)? >= MAX_PER_SCOPE {
-		return Err(
-			"Desative uma extensão primeiro; cada escopo permite oito extensões instaladas".into(),
-		);
+		return Err(format!(
+			"Desative uma extensão primeiro; cada escopo permite {MAX_PER_SCOPE} extensões instaladas"
+		));
 	}
 	if stored.package.manifest.kind == ExtensionKind::Plugin
 		&& !is_proxy(&stored.package.manifest)
