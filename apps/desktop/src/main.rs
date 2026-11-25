@@ -1104,6 +1104,8 @@ struct Desktop {
 	gsync: std::sync::Arc<std::sync::atomic::AtomicBool>,
 	tray: Option<platform::tray::Tray>,
 	hotkeys: platform::hotkeys::Hotkeys,
+	/// When a released push-to-talk key stops transmitting.
+	ptt_release: Option<std::time::Instant>,
 	/// Linux desktop light/dark preference; winit reports it everywhere else.
 	system_theme: platform::system_theme::SystemTheme,
 	tray_error: Option<&'static str>,
@@ -2114,6 +2116,12 @@ impl Desktop {
 			messaging.preview_settings(&page);
 		}
 		#[cfg(feature = "demo")]
+		if demo && std::env::args().any(|arg| arg == "--demo-deepfilternet") {
+			// Preview voice controls are read-only, so show this Custom suppressor preselected.
+			messaging.voice_processing.edit().suppression =
+				model::voice_settings::NoiseSuppression::DeepFilterNet;
+		}
+		#[cfg(feature = "demo")]
 		if demo
 			&& let Some(tab) = std::env::args().find_map(|arg| {
 				arg.strip_prefix("--demo-theme-maker")
@@ -2616,6 +2624,7 @@ impl Desktop {
 			app_menu,
 			instance: Default::default(),
 			hotkeys,
+			ptt_release: None,
 			system_theme,
 			tray_error: None,
 			#[cfg(feature = "demo")]
@@ -6266,9 +6275,32 @@ impl eframe::App for Desktop {
 				}
 			}
 		}
-		self.messaging.voice_ptt_active = self.messaging.voice_push_to_talk
-			&& self.state.voice.active.is_some()
-			&& (self.messaging.push_to_talk_down(ctx) || self.hotkeys.push_to_talk_down());
+		let talking = self.messaging.voice_push_to_talk && self.state.voice.active.is_some();
+		let held =
+			talking && (self.messaging.push_to_talk_down(ctx) || self.hotkeys.push_to_talk_down());
+		let now = std::time::Instant::now();
+		if held {
+			self.ptt_release = None;
+		} else if self.messaging.voice_ptt_active && self.ptt_release.is_none() {
+			// The denoiser delays captured audio; keep the microphone open for that delay too,
+			// except after automatic suppression has fallen back to the shorter RNNoise path.
+			let suppression = self.messaging.voice_processing.effective().suppression;
+			let fell_back = suppression == model::voice_settings::NoiseSuppression::Auto
+				&& self.messaging.voice_suppression_fell_back;
+			let extra = if fell_back {
+				Duration::ZERO
+			} else {
+				suppression.extra_delay()
+			};
+			self.ptt_release = Some(now + model::keybinds::PUSH_TO_TALK_RELEASE + extra);
+		}
+		// Like Discord, transmission lingers briefly after release so a word is not clipped.
+		let lingering = talking && self.ptt_release.is_some_and(|until| until > now);
+		match self.ptt_release {
+			Some(until) if lingering => ctx.request_repaint_after(until - now),
+			_ => self.ptt_release = None,
+		}
+		self.messaging.voice_ptt_active = held || lingering;
 		self.notification_runtime.ptt(
 			self.messaging.voice_push_to_talk,
 			!self.fixture_only

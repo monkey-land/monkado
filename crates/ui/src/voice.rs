@@ -3624,7 +3624,7 @@ impl MessagingUi {
 			(
 				InputProfile::VoiceIsolation,
 				"Isolamento de voz",
-				"Supressão RNNoise, cancelamento de eco e ganho automático para fala.",
+				"Supressão de ruído automática, cancelamento de eco e ganho automático para fala.",
 			),
 			(
 				InputProfile::Studio,
@@ -3647,6 +3647,12 @@ impl MessagingUi {
 			{
 				self.voice_processing.profile = profile;
 			}
+		}
+		let fell_back = "RNNoise ativo: este dispositivo está ocupado demais para o DeepFilterNet.";
+		if self.voice_processing.profile == InputProfile::VoiceIsolation
+			&& self.voice_suppression_fell_back
+		{
+			design::hint(ui, fell_back);
 		}
 		if self.voice_processing.profile == InputProfile::Custom {
 			design::card_divider(ui);
@@ -3695,9 +3701,11 @@ impl MessagingUi {
 			}
 			design::card_divider(ui);
 			let choices = [
+				(NoiseSuppression::Auto, "Automático"),
 				(NoiseSuppression::Off, "Desligado"),
 				(NoiseSuppression::RnNoise, "RNNoise"),
 				(NoiseSuppression::WebRtc, "WebRTC"),
+				(NoiseSuppression::DeepFilterNet, "DeepFilterNet"),
 			];
 			design::row(
 				ui,
@@ -3725,7 +3733,22 @@ impl MessagingUi {
 						});
 				},
 			);
-			if processing.suppression == NoiseSuppression::WebRtc {
+			if processing.suppression == NoiseSuppression::Auto {
+				design::hint(
+					ui,
+					if self.voice_suppression_fell_back {
+						fell_back
+					} else {
+						"Usa o DeepFilterNet e troca para o RNNoise quando o dispositivo está ocupado demais."
+					},
+				);
+			}
+			// RNNoise has no strength, so the control waits while it stands in.
+			if match processing.suppression {
+				NoiseSuppression::WebRtc | NoiseSuppression::DeepFilterNet => true,
+				NoiseSuppression::Auto => !self.voice_suppression_fell_back,
+				NoiseSuppression::Off | NoiseSuppression::RnNoise => false,
+			} {
 				ui.add_space(6.0);
 				let strength = ["Baixa", "Moderada", "Alta", "Muito alta"];
 				design::row(
