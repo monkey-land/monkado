@@ -4,6 +4,7 @@ use crate::{MessagingUi, design};
 use client_core::{
 	Command, State,
 	auth::AuthState,
+	screen::Viewers,
 	voice::{Participant, Phase, RosterEntry},
 };
 use egui::RichText;
@@ -131,7 +132,45 @@ impl MessagingUi {
 				button.widget_info(|| {
 					egui::WidgetInfo::labeled(egui::Role::Button, true, "Sair da tela cheia")
 				});
+				let exit_rect = button.rect;
 				exit |= button.on_hover_text("Sair da tela cheia (Esc)").clicked();
+				// Viewers sit left of the exit button on their own dark pill, as in Discord.
+				if let Some(call) = state.voice.active.as_ref()
+					&& let Some(viewers) = enlarged_viewers(
+						focus,
+						call,
+						self.voice_stream_viewers.as_ref(),
+						self.screen.shown_viewers(),
+					) {
+					let mut row = ui.new_child(
+						egui::UiBuilder::new()
+							.max_rect(egui::Rect::from_min_max(
+								egui::pos2(rect.left(), exit_rect.top()),
+								egui::pos2(exit_rect.left() - 18.0, exit_rect.bottom()),
+							))
+							.layout(egui::Layout::right_to_left(egui::Align::Center)),
+					);
+					let backdrop = row.painter().add(egui::Shape::Noop);
+					let shown = viewer_row(
+						&mut row,
+						&mut self.avatars,
+						state,
+						channel,
+						viewers,
+						24.0,
+						PILL_FILL,
+						egui::Color32::WHITE,
+					);
+					row.painter().set(
+						backdrop,
+						egui::epaint::RectShape::filled(
+							shown.rect.expand2(egui::vec2(10.0, 8.0)),
+							8,
+							PILL_FILL,
+						),
+					);
+					shown.on_hover_text(viewer_names(state, channel, viewers));
+				}
 			});
 		// "Parar de assistir" inside the fullscreen tile applies now, not after leaving fullscreen.
 		self.apply_watch_request(state);
@@ -998,6 +1037,8 @@ impl MessagingUi {
 							let can_watch = !is_own
 								&& !watching && (connected
 								|| (state.voice.active.is_none() && state.can_call(entry.channel)));
+							// A stream already being watched opens enlarged in its channel instead.
+							let can_open = can_watch || watching;
 							let url = state
 								.voice
 								.preview
@@ -1062,7 +1103,7 @@ impl MessagingUi {
 							let preview_response = ui.interact(
 								image_rect,
 								ui.scope_id().with("stream-preview-click"),
-								if can_watch {
+								if can_open {
 									egui::Sense::click()
 								} else {
 									egui::Sense::hover()
@@ -1071,7 +1112,7 @@ impl MessagingUi {
 							let overlay = if is_own {
 								Some("Você está transmitindo")
 							} else if watching {
-								Some("Assistindo")
+								Some("Abrir transmissão")
 							} else if can_watch {
 								Some("Assistir transmissão")
 							} else {
@@ -1092,11 +1133,11 @@ impl MessagingUi {
 									egui::FontId::new(16.0, design::medium_family(ui.ctx())),
 									egui::Color32::WHITE,
 								);
-								if can_watch {
+								if can_open {
 									ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
 								}
 							}
-							if can_watch && preview_response.clicked() {
+							if can_open && preview_response.clicked() {
 								self.stream_preview_watch =
 									Some((entry.channel, entry.participant.user));
 								watch_clicked = true;
@@ -1104,12 +1145,12 @@ impl MessagingUi {
 							let button_label = if is_own {
 								"Você está transmitindo"
 							} else if watching {
-								"Assistindo"
+								"Abrir transmissão"
 							} else {
 								"Assistir transmissão"
 							};
 							let button = ui
-								.add_enabled_ui(can_watch, |ui| {
+								.add_enabled_ui(can_open, |ui| {
 									design::positive_icon_button(
 										ui,
 										crate::icons::Icon::ScreenShare,
@@ -1119,8 +1160,6 @@ impl MessagingUi {
 								.inner
 								.on_disabled_hover_text(if is_own {
 									"Você já está transmitindo neste canal"
-								} else if watching {
-									"Você já está assistindo esta transmissão"
 								} else {
 									"Entre neste canal de voz antes de assistir"
 								});
@@ -1209,6 +1248,11 @@ impl MessagingUi {
 				if state.voice.active.as_ref().and_then(|call| call.watching) == Some(user)
 					|| state.watch_stream(user).is_some()
 				{
+					// A share in its own window docks back first: the stage leaves a detached
+					// share out of its tiles, which would drop this focus on the next frame.
+					if self.voice_stream_detached == Some(user) {
+						self.voice_stream_detached = None;
+					}
 					self.voice_focus = Some(StageFocus::Stream(user));
 					open_stage = true;
 				} else {
@@ -1775,7 +1819,37 @@ impl MessagingUi {
 			if response.clicked() {
 				return Some(tile.focus());
 			}
-			response.on_hover_text(hover);
+			// A live share also says who is watching it without enlarging it.
+			let viewers = match tile {
+				// Discord's roster belongs to the primary watched share only; an extra P2P
+				// share watched beside it must not borrow those viewers.
+				Tile::Stream(streamer) => self.voice_stream_viewers.as_ref().filter(|_| {
+					state.voice.active.as_ref().and_then(|call| call.watching) == Some(*streamer)
+				}),
+				Tile::LocalScreen => self.screen.shown_viewers(),
+				Tile::Participant(_) => None,
+			}
+			.filter(|viewers| viewers.count > 0);
+			match viewers {
+				Some(viewers) => {
+					let avatars = &mut self.avatars;
+					response.on_hover_ui(|ui| {
+						ui.label(hover);
+						ui.add_space(4.0);
+						let text = ui.visuals().text_color();
+						let ring = ui.visuals().window_fill;
+						viewer_row(ui, avatars, state, channel, viewers, 22.0, ring, text);
+						ui.label(
+							RichText::new(viewer_names(state, channel, viewers))
+								.size(12.0)
+								.color(design::palette(ui).muted),
+						);
+					});
+				}
+				None => {
+					response.on_hover_text(hover);
+				}
+			}
 		} else if !hint.is_empty() {
 			response.on_hover_text(hint);
 		}
@@ -1822,13 +1896,16 @@ impl MessagingUi {
 		content: egui::Rect,
 		compact: bool,
 	) {
-		let viewers = &self.screen.viewers;
-		if viewers.is_empty() {
+		let Some(viewers) = self
+			.screen
+			.shown_viewers()
+			.filter(|viewers| viewers.count > 0)
+		else {
 			return;
-		}
+		};
 		let (height, font) = if compact { (18.0, 10.0) } else { (24.0, 12.0) };
 		let galley = ui.painter().layout_no_wrap(
-			viewers.len().to_string(),
+			viewers.count.to_string(),
 			egui::FontId::new(font, design::medium_family(ui.ctx())),
 			egui::Color32::WHITE,
 		);
@@ -1859,6 +1936,7 @@ impl MessagingUi {
 			egui::Color32::WHITE,
 		);
 		let names = viewers
+			.ids
 			.iter()
 			.map(|user| {
 				participant_user(state, channel, *user)
@@ -5900,6 +5978,119 @@ impl<'a> MemberIndex<'a> {
 	}
 }
 
+/// Faces drawn before the eye and count; the hover text names the rest.
+const VIEWER_FACES: usize = 4;
+
+/// Discord's roster for the share `focus` enlarges in `call`, once it lists anyone.
+pub(super) fn enlarged_viewers<'a>(
+	focus: StageFocus,
+	call: &client_core::voice::Call,
+	watched: Option<&'a Viewers>,
+	own: Option<&'a Viewers>,
+) -> Option<&'a Viewers> {
+	match focus {
+		StageFocus::Stream(user) if call.watching == Some(user) => watched,
+		StageFocus::LocalScreen => own,
+		_ => None,
+	}
+	.filter(|viewers| viewers.count > 0)
+}
+
+/// Discord's stream viewer list: overlapping faces, each cut out of `ring`, then an eye and
+/// the count. Hover text is left to the caller.
+#[allow(clippy::too_many_arguments)] // Placement colours differ per surface.
+pub(super) fn viewer_row(
+	ui: &mut egui::Ui,
+	avatars: &mut crate::avatars::Avatars,
+	state: &State,
+	channel: Id,
+	viewers: &Viewers,
+	size: f32,
+	ring: egui::Color32,
+	text: egui::Color32,
+) -> egui::Response {
+	let faces = viewers.ids.len().min(VIEWER_FACES);
+	let step = size * 0.7;
+	let eye = 16.0;
+	let galley = ui.painter().layout_no_wrap(
+		viewers.count.to_string(),
+		egui::FontId::new(13.0, design::medium_family(ui.ctx())),
+		text,
+	);
+	let faces_width = if faces == 0 {
+		0.0
+	} else {
+		size + step * (faces - 1) as f32 + 6.0
+	};
+	let (rect, response) = ui.allocate_exact_size(
+		egui::vec2(faces_width + eye + 4.0 + galley.size().x, size),
+		egui::Sense::hover(),
+	);
+	if ui.is_rect_visible(rect) {
+		// The first viewer is painted last, so it sits on top of the stack.
+		for (index, id) in viewers.ids[..faces].iter().enumerate().rev() {
+			let face = egui::Rect::from_min_size(
+				egui::pos2(rect.left() + step * index as f32, rect.top()),
+				egui::Vec2::splat(size),
+			);
+			ui.painter()
+				.circle_filled(face.center(), size * 0.5 + 2.0, ring);
+			match participant_user(state, channel, *id) {
+				Some(user) => avatars.paint_user(ui, user, size, face, state.demo),
+				None => design::paint_avatar(ui, "Viewer", size, face),
+			}
+		}
+		let left = rect.left() + faces_width;
+		crate::icons::paint(
+			ui.painter(),
+			crate::icons::Icon::Eye,
+			egui::Rect::from_min_size(
+				egui::pos2(left, rect.center().y - eye * 0.5),
+				egui::Vec2::splat(eye),
+			),
+			text,
+		);
+		let at = egui::pos2(left + eye + 4.0, rect.center().y - galley.size().y * 0.5);
+		ui.painter().galley(at, galley, text);
+	}
+	let label = viewer_names(state, channel, viewers);
+	response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &label));
+	response
+}
+
+/// Who is watching, by name: the first few in Discord's order, then how many more.
+pub(super) fn viewer_names(state: &State, channel: Id, viewers: &Viewers) -> String {
+	const LISTED: usize = 8;
+	let unknown = crate::i18n::translate("voice-viewer-names-unknown-viewer");
+	let names: Vec<&str> = viewers
+		.ids
+		.iter()
+		.take(LISTED)
+		.map(|id| {
+			participant_user(state, channel, *id)
+				.map_or(unknown.as_str(), |user| user.name.as_str())
+		})
+		.collect();
+	if names.is_empty() {
+		return crate::i18n::translate_count(
+			"voice-viewer-names-count",
+			usize::from(viewers.count),
+			&[],
+		);
+	}
+	let rest = usize::from(viewers.count).saturating_sub(names.len());
+	let names = names.join(", ");
+	if rest == 0 {
+		crate::i18n::translate_args("voice-viewer-names-watching", &[("names", &names)])
+	} else {
+		crate::i18n::translate_count(
+			"voice-viewer-names-watching-more",
+			rest,
+			&[("names", &names)],
+		)
+	}
+}
+
 /// Find a call participant's user from self, DM recipients or the roster.
 pub(super) fn participant_user(state: &State, channel: Id, user: Id) -> Option<&model::User> {
 	state
@@ -7563,6 +7754,63 @@ mod tests {
 		messaging.screen.context = Some(context);
 		messaging.screen.busy = false;
 		assert!(!drawn(&mut messaging));
+	}
+
+	#[test]
+	fn a_watched_streams_preview_still_opens_it() {
+		let mut state = test_support::voice_demo_state();
+		state.selected = Some(Id(20));
+		let call = state.voice.active.as_mut().unwrap();
+		let channel = call.channel;
+		call.phase = Phase::Connected;
+		call.watching = Some(Id(3));
+		let mut entry = state
+			.voice
+			.roster
+			.iter()
+			.find(|entry| entry.channel == channel && entry.participant.user == Id(3))
+			.cloned()
+			.expect("fixture streamer");
+		entry.participant.streaming = true;
+		let mut messaging = MessagingUi::default();
+		let ctx = egui::Context::default();
+		let frame = |messaging: &mut MessagingUi, events: Vec<egui::Event>, time: f64| {
+			ctx.run_ui(
+				egui::RawInput {
+					screen_rect: Some(egui::Rect::from_min_size(
+						egui::Pos2::ZERO,
+						egui::vec2(640.0, 420.0),
+					)),
+					events,
+					time: Some(time),
+					..Default::default()
+				},
+				|ui| {
+					ui.set_width(190.0);
+					messaging.voice_participant(ui, &state, &entry);
+				},
+			)
+			.drop_without_applying_deltas();
+		};
+		let row = egui::pos2(20.0, 17.0);
+		frame(&mut messaging, vec![egui::Event::PointerMoved(row)], 0.0);
+		frame(&mut messaging, vec![egui::Event::PointerMoved(row)], 0.01);
+		// The card's middle is its preview image, a click target like the button under it.
+		let card = messaging.stream_preview_hover.expect("preview card").1;
+		let press = |pressed| egui::Event::PointerButton {
+			pos: card.center(),
+			button: egui::PointerButton::Primary,
+			pressed,
+			modifiers: Default::default(),
+		};
+		frame(
+			&mut messaging,
+			vec![egui::Event::PointerMoved(card.center())],
+			0.02,
+		);
+		frame(&mut messaging, vec![press(true)], 0.03);
+		frame(&mut messaging, vec![press(false)], 0.04);
+		assert_eq!(messaging.stream_preview_watch, Some((channel, Id(3))));
 	}
 
 	#[test]
