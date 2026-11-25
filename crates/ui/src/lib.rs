@@ -1046,6 +1046,16 @@ impl MessagingUi {
 			.collect()
 	}
 	/// Clears a viewer whose conversation or selected file changed, before requesting a decode.
+	/// Opens staged file `index` full size, as a click on its thumbnail does.
+	pub fn open_attachment_view(&mut self, state: &State, index: usize) {
+		let Some((filename, bytes)) = self.selected_files().get(index).cloned() else {
+			return;
+		};
+		self.attachment_view_file =
+			Some((filename, bytes, self.attachment_keys.get(index).copied()));
+		self.attachment_view_open = Some(index);
+		self.attachment_view_scope = Some((state.generation, state.selected));
+	}
 	pub fn validate_attachment_view(&mut self, state: &State) {
 		let valid = self.attachment_view_open.is_some_and(|index| {
 			self.attachment_view_scope == Some((state.generation, state.selected))
@@ -4743,14 +4753,7 @@ impl MessagingUi {
 										self.attachment_view_scope = None;
 									}
 									attachments::PendingAction::Preview => {
-										self.attachment_view_file = Some((
-											filename.clone(),
-											*bytes,
-											self.attachment_keys.get(index).copied(),
-										));
-										self.attachment_view_open = Some(index);
-										self.attachment_view_scope =
-											Some((state.generation, state.selected));
+										self.open_attachment_view(state, index);
 									}
 									attachments::PendingAction::None => {}
 								}

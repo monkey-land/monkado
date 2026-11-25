@@ -2275,9 +2275,11 @@ impl Desktop {
 				);
 			}
 		} else if demo
-			&& std::env::args()
-				.any(|arg| arg == "--demo-attachment" || arg == "--demo-attachment=multi")
-		{
+			&& std::env::args().any(|arg| {
+				arg == "--demo-attachment"
+					|| arg == "--demo-attachment=multi"
+					|| arg == "--demo-attachment=view"
+			}) {
 			// Synthetic gradients stand in for decoded photos; no file is read or uploaded.
 			let gradient = |width: usize, height: usize, hue: f32| {
 				let pixels = (0..width * height)
@@ -2315,6 +2317,10 @@ impl Desktop {
 				messaging.preview_attachment("synthetic-agenda.pdf", 482_311, None);
 				state.status =
 					"Offline fixture · three synthetic attachments staged in the composer";
+			} else if std::env::args().any(|arg| arg == "--demo-attachment=view") {
+				// Opens the staged image full size, as a click on its thumbnail does.
+				messaging.open_attachment_view(&state, 0);
+				state.status = "Offline fixture · synthetic attachment opened full size";
 			} else {
 				state.status = "Offline fixture · synthetic attachment staged in the composer";
 			}
