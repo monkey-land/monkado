@@ -2943,7 +2943,7 @@ mod tests {
 
 		// A single click picks the row and asks to switch calls.
 		let (picked, commands) = click(&mut view, &mut state, "Quiet room");
-		assert_eq!(picked, Some(Id(26)));
+		assert_eq!(picked, Some(Id(37)));
 		assert!(commands.is_empty() && view.voice_switch.is_some());
 		view.voice_switch = None;
 

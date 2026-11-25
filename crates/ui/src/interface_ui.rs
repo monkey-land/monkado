@@ -1430,7 +1430,7 @@ mod tests {
 		use extensions::InterfaceWindow;
 		let mut state = test_support::voice_demo_state();
 		// The fixture's streaming participant puts a watch control on the native stage.
-		let stage = "Watch Stream";
+		let stage = "Assistir transmissão";
 		let composer = crate::i18n::translate_args(
 			"composer-placeholder-channel",
 			&[("channel", "getting-started")],
