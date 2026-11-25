@@ -1200,6 +1200,11 @@ impl MessagingUi {
 				if state.voice.active.as_ref().and_then(|call| call.watching) == Some(user)
 					|| state.watch_stream(user).is_some()
 				{
+					// A share in its own window docks back first: the stage leaves a detached
+					// share out of its tiles, which would drop this focus on the next frame.
+					if self.voice_stream_detached == Some(user) {
+						self.voice_stream_detached = None;
+					}
 					self.voice_focus = Some(StageFocus::Stream(user));
 					open_stage = true;
 				} else {
@@ -1768,7 +1773,11 @@ impl MessagingUi {
 			}
 			// A live share also says who is watching it without enlarging it.
 			let viewers = match tile {
-				Tile::Stream(_) => self.voice_stream_viewers.as_ref(),
+				// Discord's roster belongs to the primary watched share only; an extra P2P
+				// share watched beside it must not borrow those viewers.
+				Tile::Stream(streamer) => self.voice_stream_viewers.as_ref().filter(|_| {
+					state.voice.active.as_ref().and_then(|call| call.watching) == Some(*streamer)
+				}),
 				Tile::LocalScreen => self.screen.shown_viewers(),
 				Tile::Participant(_) => None,
 			}
