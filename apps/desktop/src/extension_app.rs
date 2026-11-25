@@ -765,8 +765,17 @@ pub fn snapshot(
 		measured =
 			measured.saturating_sub(serde_json::to_vec(&item).map_or(0, |bytes| bytes.len() + 1));
 	}
-	while matches!(app.bytes(), Err(Error::Limit))
-		&& let Some(group) = app.channels.as_mut()
+	// The message-details group added below needs room for its keys even when empty, so the
+	// exact trim also keeps that reserve; otherwise a snapshot right at the cap is dropped.
+	let reserve = if granted(Capability::MessageDetails) && readable.is_some() {
+		512
+	} else {
+		0
+	};
+	while app.bytes().map_or_else(
+		|error| matches!(error, Error::Limit),
+		|bytes| bytes.saturating_add(reserve) > MAX_APP_SNAPSHOT_BYTES,
+	) && let Some(group) = app.channels.as_mut()
 		&& group.items.pop().is_some()
 	{
 		group.truncated = true;

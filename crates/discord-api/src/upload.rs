@@ -226,7 +226,15 @@ impl Source {
 		let path = self.path.clone();
 		let size = self.size;
 		tokio::task::spawn_blocking(move || {
-			let bytes = std::fs::read(&path).ok()?;
+			use std::io::Read;
+			// Read one byte past the inspected size: a file that grew since then is refused
+			// without ever allocating more than that bound.
+			let mut bytes = Vec::with_capacity(usize::try_from(size).ok()?);
+			std::fs::File::open(&path)
+				.ok()?
+				.take(size.saturating_add(1))
+				.read_to_end(&mut bytes)
+				.ok()?;
 			drop(hold);
 			(bytes.len() as u64 == size).then(|| bytes.into())
 		})

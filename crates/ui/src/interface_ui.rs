@@ -555,9 +555,15 @@ fn row_id(plugin: &str, node: &extensions::InterfaceNode, index: usize) -> egui:
 }
 
 /// Whether a row or dock click is the primary open action: a double click, or Enter on the
-/// focused item (egui reports that, like Space, as a click).
+/// focused item (egui reports that, like Space, as a click). egui counts a double click by
+/// position and time only, so both clicks must also have landed on this same item.
 fn opened(ui: &egui::Ui, response: &egui::Response) -> bool {
-	response.double_clicked()
+	let last = egui::Id::unique("plugin-interface-last-click");
+	let previous = ui.data(|data| data.get_temp::<egui::Id>(last));
+	if response.clicked() {
+		ui.data_mut(|data| data.insert_temp(last, response.id));
+	}
+	(response.double_clicked() && previous == Some(response.id))
 		|| (response.has_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)))
 }
 
@@ -1183,6 +1189,48 @@ mod tests {
 				|command| matches!(command, Command::MarkAllRead { channels, .. } if channels.len() == 1)
 			),
 			"the remaining batch was issued"
+		);
+	}
+
+	/// egui pairs clicks by position and time only: two quick clicks straddling the boundary
+	/// between rows are two single clicks, never a double click on the second row.
+	#[test]
+	fn quick_clicks_on_neighbouring_rows_are_not_a_double_click() {
+		let mut state = one_server();
+		let mut client = Client::new(Some(interface(
+			vec![node("server:10", "Voice club"), node("channel:30", "Lobby")],
+			None,
+		)));
+		client.frame(&mut state, vec![]);
+		let (texts, _) = client.frame(&mut state, vec![]);
+		let at = |name: &str| {
+			texts
+				.iter()
+				.find(|(text, _)| text == name)
+				.map(|(_, point)| *point)
+				.expect("row")
+		};
+		let (server, lobby) = (at("Voice club"), at("Lobby"));
+		let boundary = (server.y + lobby.y) * 0.5 + 4.0;
+		for y in [boundary - 2.0, boundary + 2.0] {
+			for pressed in [true, false] {
+				client.frame(
+					&mut state,
+					vec![egui::Event::PointerButton {
+						pos: egui::pos2(lobby.x, y),
+						button: egui::PointerButton::Primary,
+						pressed,
+						modifiers: egui::Modifiers::NONE,
+					}],
+				);
+			}
+		}
+		let routed = client.routed();
+		assert_eq!(routed.len(), 2, "each side routes once: {routed:?}");
+		assert_ne!(routed[0].values.get("id"), routed[1].values.get("id"));
+		assert!(
+			!routed[1].double_clicked,
+			"a click on another row is not a double"
 		);
 	}
 
