@@ -2880,11 +2880,16 @@ mod tests {
 			let pcm = std::array::from_fn::<_, 1920, _>(|i| {
 				seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
 				let t = (frame * 960 + i / 2) as f32 / 48_000.0;
-				(t * 180.0 * std::f32::consts::TAU).sin() * 0.5 + (seed as i32 as f32 / i32::MAX as f32) * 0.1
+				(t * 180.0 * std::f32::consts::TAU).sin() * 0.5
+					+ (seed as i32 as f32 / i32::MAX as f32) * 0.1
 			});
 			let mut packet = [0; 1275];
 			let length = microphone.encode_float(&pcm, &mut packet).unwrap();
-			assert!(packet[0] >> 3 < 16, "frame {frame}: config {}", packet[0] >> 3);
+			assert!(
+				packet[0] >> 3 < 16,
+				"frame {frame}: config {}",
+				packet[0] >> 3
+			);
 			assert!(length < 400, "frame {frame}: {length} bytes");
 		}
 		assert!(discovery(&reply, 43).is_err());
