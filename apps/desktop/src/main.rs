@@ -6282,16 +6282,14 @@ impl eframe::App for Desktop {
 		if held {
 			self.ptt_release = None;
 		} else if self.messaging.voice_ptt_active && self.ptt_release.is_none() {
-			// The denoiser delays captured audio; keep the microphone open for that delay too,
-			// except after automatic suppression has fallen back to the shorter RNNoise path.
-			let suppression = self.messaging.voice_processing.effective().suppression;
-			let fell_back = suppression == model::voice_settings::NoiseSuppression::Auto
-				&& self.messaging.voice_suppression_fell_back;
-			let extra = if fell_back {
-				Duration::ZERO
-			} else {
-				suppression.extra_delay()
-			};
+			// The denoiser delays captured audio; keep the microphone open for that delay too.
+			// After an automatic fallback, RNNoise keeps DeepFilterNet's delay in its queue.
+			let extra = self
+				.messaging
+				.voice_processing
+				.effective()
+				.suppression
+				.extra_delay();
 			self.ptt_release = Some(now + model::keybinds::PUSH_TO_TALK_RELEASE + extra);
 		}
 		// Like Discord, transmission lingers briefly after release so a word is not clipped.

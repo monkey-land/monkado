@@ -99,6 +99,7 @@ impl Mixer {
 					.find(|(user, _)| *user == speaker.user)
 					.map_or(100, |(_, percent)| (*percent).min(200)),
 			) / 100.0;
+			speaker.jitter.tick();
 			let mut energy = 0.0;
 			let mut filled = 0;
 			let mut decoded = 0;
@@ -122,6 +123,8 @@ impl Mixer {
 						Packet::Audio(opus) => (opus.as_slice(), speaker.pcm.len(), false),
 						Packet::Fec(opus) => (opus.as_slice(), lost, true),
 						Packet::Conceal => (&[][..], lost, false),
+						// A stretch adds exactly one 20ms tick of delay.
+						Packet::Stretch => (&[][..], 960, false),
 					};
 					let Ok(length) =
 						speaker

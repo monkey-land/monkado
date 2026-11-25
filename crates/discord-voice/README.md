@@ -92,7 +92,7 @@ The desktop persists Voice Isolation, Studio and Custom profiles via the shared
 and −55 dBFS sensitivity; Studio retains only manual gain and privacy/permission gates.
 Custom selects Off, RNNoise (nnnoiseless 0.5.2), WebRTC (levels 0–3),
 DeepFilterNet (DFN3 in `crates/deepfilternet`, levels 0–3; adds 30 ms), or Automatic
-(DeepFilterNet until it averages over 3 ms per 10 ms hop for half a second, then RNNoise),
+(DeepFilterNet until the rolling cost of its last 50 hops, each capped at 10 ms, passes 150 ms, then RNNoise),
 independent echo cancellation/AGC and optional −80..=0 dBFS sensitivity. Sensitivity
 uses 3 dB hysteresis, 200 ms release and a 5 ms ramp. Local activity uses the selected
 threshold, or −70 dBFS when open; remote indicators remain display-only at −45 dBFS.

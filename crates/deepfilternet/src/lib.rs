@@ -52,7 +52,7 @@ impl DeepFilterNet {
 	/// Attenuates bins the model already reduced strongly a little further. Zero disables
 	/// the filter; the reference setting is 0.02.
 	pub fn set_post_filter(&mut self, beta: f32) {
-		self.post_filter = beta.max(0.0);
+		self.post_filter = if beta.is_finite() { beta.max(0.0) } else { 0.0 };
 	}
 
 	/// Drops all audio history, so the next frame starts a new stream.

@@ -715,6 +715,13 @@ impl Streams {
 		}
 		let host = cpal::default_host();
 		let (input_stream, input_read, input_id) = if gate.input_enabled.load(Ordering::Acquire) {
+			// A failure from an earlier speaker candidate must not drop this microphone.
+			let _ = gate.input_failed_revision.compare_exchange(
+				revision,
+				0,
+				Ordering::AcqRel,
+				Ordering::Acquire,
+			);
 			match open_input_stream(&host, settings, &gate, revision) {
 				Ok((stream, read, id)) => (Some(stream), read, id),
 				Err(_) => {

@@ -53,7 +53,13 @@ impl Voice {
 /// differs by float rounding only.
 #[test]
 fn matches_the_reference_runtime() {
-	let golden = include_bytes!("fixtures/reference.f32").as_chunks::<4>().0;
+	let fixture = include_bytes!("fixtures/reference.f32");
+	assert_eq!(
+		fixture.len(),
+		20 * FRAME * 4,
+		"fixture must hold twenty full frames"
+	);
+	let golden = fixture.as_chunks::<4>().0;
 	let mut golden = golden.iter().map(|bytes| f32::from_le_bytes(*bytes));
 	let mut voice = Voice::new();
 	let mut filter = DeepFilterNet::new();

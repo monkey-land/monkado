@@ -17,8 +17,10 @@ pub(crate) enum Packet {
 	Audio(Vec<u8>),
 	/// The next packet, decoded with FEC to rebuild the missing one before it.
 	Fec(Vec<u8>),
-	/// Opus packet-loss concealment.
+	/// Opus packet-loss concealment for a missing packet.
 	Conceal,
+	/// 20ms of concealment that holds playout while a deeper target takes effect.
+	Stretch,
 }
 
 pub(crate) struct Jitter {
@@ -87,10 +89,28 @@ impl Jitter {
 	}
 	fn late(&mut self) {
 		self.clean = 0;
-		self.shrink = 0;
+		if self.shrink > 0 {
+			// The silence that would have shortened playout was never dropped, so the
+			// actual delay is still one tick deeper: restore the target without stretching.
+			self.shrink -= 1;
+			self.target += 1;
+			return;
+		}
 		if self.target < MAX_TARGET {
 			self.target += 1;
 			self.stretch = self.stretch.saturating_add(1).min(MAX_TARGET);
+		}
+	}
+	/// Advances the clean interval by one 20ms mixer tick, whatever the packet duration.
+	pub fn tick(&mut self) {
+		if self.next.is_none() {
+			return;
+		}
+		self.clean = self.clean.saturating_add(1);
+		if self.clean >= SHRINK_AFTER && self.target > MIN_TARGET {
+			self.target -= 1;
+			self.shrink = self.shrink.saturating_add(1);
+			self.clean = 0;
 		}
 	}
 	fn take(&mut self, sequence: u16) -> Option<Vec<u8>> {
@@ -113,17 +133,11 @@ impl Jitter {
 		if self.stretch > 0 && !self.packets.is_empty() {
 			// Hold the sequence for one concealed tick so the deeper target takes effect.
 			self.stretch -= 1;
-			return Some(Packet::Conceal);
+			return Some(Packet::Stretch);
 		}
 		self.next = Some(next.wrapping_add(1));
 		if let Some(opus) = self.take(next) {
 			self.missing = 0;
-			self.clean = self.clean.saturating_add(1);
-			if self.clean >= SHRINK_AFTER && self.target > MIN_TARGET {
-				self.target -= 1;
-				self.shrink = self.shrink.saturating_add(1);
-				self.clean = 0;
-			}
 			if self.shrink > 0
 				&& opus == davey::OPUS_SILENCE_PACKET
 				&& let Some(following) = self.take(next.wrapping_add(1))
@@ -236,6 +250,7 @@ mod tests {
 					jitter.push(*sequence, vec![1]);
 				}
 				*sequence = sequence.wrapping_add(1);
+				jitter.tick();
 				played += usize::from(matches!(jitter.pop(), Some(Packet::Audio(_))));
 			}
 			delayed.clear();
@@ -263,10 +278,37 @@ mod tests {
 			};
 			jitter.push(sequence, packet);
 			sequence = sequence.wrapping_add(1);
+			jitter.tick();
 			dropped_speech |= matches!(jitter.pop(), Some(Packet::Conceal) | None) && !silent;
 		}
 		assert!(jitter.target < deep);
 		assert!(!dropped_speech);
 		assert!(jitter.packets.len() <= usize::from(jitter.target) + 1);
+	}
+	#[test]
+	fn late_packet_during_a_pending_shrink_never_exceeds_the_cap() {
+		let mut jitter = Jitter {
+			target: MAX_TARGET,
+			..Jitter::default()
+		};
+		// Continuous speech: the target shrinks but no silence arrives to drop.
+		let mut sequence = 0u16;
+		for _ in 0..=SHRINK_AFTER {
+			jitter.push(sequence, vec![1]);
+			sequence = sequence.wrapping_add(1);
+			jitter.tick();
+			jitter.pop();
+		}
+		assert_eq!((jitter.target, jitter.shrink), (MAX_TARGET - 1, 1));
+		// A late packet restores the depth playout never left; it must not stretch past it.
+		let played = jitter.next.unwrap();
+		jitter.push(played.wrapping_sub(1), vec![2]);
+		assert_eq!(
+			(jitter.target, jitter.shrink, jitter.stretch),
+			(MAX_TARGET, 0, 0)
+		);
+		jitter.push(played.wrapping_sub(2), vec![2]);
+		assert_eq!(jitter.target, MAX_TARGET);
+		assert_eq!(jitter.stretch, 0);
 	}
 }
