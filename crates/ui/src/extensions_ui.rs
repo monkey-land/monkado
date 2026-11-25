@@ -3321,7 +3321,9 @@ fn capability_label(capability: Capability) -> &'static str {
 		Capability::InterfaceTweaks => {
 			"Mudar a aparência ou o comportamento de partes da interface"
 		}
-		Capability::InterfaceUi => "Substituir os painéis principais pela lista de linhas do plug-in",
+		Capability::InterfaceUi => {
+			"Substituir os painéis principais pela lista de linhas do plug-in"
+		}
 		Capability::StartScreen => {
 			"Substituir o logo e o texto da tela inicial pelas imagens e textos do plug-in, neste dispositivo, antes do login"
 		}
