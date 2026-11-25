@@ -315,6 +315,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = Indisponível par
 attachments-open-original-open-original = Abra o original…
 # Context: pending_card
 attachments-pending-card-remove-attachment = Remover anexo
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = Prévia em tamanho original indisponível
+attachments-pending-viewer-loading = Carregando imagem em tamanho real…
+attachments-pending-viewer-close = Fechar (Esc)
 attachments-loading-card-preparing = Preparando…
 # Context: show_status
 attachments-show-status-cancel-download = Cancelar download
@@ -4961,3 +4965,7 @@ moderation-confirm-timeout = Castigar
 # Context: moderation
 moderation-confirm-ban = Banir
 voice-voice-participant-camera-on = Câmera ligada
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Este plug-in ainda não tem nada para mostrar.

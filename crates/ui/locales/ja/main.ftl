@@ -316,6 +316,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = 合成アタッ�
 attachments-open-original-open-original = オリジナルを開く…
 # Context: pending_card
 attachments-pending-card-remove-attachment = 添付ファイルを削除する
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = フルサイズのプレビューを表示できません
+attachments-pending-viewer-loading = フルサイズの画像を読み込み中…
+attachments-pending-viewer-close = 閉じる (Esc)
 attachments-loading-card-preparing = 準備中…
 # Context: show_status
 attachments-show-status-cancel-download = ダウンロードをキャンセルする
@@ -4940,3 +4944,7 @@ moderation-confirm-timeout = タイムアウト
 # Context: moderation
 moderation-confirm-ban = BAN
 voice-voice-participant-camera-on = カメラオン
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = このプラグインにはまだ表示するものがありません。

@@ -30,6 +30,16 @@ pub(super) struct CallSwitch {
 	open: Option<Id>,
 }
 
+/// One roster entry as the client shows it; see [`MessagingUi::voice_roster`].
+pub struct VoiceRosterRow<'a> {
+	pub entry: &'a RosterEntry,
+	/// Display name when the member is loaded.
+	pub name: Option<&'a str>,
+	/// Mute and deafen flags as shown, including the own call's live state.
+	pub shown: Participant,
+	pub speaking: bool,
+}
+
 impl MessagingUi {
 	pub(super) fn exit_voice_fullscreen(&mut self) {
 		if let Some((_, ctx, previous, focus)) = self.voice_fullscreen.take() {
@@ -496,7 +506,12 @@ impl MessagingUi {
 			});
 	}
 
-	fn is_speaking(&self, state: &State, channel: Id, participant: &Participant) -> bool {
+	pub(super) fn is_speaking(
+		&self,
+		state: &State,
+		channel: Id,
+		participant: &Participant,
+	) -> bool {
 		!inactive_recipient(state, channel, participant.user)
 			&& !self.voice_user_locally_muted(participant.user)
 			&& !participant.muted
@@ -509,6 +524,39 @@ impl MessagingUi {
 					&& !call.deafened
 					&& !call.server_deafened
 			}) && self.voice_speaking.contains(&participant.user)
+	}
+
+	/// Everyone in a voice channel the account can view, as the client shows them: the
+	/// resolved display name when the member is loaded, the shown mute and deafen flags,
+	/// and whether the speaking indicator is lit. Channels without a positive view grant
+	/// are left out, like the directory. For plugin snapshots; no audio data leaves this
+	/// summary.
+	pub fn voice_roster<'a>(
+		&'a self,
+		state: &'a State,
+	) -> impl Iterator<Item = VoiceRosterRow<'a>> + 'a {
+		// Snapshots and the change key walk every row each frame, so rows needing the
+		// member fallback share one index of the loaded list. It is built on first use:
+		// rows filtered out or already carrying their member never pay for it.
+		let mut index = None;
+		state.voice.roster.iter().filter_map(move |entry| {
+			if !state.can_view(entry.channel) {
+				return None;
+			}
+			let shown = shown_participant(state, entry);
+			let member = entry.member.as_ref().or_else(|| {
+				index
+					.get_or_insert_with(|| MemberIndex::build(state))
+					.get(entry.guild, entry.participant.user)
+			});
+			let (user, name) = resolve_member_with(state, member, entry);
+			Some(VoiceRosterRow {
+				entry,
+				name: user.map(|_| name),
+				speaking: self.is_speaking(state, entry.channel, &shown),
+				shown,
+			})
+		})
 	}
 
 	pub(super) fn voice_channel_button(
@@ -5801,7 +5849,7 @@ fn stage_participants(state: &State, channel: Id) -> Vec<RosterEntry> {
 
 /// The local participant follows this device's toggles at once instead of waiting for the
 /// gateway echo, so a deafen shows the deafened glyph immediately (and in the offline preview).
-fn shown_participant(state: &State, entry: &RosterEntry) -> Participant {
+pub(super) fn shown_participant(state: &State, entry: &RosterEntry) -> Participant {
 	let mut participant = entry.participant;
 	if let Some(call) = state
 		.voice
@@ -5872,6 +5920,16 @@ pub(crate) fn resolve_member<'a>(
 					.find(|m| m.user.id == entry.participant.user)
 			})
 	});
+	resolve_member_with(state, member, entry)
+}
+
+/// [`resolve_member`] with the member already resolved, so a roster walker can share one
+/// [`MemberIndex`] instead of rescanning the member list per row.
+fn resolve_member_with<'a>(
+	state: &'a State,
+	member: Option<&'a model::Member>,
+	entry: &'a RosterEntry,
+) -> (Option<&'a model::User>, &'a str) {
 	let user = member
 		.map(|m| &m.user)
 		.or_else(|| participant_user(state, entry.channel, entry.participant.user));
@@ -5880,6 +5938,44 @@ pub(crate) fn resolve_member<'a>(
 		.or_else(|| user.map(|u| u.name.as_str()))
 		.unwrap_or("Participante");
 	(user, name)
+}
+
+/// The loaded member list indexed by user, so a whole roster resolves names without
+/// rescanning the slots per row. Only the guild the list was loaded for resolves, like
+/// the per-row scan it replaces.
+struct MemberIndex<'a> {
+	guild: Option<Id>,
+	members: std::collections::HashMap<Id, &'a model::Member>,
+}
+
+impl<'a> MemberIndex<'a> {
+	fn build(state: &'a State) -> Self {
+		let Some(list) = state.members.as_ref() else {
+			return Self {
+				guild: None,
+				members: std::collections::HashMap::new(),
+			};
+		};
+		// The first matching slot wins, as the per-row scan did.
+		let mut members = std::collections::HashMap::with_capacity(list.slots.len());
+		for member in list.slots.iter().flatten().filter_map(|slot| match slot {
+			model::MemberSlot::Person(member) => Some(member),
+			_ => None,
+		}) {
+			members.entry(member.user.id).or_insert(member);
+		}
+		Self {
+			guild: list.guild,
+			members,
+		}
+	}
+
+	fn get(&self, guild: Id, user: Id) -> Option<&'a model::Member> {
+		if self.guild != Some(guild) {
+			return None;
+		}
+		self.members.get(&user).copied()
+	}
 }
 
 /// Faces drawn before the eye and count; the hover text names the rest.
@@ -6451,7 +6547,7 @@ mod tests {
 			.find(|role| role.id == guild)
 			.unwrap()
 			.bits = p::VIEW_CHANNEL | p::CONNECT | p::MUTE_MEMBERS | p::MOVE_MEMBERS;
-		for id in [Id(25), Id(26)] {
+		for id in [Id(25), Id(37)] {
 			state.permissions.channels.insert(
 				id,
 				p::Channel {
@@ -6462,14 +6558,14 @@ mod tests {
 			);
 		}
 		state.permissions.clear_cache();
-		assert!(state.can_moderate_voice(guild, Id(25), Id(2), VoiceChange::Move(Some(Id(26)))));
+		assert!(state.can_moderate_voice(guild, Id(25), Id(2), VoiceChange::Move(Some(Id(37)))));
 		assert!(!state.can_moderate_voice(guild, Id(25), Id(1), VoiceChange::Mute(true)));
 		assert!(!state.can_moderate_voice(guild, Id(25), Id(2), VoiceChange::Move(Some(Id(25)))));
 		assert!(!state.can_moderate_voice(guild, Id(25), Id(2), VoiceChange::Move(Some(Id(20)))));
 		state
 			.permissions
 			.channels
-			.get_mut(&Id(26))
+			.get_mut(&Id(37))
 			.unwrap()
 			.overwrites = Some(vec![p::Overwrite {
 			id: guild,
@@ -6478,18 +6574,18 @@ mod tests {
 			deny: p::CONNECT,
 		}]);
 		state.permissions.clear_cache();
-		assert!(!state.can_moderate_voice(guild, Id(25), Id(2), VoiceChange::Move(Some(Id(26)))));
+		assert!(!state.can_moderate_voice(guild, Id(25), Id(2), VoiceChange::Move(Some(Id(37)))));
 		state
 			.permissions
 			.channels
-			.get_mut(&Id(26))
+			.get_mut(&Id(37))
 			.unwrap()
 			.overwrites = Some(vec![]);
 		state.permissions.clear_cache();
 		for change in [
 			VoiceChange::Mute(true),
 			VoiceChange::Mute(false),
-			VoiceChange::Move(Some(Id(26))),
+			VoiceChange::Move(Some(Id(37))),
 			VoiceChange::Move(None),
 		] {
 			let channel = state
@@ -6547,7 +6643,7 @@ mod tests {
 			}
 		}
 		assert!(
-			!state.can_moderate_voice(guild, Id(26), Id(2), VoiceChange::Mute(true)),
+			!state.can_moderate_voice(guild, Id(37), Id(2), VoiceChange::Mute(true)),
 			"departed source cannot be moderated"
 		);
 	}
@@ -6644,7 +6740,7 @@ mod tests {
 					.find(|role| role.id == guild)
 					.unwrap()
 					.bits = p::VIEW_CHANNEL | p::CONNECT | p::MOVE_MEMBERS;
-				for id in [Id(25), Id(26)] {
+				for id in [Id(25), Id(37)] {
 					state.permissions.channels.insert(
 						id,
 						p::Channel {
@@ -6658,7 +6754,7 @@ mod tests {
 					state
 						.permissions
 						.channels
-						.get_mut(&Id(26))
+						.get_mut(&Id(37))
 						.unwrap()
 						.overwrites = Some(vec![p::Overwrite {
 						id: guild,
@@ -6804,7 +6900,7 @@ mod tests {
 					}
 				}
 				let expected =
-					(!denied).then_some((guild, Id(25), Id(2), VoiceChange::Move(Some(Id(26)))));
+					(!denied).then_some((guild, Id(25), Id(2), VoiceChange::Move(Some(Id(37)))));
 				assert_eq!(
 					view.voice_moderation, expected,
 					"dragging={dragging}, denied={denied}"
@@ -6840,7 +6936,7 @@ mod tests {
 					if denied {
 						vec![]
 					} else {
-						vec![(Id(2), Id(25), VoiceChange::Move(Some(Id(26))))]
+						vec![(Id(2), Id(25), VoiceChange::Move(Some(Id(37))))]
 					}
 				);
 			}

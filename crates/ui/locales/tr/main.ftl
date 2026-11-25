@@ -316,6 +316,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = Sentetik ataşman
 attachments-open-original-open-original = Orijinali aç…
 # Context: pending_card
 attachments-pending-card-remove-attachment = Eki kaldır
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = Tam boyutlu önizleme kullanılamıyor
+attachments-pending-viewer-loading = Tam boyutlu resim yükleniyor…
+attachments-pending-viewer-close = Kapat (Esc)
 attachments-loading-card-preparing = Hazırlanıyor…
 # Context: show_status
 attachments-show-status-cancel-download = İndirmeyi iptal et
@@ -4943,3 +4947,7 @@ moderation-confirm-timeout = Zaman aşımı
 # Context: moderation
 moderation-confirm-ban = Yasakla
 voice-voice-participant-camera-on = Kamera açık
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Bu eklentinin henüz gösterecek bir şeyi yok.

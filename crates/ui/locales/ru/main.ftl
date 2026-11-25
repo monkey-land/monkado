@@ -316,6 +316,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = Недоступ�
 attachments-open-original-open-original = Открыть оригинал…
 # Context: pending_card
 attachments-pending-card-remove-attachment = Удалить вложение
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = Полноразмерный просмотр недоступен
+attachments-pending-viewer-loading = Загрузка полноразмерного изображения…
+attachments-pending-viewer-close = Закрыть (Esc)
 attachments-loading-card-preparing = Подготовка…
 # Context: show_status
 attachments-show-status-cancel-download = Отменить загрузку
@@ -4973,3 +4977,7 @@ moderation-confirm-timeout = Тайм-аут
 # Context: moderation
 moderation-confirm-ban = Забанить
 voice-voice-participant-camera-on = Камера включена
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Плагину пока нечего показать.
