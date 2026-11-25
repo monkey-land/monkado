@@ -404,26 +404,33 @@ const fn classify_recovery_hresult(code: u32) -> RecoveryDisposition {
 #[derive(Default)]
 struct RecoveryBudget {
 	started: Option<Instant>,
+	/// Bounded failure time spent before the last secure-desktop wait.
+	spent: Duration,
 }
 
 impl RecoveryBudget {
 	/// Records a recovery failure at `now`. Returns `true` while recovery may continue and `false`
-	/// once bounded failures have exceeded `RECOVERY_LIMIT`.
+	/// once bounded failures have used `RECOVERY_LIMIT` since the last delivered frame.
+	/// A secure-desktop wait pauses that clock without resetting it, so an episode alternating
+	/// between waits and hard failures still ends; only a delivered frame (`clear`) resets it.
 	fn note_failure(&mut self, now: Instant, disposition: RecoveryDisposition) -> bool {
 		match disposition {
 			RecoveryDisposition::KeepWaiting => {
-				self.started = None;
+				if let Some(started) = self.started.take() {
+					self.spent += now.saturating_duration_since(started);
+				}
 				true
 			}
 			RecoveryDisposition::RetryBounded => {
 				let started = *self.started.get_or_insert(now);
-				now.saturating_duration_since(started) < RECOVERY_LIMIT
+				self.spent + now.saturating_duration_since(started) < RECOVERY_LIMIT
 			}
 		}
 	}
 
 	fn clear(&mut self) {
 		self.started = None;
+		self.spent = Duration::ZERO;
 	}
 }
 
@@ -1529,12 +1536,16 @@ mod tests {
 		));
 		assert!(!budget.note_failure(start + RECOVERY_LIMIT, RecoveryDisposition::RetryBounded));
 
-		// Secure-desktop waits pause the hard-error clock; a successful copy clears it.
-		assert!(budget.note_failure(start + RECOVERY_LIMIT, RecoveryDisposition::KeepWaiting));
-		assert!(budget.note_failure(
-			start + RECOVERY_LIMIT + Duration::from_secs(1),
-			RecoveryDisposition::RetryBounded,
-		));
+		// Secure-desktop waits pause the hard-error clock without resetting it, so hard failures
+		// alternating with waits still end; a delivered frame clears it.
+		let mut budget = RecoveryBudget::default();
+		let second = Duration::from_secs(1);
+		assert!(budget.note_failure(start, RecoveryDisposition::RetryBounded));
+		assert!(budget.note_failure(start + 2 * second, RecoveryDisposition::KeepWaiting));
+		assert!(budget.note_failure(start + 60 * second, RecoveryDisposition::KeepWaiting));
+		assert!(budget.note_failure(start + 61 * second, RecoveryDisposition::RetryBounded));
+		assert!(budget.note_failure(start + 62 * second, RecoveryDisposition::KeepWaiting));
+		assert!(!budget.note_failure(start + 70 * second, RecoveryDisposition::RetryBounded));
 		budget.clear();
 		assert!(budget.note_failure(
 			start + RECOVERY_LIMIT + Duration::from_secs(10),
