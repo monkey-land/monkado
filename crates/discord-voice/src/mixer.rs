@@ -1,5 +1,9 @@
 //! One bounded decoder and reorder window per authenticated remote speaker.
-use crate::{Frame, crypto::MAX_PARTICIPANTS, jitter::Jitter};
+use crate::{
+	Frame,
+	crypto::MAX_PARTICIPANTS,
+	jitter::{Jitter, Packet},
+};
 use opus2::{Channels, Decoder};
 
 struct Speaker {
@@ -104,30 +108,31 @@ impl Mixer {
 					if decoded == 8 {
 						break;
 					}
-					let Some(opus) = speaker.jitter.pop() else {
+					let Some(packet) = speaker.jitter.pop() else {
 						break;
 					};
 					decoded += 1;
-					let limit = if opus.is_empty() {
-						// Preserve the lost packet duration; long concealment drains over 20ms ticks.
-						speaker
-							.decoder
-							.get_last_packet_duration()
-							.unwrap_or(960)
-							.clamp(120, 5760) as usize
-					} else {
-						speaker.pcm.len()
+					// Preserve the lost packet duration; long concealment drains over 20ms ticks.
+					let lost = speaker
+						.decoder
+						.get_last_packet_duration()
+						.unwrap_or(960)
+						.clamp(120, 5760) as usize;
+					let (opus, limit, fec) = match &packet {
+						Packet::Audio(opus) => (opus.as_slice(), speaker.pcm.len(), false),
+						Packet::Fec(opus) => (opus.as_slice(), lost, true),
+						Packet::Conceal => (&[][..], lost, false),
 					};
 					let Ok(length) =
 						speaker
 							.decoder
-							.decode_float(&opus, &mut speaker.pcm[..limit], false)
+							.decode_float(opus, &mut speaker.pcm[..limit], fec)
 					else {
 						continue;
 					};
 					speaker.offset = 0;
 					speaker.length = length;
-					heard |= !opus.is_empty() && opus != davey::OPUS_SILENCE_PACKET;
+					heard |= matches!(&packet, Packet::Audio(opus) if *opus != davey::OPUS_SILENCE_PACKET);
 				}
 				let count = (output.len() - filled).min(speaker.length - speaker.offset);
 				for (mixed, sample) in output[filled..filled + count]
