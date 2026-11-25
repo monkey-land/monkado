@@ -1016,6 +1016,10 @@ impl Voice {
 		self.poll_camera_test(state, ui, ctx);
 		ui.voice_speaking.clear();
 		ui.voice_microphone_unavailable = false;
+		ui.voice_suppression_fell_back = self
+			.mic_preview
+			.as_ref()
+			.is_some_and(|preview| preview.audio.suppression_fell_back());
 		self.poll_camera_devices(state.demo, ui, ctx);
 		if ui.voice_refresh_devices {
 			ui.voice_refresh_devices = false;
@@ -1233,6 +1237,9 @@ impl Voice {
 							.negotiation
 							.as_ref()
 							.and_then(|pending| pending.confirm_transport(revision));
+						if command.is_some() {
+							note(Level::Info, "voice transport ready", &[]);
+						}
 					}
 					Notice::WaitingForPeer => {
 						live.waiting_for_peer = true;
@@ -1291,6 +1298,7 @@ impl Voice {
 			failure = live.failure.get().copied();
 			let devices_ready = live.audio.is_ready();
 			ui.voice_microphone_unavailable = live.audio.microphone_unavailable();
+			ui.voice_suppression_fell_back |= live.audio.suppression_fell_back();
 			if ui.voice_settings_open() {
 				ui.voice_preview_level = Some(live.audio.preview_level_db());
 				ctx.request_repaint_after(Duration::from_millis(50));
@@ -1436,12 +1444,17 @@ impl Voice {
 			note(Level::Error, "removed by the service", &[]);
 			return self.give_up_rejoin(state, discord_voice::DISCONNECTED_BY_DISCORD, true);
 		}
-		if failure.is_some()
+		if let Some(reason) = failure
 			&& self
 				.live
 				.as_ref()
 				.is_some_and(|live| live.negotiation.is_some())
 		{
+			note(
+				Level::Warn,
+				"voice negotiation failed",
+				&[("reason", reason.into())],
+			);
 			let mut pending = self.live.as_mut().unwrap().negotiation.take().unwrap();
 			pending.failed_candidate = true;
 			self.stop();

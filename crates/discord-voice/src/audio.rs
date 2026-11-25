@@ -77,6 +77,8 @@ pub struct Gate {
 	echo_reset: AtomicBool,
 	preview_level: AtomicU16,
 	processing_ready: AtomicBool,
+	/// Automatic noise suppression moved from DeepFilterNet to RNNoise.
+	suppression_fell_back: AtomicBool,
 	diagnostics: bool,
 	output_gaps: [AtomicU64; 2],
 }
@@ -103,6 +105,7 @@ impl Default for Gate {
 			echo_reset: AtomicBool::new(false),
 			preview_level: AtomicU16::new(0),
 			processing_ready: AtomicBool::new(true),
+			suppression_fell_back: AtomicBool::new(false),
 			diagnostics: crate::diagnostics::enabled(),
 			output_gaps: std::array::from_fn(|_| AtomicU64::new(0)),
 		}
@@ -261,16 +264,29 @@ impl Audio {
 					{
 						// A live call keeps its place in the channel: the device is reopened as soon
 						// as the system offers it again, exactly as in the official client.
+						if worker_gate
+							.revision
+							.compare_exchange(
+								revision,
+								revision + 1,
+								Ordering::AcqRel,
+								Ordering::Acquire,
+							)
+							.is_err()
+						{
+							// A device change landed first; the next iteration owns it.
+							continue;
+						}
+						let next = revision + 1;
 						recovery_attempts += 1;
-						worker_gate.revision.fetch_add(1, Ordering::AcqRel);
 						streams = None;
 						if recovery_attempts >= MAX_RECOVERY_ATTEMPTS {
 							worker_gate.devices_missing.store(true, Ordering::Release);
 							recovery_attempts = 0;
 							emit(Ok(())); // Wake the interface for the unavailable-audio state.
-							std::thread::park_timeout(RECOVERY_PATIENCE);
+							wait_recovery(&worker_gate, next, RECOVERY_PATIENCE);
 						} else {
-							std::thread::park_timeout(RECOVERY_DELAY);
+							wait_recovery(&worker_gate, next, RECOVERY_DELAY);
 						}
 						continue;
 					}
@@ -305,12 +321,12 @@ impl Audio {
 									worker_gate.devices_missing.store(true, Ordering::Release);
 									recovery_attempts = 0;
 									emit(Ok(()));
-									std::thread::park_timeout(RECOVERY_PATIENCE);
+									wait_recovery(&worker_gate, revision, RECOVERY_PATIENCE);
 									continue;
 								}
 								if recovery_attempts < MAX_RECOVERY_ATTEMPTS {
 									recovery_attempts += 1;
-									std::thread::park_timeout(RECOVERY_DELAY);
+									wait_recovery(&worker_gate, revision, RECOVERY_DELAY);
 									continue;
 								}
 								emit(Err(error));
@@ -453,6 +469,14 @@ impl Audio {
 								.map(|value| value.swap(0, Ordering::Relaxed)),
 						);
 					}
+					let fell_back = echo.fell_back();
+					if worker_gate
+						.suppression_fell_back
+						.swap(fell_back, Ordering::Relaxed)
+						!= fell_back
+					{
+						emit(Ok(())); // Wake the UI to name the suppressor now running.
+					}
 					metrics.poll(reset, drops, false, noise_frames);
 					std::thread::park_timeout(Duration::from_millis(5));
 				}
@@ -521,6 +545,10 @@ impl Audio {
 	pub fn is_ready(&self) -> bool {
 		self.gate.is_ready() && self.gate.processing_ready.load(Ordering::Acquire)
 	}
+	/// Automatic noise suppression found DeepFilterNet too costly and runs RNNoise instead.
+	pub fn suppression_fell_back(&self) -> bool {
+		self.gate.suppression_fell_back.load(Ordering::Relaxed)
+	}
 	pub fn microphone_unavailable(&self) -> bool {
 		self.gate.input_enabled.load(Ordering::Acquire)
 			&& (self.gate.input_retrying.load(Ordering::Acquire)
@@ -544,11 +572,12 @@ impl Audio {
 			self.gate.playback_generation.fetch_add(1, Ordering::AcqRel);
 		}
 	}
-	/// Changes are coalesced and applied on the worker, never in device callbacks.
+	/// Changes are coalesced and applied on the worker, never in device callbacks. The interface
+	/// repeats the current settings every frame, so only a real change may wake the worker.
 	pub fn set_processing(&self, mut settings: Processing) {
 		settings.suppression_level = settings.suppression_level.min(3);
 		settings.sensitivity_db = settings.sensitivity_db.map(|db| db.clamp(-80, 0));
-		self.processing.send_if_modified(|current| {
+		let changed = self.processing.send_if_modified(|current| {
 			if *current == settings {
 				return false;
 			}
@@ -556,7 +585,9 @@ impl Audio {
 			*current = settings;
 			true
 		});
-		self.thread.unpark();
+		if changed {
+			self.thread.unpark();
+		}
 	}
 	/// Adjusts software gain without reopening devices. Defaults to 100%; clamps to 0..=200%.
 	pub fn set_gain(&self, input_percent: u16, output_percent: u16) {
@@ -583,6 +614,30 @@ const MAX_RECOVERY_ATTEMPTS: u8 = 24;
 const RECOVERY_DELAY: Duration = Duration::from_millis(250);
 /// How long a live call waits between attempts while its devices stay away.
 const RECOVERY_PATIENCE: Duration = Duration::from_secs(5);
+
+/// Waits out a recovery delay. The interface wakes this worker for unrelated reasons, so a bare
+/// park would collapse the retry window to one frame; only a call change ends the wait early.
+fn wait_recovery(gate: &Gate, revision: u64, delay: Duration) {
+	wait_recovery_with(delay, Instant::now, std::thread::park_timeout, || {
+		gate.stopped.load(Ordering::Acquire) || gate.revision.load(Ordering::Acquire) != revision
+	});
+}
+
+fn wait_recovery_with(
+	delay: Duration,
+	now: impl Fn() -> Instant,
+	park: impl Fn(Duration),
+	changed: impl Fn() -> bool,
+) {
+	let deadline = now() + delay;
+	loop {
+		let remaining = deadline.saturating_duration_since(now());
+		if remaining.is_zero() || changed() {
+			return;
+		}
+		park(remaining);
+	}
+}
 
 struct Streams {
 	// Reuse the connection that owns these streams for polling and microphone retries.
@@ -659,6 +714,26 @@ impl Streams {
 			return Err("Call changed before audio devices could open");
 		}
 		let host = cpal::default_host();
+		let (input_stream, input_read, input_id) = if gate.input_enabled.load(Ordering::Acquire) {
+			// A failure from an earlier speaker candidate must not drop this microphone.
+			let _ = gate.input_failed_revision.compare_exchange(
+				revision,
+				0,
+				Ordering::AcqRel,
+				Ordering::Acquire,
+			);
+			match open_input_stream(&host, settings, &gate, revision) {
+				Ok((stream, read, id)) => (Some(stream), read, id),
+				Err(_) => {
+					gate.input_failed_revision
+						.fetch_max(revision, Ordering::AcqRel);
+					(None, rtrb::RingBuffer::new(8).1, None)
+				}
+			}
+		} else {
+			(None, rtrb::RingBuffer::new(8).1, None)
+		};
+		// Starting a Bluetooth microphone can switch the paired speaker to its call format.
 		let output = choose(&host, settings.output.as_deref(), false)?;
 		let output_id = output.id().ok().map(|id| id.to_string());
 		let output_config = platform::audio::output_config(
@@ -679,18 +754,6 @@ impl Streams {
 		let (output_write, output_read) = rtrb::RingBuffer::new(8);
 		let (reference_write, reference_read) = rtrb::RingBuffer::new(8);
 		let render = Playback::new(output_config.sample_rate(), output_read, reference_write);
-		let (input_stream, input_read, input_id) = if gate.input_enabled.load(Ordering::Acquire) {
-			match open_input_stream(&host, settings, &gate, revision) {
-				Ok((stream, read, id)) => (Some(stream), read, id),
-				Err(_) => {
-					gate.input_failed_revision
-						.fetch_max(revision, Ordering::AcqRel);
-					(None, rtrb::RingBuffer::new(8).1, None)
-				}
-			}
-		} else {
-			(None, rtrb::RingBuffer::new(8).1, None)
-		};
 		let output_stream = match output_config.sample_format() {
 			cpal::SampleFormat::F32 => {
 				output_stream::<f32>(&output, &stream_config, render, gate.clone(), revision)
@@ -1203,7 +1266,11 @@ pub fn debug_processing_check() {
 	let mut frame = original;
 	dsp.capture(&mut frame, false).unwrap();
 	assert_eq!(frame, original, "Studio must bypass DSP");
-	for suppression in [NoiseSuppression::RnNoise, NoiseSuppression::WebRtc] {
+	for suppression in [
+		NoiseSuppression::RnNoise,
+		NoiseSuppression::WebRtc,
+		NoiseSuppression::DeepFilterNet,
+	] {
 		dsp.configure(Processing {
 			suppression,
 			..Processing::default()
@@ -1231,13 +1298,61 @@ pub fn debug_processing_check() {
 		"Live switch back to Studio must bypass DSP"
 	);
 	println!(
-		"Offline voice processing passed: profiles, legacy mapping, sensitivity/release, Studio bypass, RNNoise/WebRTC inference and history reset. No devices opened."
+		"Offline voice processing passed: profiles, legacy mapping, sensitivity/release, Studio bypass, RNNoise/WebRTC/DeepFilterNet inference and history reset. No devices opened."
 	);
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	#[test]
+	fn deepfilternet_caps_strength_and_resets_history() {
+		let mut dsp = echo::Echo::new();
+		let full = Processing {
+			suppression: NoiseSuppression::DeepFilterNet,
+			suppression_level: 2,
+			..Processing::studio()
+		};
+		dsp.configure(full).unwrap();
+		let mut seed = 17_u32;
+		let mut noise = || -> Frame {
+			std::array::from_fn(|_| {
+				seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+				(seed as i32 as f32 / i32::MAX as f32) * 0.05
+			})
+		};
+		fn residual(dsp: &mut echo::Echo, noise: &mut impl FnMut() -> Frame) -> f32 {
+			let (mut before, mut after) = (0.0, 0.0);
+			for tick in 0..60 {
+				let raw = noise();
+				let mut clean = raw;
+				dsp.capture(&mut clean, false).unwrap();
+				if tick >= 30 {
+					before += raw.iter().map(|s| s * s).sum::<f32>();
+					after += clean.iter().map(|s| s * s).sum::<f32>();
+				}
+			}
+			after / before
+		}
+		let full_residual = residual(&mut dsp, &mut noise);
+		assert!(full_residual < 0.1, "{full_residual}");
+		// Low caps attenuation at 12 dB: residual energy 0.063.
+		dsp.configure(Processing {
+			suppression_level: 0,
+			..full
+		})
+		.unwrap();
+		let low_residual = residual(&mut dsp, &mut noise);
+		assert!((0.03..0.13).contains(&low_residual), "{low_residual}");
+		// Look-ahead and recurrent state hold earlier microphone audio; a reset must drop it.
+		let probe = noise();
+		let [mut first, mut second] = [probe; 2];
+		dsp.reset();
+		dsp.capture(&mut first, false).unwrap();
+		dsp.reset();
+		dsp.capture(&mut second, false).unwrap();
+		assert_eq!(first, second);
+	}
 	fn audio_without_devices() -> Audio {
 		let (settings, _) = tokio::sync::watch::channel(Devices::default());
 		let (processing, _) =
@@ -1326,6 +1441,34 @@ mod tests {
 		assert!(!default_device_changed(None, None, || {
 			panic!("Disabled or unavailable input has no active default to follow")
 		}));
+	}
+
+	#[test]
+	fn recovery_wait_survives_unrelated_wake_ups() {
+		let start = Instant::now();
+		let elapsed = std::cell::Cell::new(Duration::ZERO);
+		let parks = std::cell::Cell::new(0u32);
+		wait_recovery_with(
+			Duration::from_millis(250),
+			|| start + elapsed.get(),
+			|requested| {
+				parks.set(parks.get() + 1);
+				// The interface wakes the worker every frame; that must not end the wait.
+				elapsed.set(elapsed.get() + Duration::from_millis(16).min(requested));
+			},
+			|| false,
+		);
+		assert!(elapsed.get() >= Duration::from_millis(250));
+		assert!(parks.get() > 1);
+		// A call change ends the wait instead of holding the worker for the full delay.
+		let parks = std::cell::Cell::new(0u32);
+		wait_recovery_with(
+			Duration::from_secs(5),
+			|| start,
+			|_| parks.set(parks.get() + 1),
+			|| true,
+		);
+		assert_eq!(parks.get(), 0);
 	}
 
 	#[test]
