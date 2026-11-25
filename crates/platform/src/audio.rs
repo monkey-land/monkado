@@ -27,16 +27,34 @@ pub fn output_config(
 		cfg!(target_os = "windows")
 			|| (cfg!(target_os = "macos") && preference == OutputConfigPreference::Voice),
 		|| {
-			device
-				.default_output_config()
-				.map_err(|_| "O formato de áudio padrão está indisponível")
+			device.default_output_config().map_err(|error| {
+				output_error(&error, "O formato de áudio padrão está indisponível")
+			})
 		},
 		|| {
-			device
-				.supported_output_configs()
-				.map_err(|_| "Os formatos do alto-falante estão indisponíveis")
+			device.supported_output_configs().map_err(|error| {
+				output_error(&error, "Os formatos do alto-falante estão indisponíveis")
+			})
 		},
 	)
+}
+
+/// Fixed reasons keep the call card and the bounded log readable; the raw backend error is not
+/// reported because it is unbounded and does not change what the person can do.
+fn output_error(error: &cpal::Error, fallback: &'static str) -> &'static str {
+	match error.kind() {
+		cpal::ErrorKind::HostUnavailable => "O serviço de áudio do sistema está indisponível",
+		cpal::ErrorKind::DeviceNotAvailable | cpal::ErrorKind::StreamInvalidated => {
+			"O dispositivo de saída de áudio está indisponível; confira o alto-falante selecionado"
+		}
+		cpal::ErrorKind::DeviceBusy => {
+			"O dispositivo de saída de áudio está em uso por outro aplicativo"
+		}
+		cpal::ErrorKind::UnsupportedConfig => {
+			"O dispositivo de saída de áudio não tem um formato utilizável"
+		}
+		_ => fallback,
+	}
 }
 
 fn select_output_config<I: Iterator<Item = SupportedStreamConfigRange>>(
