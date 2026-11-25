@@ -1839,7 +1839,11 @@ impl MessagingUi {
 		content: egui::Rect,
 		compact: bool,
 	) {
-		let Some(viewers) = self.screen.shown_viewers().filter(|viewers| viewers.count > 0) else {
+		let Some(viewers) = self
+			.screen
+			.shown_viewers()
+			.filter(|viewers| viewers.count > 0)
+		else {
 			return;
 		};
 		let (height, font) = if compact { (18.0, 10.0) } else { (24.0, 12.0) };
