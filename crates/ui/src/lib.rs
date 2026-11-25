@@ -4954,18 +4954,23 @@ impl MessagingUi {
 		name_styles::set_enabled(self.cosmetics.name_styles);
 		role_names::set_gradients(!self.cosmetics.solid_names);
 		let cosmetics_refresh = state.set_profile_cosmetics(self.cosmetics);
-		self.timeline.download.gif_favorites = state
-			.gifs
-			.favorites
-			.iter()
-			.map(|gif| gif.url.clone())
-			.collect();
+		if self.timeline.download.gif_favorites.len() != state.gifs.favorites.len()
+			|| self
+				.timeline
+				.download
+				.gif_favorites
+				.iter()
+				.zip(&state.gifs.favorites)
+				.any(|(cached, current)| cached != &current.url)
+		{
+			self.timeline.download.gif_favorites = state
+				.gifs
+				.favorites
+				.iter()
+				.map(|gif| gif.url.clone())
+				.collect();
+		}
 		crate::scroll::apply_preferences(ui.ctx(), self.reading_preferences);
-		let diagnostics_chords: Vec<model::KeyChord> = self
-			.keybinds
-			.chords(model::KeybindAction::CopyIssueDiagnostics)
-			.cloned()
-			.collect();
 		// Text entry only suppresses plain chords; an F-key or modified chord keeps working.
 		let diagnostics_typing = ui.ctx().egui_wants_keyboard_input()
 			|| ui.input(|input| {
@@ -4987,7 +4992,10 @@ impl MessagingUi {
 		};
 		if self.keybind_capture.is_none()
 			&& !self.ime_active
-			&& diagnostics_chords.iter().any(&diagnostics_allowed)
+			&& self
+				.keybinds
+				.chords(model::KeybindAction::CopyIssueDiagnostics)
+				.any(&diagnostics_allowed)
 			&& ui.input(|input| {
 				input.focused
 					&& !input
@@ -4995,8 +5003,8 @@ impl MessagingUi {
 						.iter()
 						.any(|event| matches!(event, egui::Event::Ime(_)))
 			}) && ui.input_mut(|input| {
-			diagnostics_chords
-				.iter()
+			self.keybinds
+				.chords(model::KeybindAction::CopyIssueDiagnostics)
 				.filter(|chord| diagnostics_allowed(chord))
 				.any(|chord| crate::keybinds::pressed_exact(input, chord))
 		}) {

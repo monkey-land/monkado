@@ -1,6 +1,6 @@
 use chacha20poly1305::{
 	KeyInit, XChaCha20Poly1305, XNonce,
-	aead::{Aead, Payload},
+	aead::{Aead, AeadInPlace, Payload},
 };
 use davey::{DaveSession, ProposalsOperationType, SigningKeyPair};
 use openmls::prelude::{
@@ -92,19 +92,18 @@ impl Encryption {
 			.ok_or("Voice transport nonce exhausted; rejoin the call")?;
 		let mut nonce = [0; 24];
 		nonce[..4].copy_from_slice(&self.counter.to_be_bytes());
-		let data = self
+		let mut packet = Vec::with_capacity(header.len() + frame.len() + 16 + 4);
+		packet.extend_from_slice(header);
+		packet.extend_from_slice(frame);
+		let tag = self
 			.cipher
-			.encrypt(
+			.encrypt_in_place_detached(
 				XNonce::from_slice(&nonce),
-				Payload {
-					msg: frame,
-					aad: header,
-				},
+				header,
+				&mut packet[header.len()..],
 			)
 			.map_err(|_| "Voice transport encryption failed")?;
-		let mut packet = Vec::with_capacity(header.len() + data.len() + 4);
-		packet.extend_from_slice(header);
-		packet.extend_from_slice(&data);
+		packet.extend_from_slice(&tag);
 		packet.extend_from_slice(&nonce[..4]);
 		Ok(packet)
 	}

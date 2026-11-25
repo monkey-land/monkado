@@ -60,6 +60,7 @@ const ATTEMPTS: usize = 2048;
 struct Fit {
 	edge: u32,
 	frame: Option<usize>,
+	used: u64,
 	texture: TextureHandle,
 }
 
@@ -546,10 +547,15 @@ impl Avatars {
 		let frame = animated
 			.then(|| self.animations.get(key).map(|animation| animation.frame))
 			.flatten();
-		if let Some(texture) = self.fits.get(key).and_then(|fits| {
-			fits.iter()
+		self.clock += 1;
+		let used = self.clock;
+		if let Some(texture) = self.fits.get_mut(key).and_then(|fits| {
+			fits.iter_mut()
 				.find(|fit| fit.edge == edge && fit.frame == frame)
-				.map(|fit| fit.texture.clone())
+				.map(|fit| {
+					fit.used = used;
+					fit.texture.clone()
+				})
 		}) {
 			return texture;
 		}
@@ -559,6 +565,31 @@ impl Avatars {
 		let image = crate::resample::downscale(&pixels, edge);
 		self.store_fit(ctx, key, edge, frame, image)
 	}
+	fn evict_oldest_fit(&mut self) -> bool {
+		let Some((evict_key, evict_index)) = self
+			.fits
+			.iter()
+			.flat_map(|(key, fits)| {
+				fits.iter()
+					.enumerate()
+					.map(move |(index, fit)| (fit.used, key.as_str(), index))
+			})
+			.min_by_key(|(used, _, _)| *used)
+			.map(|(_, key, index)| (key.to_owned(), index))
+		else {
+			return false;
+		};
+		if let Some(fits) = self.fits.get_mut(&evict_key) {
+			let dropped = fits.remove(evict_index).texture.byte_size();
+			self.fit_bytes = self.fit_bytes.saturating_sub(dropped);
+			if fits.is_empty() {
+				self.fits.remove(&evict_key);
+			}
+			true
+		} else {
+			false
+		}
+	}
 	fn store_fit(
 		&mut self,
 		ctx: &egui::Context,
@@ -567,10 +598,8 @@ impl Avatars {
 		frame: Option<usize>,
 		image: ColorImage,
 	) -> TextureHandle {
-		if self.fit_bytes > FIT_BYTES {
-			self.fits.clear();
-			self.fit_bytes = 0;
-		}
+		self.clock += 1;
+		let used = self.clock;
 		let has_slot = self.fits.get(key).is_some_and(|fits| {
 			fits.iter()
 				.any(|fit| fit.edge == edge && fit.frame.is_some() == frame.is_some())
@@ -585,9 +614,11 @@ impl Avatars {
 				let before = slot.texture.byte_size();
 				slot.texture.set(image, egui::TextureOptions::LINEAR);
 				slot.frame = frame;
+				slot.used = used;
 				(slot.texture.clone(), before, slot.texture.byte_size())
 			};
 			self.fit_bytes = self.fit_bytes.saturating_sub(before) + after;
+			while self.fit_bytes > FIT_BYTES && self.evict_oldest_fit() {}
 			return texture;
 		}
 		let dropped = {
@@ -606,8 +637,10 @@ impl Avatars {
 		self.fits.entry(key.to_owned()).or_default().push(Fit {
 			edge,
 			frame,
+			used,
 			texture: texture.clone(),
 		});
+		while self.fit_bytes > FIT_BYTES && self.evict_oldest_fit() {}
 		texture
 	}
 	pub fn accept(&mut self, ctx: &egui::Context, key: String, image: Option<ColorImage>) {
@@ -3383,5 +3416,20 @@ mod tests {
 			.collect();
 		avatars.accept_animation("effect-c-test".into(), frames);
 		assert!(avatars.animations.contains_key("effect-c-test"));
+	}
+
+	#[test]
+	fn store_fit_evicts_oldest_entries_without_clearing_recent_fits() {
+		let ctx = egui::Context::default();
+		let mut avatars = Avatars::default();
+		// Each 512x512 RGBA fit uses 1 MiB, so 17 entries cross FIT_BYTES (16 MiB).
+		for index in 0..17 {
+			let key = format!("fit-{index}");
+			let image = ColorImage::filled([512, 512], egui::Color32::WHITE);
+			let _ = avatars.store_fit(&ctx, &key, 512, None, image);
+		}
+		assert!(avatars.fit_bytes <= FIT_BYTES);
+		assert!(!avatars.fits.contains_key("fit-0"));
+		assert!(avatars.fits.contains_key("fit-16"));
 	}
 }

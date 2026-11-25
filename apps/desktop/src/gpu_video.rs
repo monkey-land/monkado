@@ -258,6 +258,7 @@ struct Gpu {
 	converter: Arc<Converter>,
 	id: egui::TextureId,
 	output: wgpu::Texture,
+	output_view: wgpu::TextureView,
 	planes: Option<Planes>,
 }
 
@@ -336,6 +337,7 @@ impl VideoTexture {
 						gpu.id,
 					);
 					gpu.output = output;
+					gpu.output_view = view;
 				}
 				None => {
 					let id = renderer.register_native_texture(
@@ -347,6 +349,7 @@ impl VideoTexture {
 						converter: converter.clone(),
 						id,
 						output,
+						output_view: view,
 						planes: None,
 					});
 				}
@@ -394,9 +397,6 @@ impl VideoTexture {
 		}
 		params[48..52].copy_from_slice(&u32::from(picture.rotation).to_le_bytes());
 		converter.queue.write_buffer(&planes.params, 0, &params);
-		let view = gpu
-			.output
-			.create_view(&wgpu::TextureViewDescriptor::default());
 		let mut encoder = converter
 			.device
 			.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(name) });
@@ -404,7 +404,7 @@ impl VideoTexture {
 			let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 				label: Some(name),
 				color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-					view: &view,
+					view: &gpu.output_view,
 					depth_slice: None,
 					resolve_target: None,
 					ops: wgpu::Operations {

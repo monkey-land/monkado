@@ -352,9 +352,12 @@ fn encode_loop(
 	#[cfg(target_os = "windows")]
 	let raw_pending = Arc::new(AtomicBool::new(false));
 	#[cfg(target_os = "windows")]
+	let raw_recycle = Arc::new(Mutex::new(Vec::with_capacity(2)));
+	#[cfg(target_os = "windows")]
 	let _native = capture::Capture::start(
 		settings,
 		raw_send,
+		raw_recycle.clone(),
 		audio,
 		capture_stop.clone(),
 		ready.clone(),
@@ -437,12 +440,26 @@ fn encode_loop(
 			}
 			wake();
 		}
+		let prev_frame = if frame.is_some() {
+			latest_frame.take()
+		} else {
+			None
+		};
 		let encode = retain_screen_frame(
 			&mut latest_frame,
 			frame,
 			ready.load(Ordering::Acquire),
 			keyframe.load(Ordering::Acquire),
 		)?;
+		#[cfg(target_os = "windows")]
+		if let Some(old) = prev_frame
+			&& let Ok(mut pool) = raw_recycle.try_lock()
+			&& pool.len() < 2
+		{
+			pool.push(old.data);
+		}
+		#[cfg(not(target_os = "windows"))]
+		let _ = prev_frame;
 		// Local capture remains available while alone; only secure media is encoded or queued.
 		if !ready.load(Ordering::Acquire) {
 			encoding = None;
@@ -545,6 +562,7 @@ struct ScreenEncoder {
 	software: Option<Encoder>,
 	/// Reused I420 picture for openh264.
 	i420: Vec<u8>,
+	converter: convert::Converter,
 	hardware: Option<crate::video_encode::hardware::Encoder>,
 	settings: Settings,
 	bitrate: u32,
@@ -588,6 +606,7 @@ impl ScreenEncoder {
 			diagnostics: crate::diagnostics::EncoderRegistration::new(true, hardware.is_some()),
 			software,
 			i420: Vec::new(),
+			converter: convert::Converter::default(),
 			hardware,
 			settings,
 			bitrate,
@@ -635,7 +654,13 @@ impl ScreenEncoder {
 			let encoded = hardware.encode(&frame.data, (width, height), force_keyframe);
 			#[cfg(target_os = "windows")]
 			let encoded = hardware.encode_with(width * height * 3 / 2, force_keyframe, |picture| {
-				convert::bgra_to_yuv420(frame, width, height, convert::Chroma::Interleaved, picture)
+				self.converter.bgra_to_yuv420(
+					frame,
+					width,
+					height,
+					convert::Chroma::Interleaved,
+					picture,
+				)
 			});
 			if let Ok(encoded) = encoded {
 				return Ok(encoded);
@@ -648,7 +673,7 @@ impl ScreenEncoder {
 			software_force = true;
 		}
 		self.i420.resize(width * height * 3 / 2, 0);
-		convert::bgra_to_yuv420(
+		self.converter.bgra_to_yuv420(
 			frame,
 			width,
 			height,

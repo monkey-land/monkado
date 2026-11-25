@@ -1,4 +1,8 @@
 use crate::{Error, ExtensionKind, Invocation, MAX_IO_BYTES, MAX_MODULE_BYTES, Output, Package};
+use std::{
+	hash::{DefaultHasher, Hash, Hasher},
+	sync::{Arc, Mutex, OnceLock},
+};
 use wasmi::{
 	Config, EnforcedLimits, Engine, ExternType, FuncType, Instance, Linker, Module, Store,
 	StoreLimits, StoreLimitsBuilder, TrapCode, ValType,
@@ -6,22 +10,32 @@ use wasmi::{
 
 const MEMORY_BYTES: usize = 16 * 1024 * 1024;
 const FUEL: u64 = 10_000_000;
+const MODULE_CACHE_CAP: usize = crate::MAX_PLUGINS * 2;
 
-fn engine() -> Engine {
-	let mut config = Config::default();
-	config
-		.consume_fuel(true)
-		.allow_start_fn(false)
-		.ignore_custom_sections(true)
-		.set_max_recursion_depth(128)
-		.set_min_stack_height(4096)
-		.set_max_stack_height(256 * 1024)
-		.set_max_cached_stacks(0)
-		.enforced_limits(EnforcedLimits::strict());
-	Engine::new(&config)
+struct CachedModule {
+	hash: u64,
+	wasm: Arc<[u8]>,
+	module: Module,
 }
 
-fn module(engine: &Engine, bytes: &[u8]) -> Result<Module, Error> {
+fn shared_engine() -> &'static Engine {
+	static ENGINE: OnceLock<Engine> = OnceLock::new();
+	ENGINE.get_or_init(|| {
+		let mut config = Config::default();
+		config
+			.consume_fuel(true)
+			.allow_start_fn(false)
+			.ignore_custom_sections(true)
+			.set_max_recursion_depth(128)
+			.set_min_stack_height(4096)
+			.set_max_stack_height(256 * 1024)
+			.set_max_cached_stacks(0)
+			.enforced_limits(EnforcedLimits::strict());
+		Engine::new(&config)
+	})
+}
+
+fn compile_module(engine: &Engine, bytes: &[u8]) -> Result<Module, Error> {
 	if bytes.len() > MAX_MODULE_BYTES {
 		return Err(Error::Limit);
 	}
@@ -38,10 +52,52 @@ fn module(engine: &Engine, bytes: &[u8]) -> Result<Module, Error> {
 	Ok(module)
 }
 
+fn cached_module(engine: &Engine, bytes: &[u8]) -> Result<Module, Error> {
+	if bytes.len() > MAX_MODULE_BYTES {
+		return Err(Error::Limit);
+	}
+	static CACHE: OnceLock<Mutex<Vec<CachedModule>>> = OnceLock::new();
+	let cache = CACHE.get_or_init(|| Mutex::new(Vec::with_capacity(MODULE_CACHE_CAP)));
+	let mut hasher = DefaultHasher::new();
+	bytes.hash(&mut hasher);
+	let hash = hasher.finish();
+	{
+		let mut entries = cache.lock().unwrap_or_else(|e| e.into_inner());
+		if let Some(index) = entries
+			.iter()
+			.position(|entry| entry.hash == hash && entry.wasm.as_ref() == bytes)
+		{
+			let last = entries.len() - 1;
+			if index != last {
+				let hit = entries.remove(index);
+				entries.push(hit);
+			}
+			return Ok(entries[last].module.clone());
+		}
+	}
+	// Compile outside the lock so concurrent invocations of distinct plugins do not serialize.
+	let module = compile_module(engine, bytes)?;
+	let mut entries = cache.lock().unwrap_or_else(|e| e.into_inner());
+	if !entries
+		.iter()
+		.any(|entry| entry.hash == hash && entry.wasm.as_ref() == bytes)
+	{
+		if entries.len() >= MODULE_CACHE_CAP {
+			entries.remove(0);
+		}
+		entries.push(CachedModule {
+			hash,
+			wasm: Arc::from(bytes),
+			module: module.clone(),
+		});
+	}
+	Ok(module)
+}
+
 pub(crate) fn validate_module(bytes: &[u8]) -> Result<(), Error> {
-	let engine = engine();
-	let module = module(&engine, bytes)?;
-	instantiate(&engine, &module).map(|_| ())
+	let engine = shared_engine();
+	let module = compile_module(engine, bytes)?;
+	instantiate(engine, &module).map(|_| ())
 }
 
 // Classify only engine-owned codes: never surface Wasm-provided text or input/output bytes.
@@ -107,9 +163,9 @@ pub fn invoke(package: &Package, input: &Invocation) -> Result<Output, Error> {
 	if bytes.len() > MAX_IO_BYTES {
 		return Err(Error::InputLimit);
 	}
-	let engine = engine();
-	let module = module(&engine, &package.wasm)?;
-	let (mut store, instance) = instantiate(&engine, &module)?;
+	let engine = shared_engine();
+	let module = cached_module(engine, &package.wasm)?;
+	let (mut store, instance) = instantiate(engine, &module)?;
 	let memory = instance.get_memory(&store, "memory").ok_or(Error::Module)?;
 	let alloc = instance
 		.get_typed_func::<i32, i32>(&store, "serein_alloc")

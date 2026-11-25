@@ -102,6 +102,7 @@ pub(crate) fn sources() -> Result<Vec<Source>, &'static str> {
 #[derive(Clone)]
 struct Flags {
 	frames: SyncSender<RawFrame>,
+	recycle: Arc<std::sync::Mutex<Vec<Vec<u8>>>>,
 	stop: Arc<AtomicBool>,
 	pending: Arc<AtomicBool>,
 	next_frame: Instant,
@@ -173,22 +174,37 @@ impl GraphicsCaptureApiHandler for Handler {
 			self.0.stop.store(true, Ordering::Release);
 			return Err("Captured frame buffer is incomplete");
 		}
-		let mut data = Vec::with_capacity(data_len);
-		for row in source[..source_len].chunks_exact(stride) {
-			data.extend_from_slice(&row[..row_bytes]);
-		}
-		if self
+		let mut data = self
 			.0
-			.frames
-			.try_send(RawFrame {
-				width,
-				height,
-				stride: row_bytes,
-				data,
-			})
-			.is_err()
-		{
+			.recycle
+			.try_lock()
+			.ok()
+			.and_then(|mut pool| pool.pop())
+			.unwrap_or_default();
+		data.clear();
+		data.reserve(data_len);
+		if stride == row_bytes {
+			data.extend_from_slice(&source[..source_len]);
+		} else {
+			for row in source[..source_len].chunks_exact(stride) {
+				data.extend_from_slice(&row[..row_bytes]);
+			}
+		}
+		if let Err(
+			std::sync::mpsc::TrySendError::Full(rejected)
+			| std::sync::mpsc::TrySendError::Disconnected(rejected),
+		) = self.0.frames.try_send(RawFrame {
+			width,
+			height,
+			stride: row_bytes,
+			data,
+		}) {
 			self.0.pending.store(false, Ordering::Release);
+			if let Ok(mut pool) = self.0.recycle.try_lock()
+				&& pool.len() < 2
+			{
+				pool.push(rejected.data);
+			}
 		}
 		Ok(())
 	}
@@ -211,6 +227,7 @@ impl Capture {
 	pub(crate) fn start(
 		settings: CaptureSettings,
 		frames: SyncSender<RawFrame>,
+		recycle: Arc<std::sync::Mutex<Vec<Vec<u8>>>>,
 		audio: Option<tokio::sync::mpsc::Sender<AudioChunk>>,
 		stop: Arc<AtomicBool>,
 		ready: Arc<AtomicBool>,
@@ -236,7 +253,15 @@ impl Capture {
 					.into_iter()
 					.find(|monitor| monitor_id(monitor) == id)
 					.ok_or("Selected display is no longer available")?;
-				start_item(settings, monitor, frames, stop.clone(), pending, cancel)
+				start_item(
+					settings,
+					monitor,
+					frames,
+					recycle,
+					stop.clone(),
+					pending,
+					cancel,
+				)
 			}
 			SourceId::Window(id) => {
 				let window = Window::enumerate()
@@ -245,7 +270,15 @@ impl Capture {
 					.find(|window| window_id(window) == id)
 					.ok_or("Selected window is no longer available")?;
 				window_process = window.process_id().ok();
-				start_item(settings, window, frames, stop.clone(), pending, cancel)
+				start_item(
+					settings,
+					window,
+					frames,
+					recycle,
+					stop.clone(),
+					pending,
+					cancel,
+				)
 			}
 			#[allow(unreachable_patterns)] // Portal may be absent from platform-scoped models.
 			_ => return Err("The desktop screen picker is available only on Linux".into()),
@@ -321,6 +354,7 @@ fn start_item<T>(
 	settings: CaptureSettings,
 	item: T,
 	frames: SyncSender<RawFrame>,
+	recycle: Arc<std::sync::Mutex<Vec<Vec<u8>>>>,
 	stop: Arc<AtomicBool>,
 	pending: Arc<AtomicBool>,
 	cancel: Arc<AtomicBool>,
@@ -341,6 +375,7 @@ where
 	item.probe()?;
 	let flags = Flags {
 		frames,
+		recycle,
 		stop,
 		pending,
 		next_frame: Instant::now(),
