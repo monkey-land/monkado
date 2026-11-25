@@ -335,6 +335,46 @@ fn discovery(packet: &[u8], ssrc: u32) -> Result<(IpAddr, u16), &'static str> {
 	Ok((address, port))
 }
 
+/// Speech Opus like Discord's own client: 64 kb/s VBR coded as mono in the SILK/hybrid
+/// modes, with in-band FEC so receivers can rebuild a lost packet from the next one.
+/// Capture stays mono and is still handed over as dual-mono stereo PCM.
+fn microphone_encoder() -> Result<Encoder, &'static str> {
+	let mut encoder = Encoder::new(48_000, Channels::Stereo, Application::Voip)
+		.map_err(|_| "Opus encoder initialization failed")?;
+	encoder
+		.set_bitrate(Bitrate::Bits(64_000))
+		.map_err(|_| "Opus bitrate configuration failed")?;
+	encoder
+		.set_vbr(true)
+		.map_err(|_| "Opus VBR configuration failed")?;
+	// Capture is 32-bit float; the source carries at least 24 significant bits.
+	encoder
+		.set_lsb_depth(24)
+		.map_err(|_| "Opus LSB depth configuration failed")?;
+	encoder
+		.set_complexity(10)
+		.map_err(|_| "Opus complexity configuration failed")?;
+	encoder
+		.set_signal(opus2::Signal::Voice)
+		.map_err(|_| "Opus signal configuration failed")?;
+	encoder
+		.set_force_channels(Some(Channels::Mono))
+		.map_err(|_| "Opus channel configuration failed")?;
+	encoder
+		.set_max_bandwidth(opus2::Bandwidth::Fullband)
+		.map_err(|_| "Opus bandwidth configuration failed")?;
+	encoder
+		.set_inband_fec(true)
+		.map_err(|_| "Opus FEC configuration failed")?;
+	encoder
+		.set_packet_loss_perc(10)
+		.map_err(|_| "Opus packet-loss configuration failed")?;
+	encoder
+		.set_dtx(false)
+		.map_err(|_| "Opus DTX configuration failed")?;
+	Ok(encoder)
+}
+
 /// Drop the control sender or abort this future to stop the socket, UDP, codecs and ephemeral keys.
 /// PCM queues must contain at most eight 20ms mono48k frames each. No audio device opens here.
 #[allow(clippy::too_many_arguments)] // Every media input of one call.
@@ -477,45 +517,7 @@ async fn run_inner(
 	let mut heard = false;
 	let mut speaking = false;
 	let mut silence = 0u8;
-	// Capture stays mono; each mono frame is sent as dual-mono stereo Opus at the
-	// maximum 510 kb/s constant-bitrate Music profile (1,275-byte 20 ms packets,
-	// about 528 kb/s on the wire with RTP/DAVE/transport overhead).
-	let mut encoder = Encoder::new(48_000, Channels::Stereo, Application::Audio)
-		.map_err(|_| "Opus encoder initialization failed")?;
-	encoder
-		.set_bitrate(Bitrate::Bits(510_000))
-		.map_err(|_| "Opus bitrate configuration failed")?;
-	encoder
-		.set_vbr(false)
-		.map_err(|_| "Opus VBR configuration failed")?;
-	encoder
-		.set_vbr_constraint(false)
-		.map_err(|_| "Opus VBR constraint configuration failed")?;
-	// Capture is 32-bit float; the source carries at least 24 significant bits.
-	encoder
-		.set_lsb_depth(24)
-		.map_err(|_| "Opus LSB depth configuration failed")?;
-	encoder
-		.set_complexity(10)
-		.map_err(|_| "Opus complexity configuration failed")?;
-	encoder
-		.set_signal(opus2::Signal::Music)
-		.map_err(|_| "Opus signal configuration failed")?;
-	encoder
-		.set_force_channels(Some(Channels::Stereo))
-		.map_err(|_| "Opus stereo configuration failed")?;
-	encoder
-		.set_max_bandwidth(opus2::Bandwidth::Fullband)
-		.map_err(|_| "Opus bandwidth configuration failed")?;
-	encoder
-		.set_inband_fec(false)
-		.map_err(|_| "Opus FEC configuration failed")?;
-	encoder
-		.set_packet_loss_perc(0)
-		.map_err(|_| "Opus packet-loss configuration failed")?;
-	encoder
-		.set_dtx(false)
-		.map_err(|_| "Opus DTX configuration failed")?;
+	let mut encoder = microphone_encoder()?;
 	let mut random = [0; 6];
 	getrandom::fill(&mut random).map_err(|_| "Voice random initialization failed")?;
 	let mut sequence = u16::from_be_bytes([random[0], random[1]]);
@@ -2848,6 +2850,21 @@ mod tests {
 		reply[8..17].copy_from_slice(b"127.0.0.1");
 		reply[72..].copy_from_slice(&1234u16.to_be_bytes());
 		assert_eq!(discovery(&reply, 42).unwrap().1, 1234);
+		// Loud, noisy speech-like input must still leave the encoder in the FEC-capable
+		// SILK/hybrid modes and well under the old 1,275-byte CBR packets.
+		let mut microphone = microphone_encoder().unwrap();
+		let mut seed = 7u32;
+		for frame in 0..50 {
+			let pcm = std::array::from_fn::<_, 1920, _>(|i| {
+				seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+				let t = (frame * 960 + i / 2) as f32 / 48_000.0;
+				(t * 180.0 * std::f32::consts::TAU).sin() * 0.5 + (seed as i32 as f32 / i32::MAX as f32) * 0.1
+			});
+			let mut packet = [0; 1275];
+			let length = microphone.encode_float(&pcm, &mut packet).unwrap();
+			assert!(packet[0] >> 3 < 16, "frame {frame}: config {}", packet[0] >> 3);
+			assert!(length < 400, "frame {frame}: {length} bytes");
+		}
 		assert!(discovery(&reply, 43).is_err());
 		let mut encoder = Encoder::new(48_000, Channels::Stereo, Application::Voip).unwrap();
 		let mut decoder = Decoder::new(48_000, Channels::Mono).unwrap();
@@ -3109,12 +3126,9 @@ mod tests {
 				.session
 				.decrypt(1, davey::MediaType::AUDIO, &ciphertext)
 				.unwrap();
-			// Retain upstream's stereo CBR microphone wire format through this integration.
-			assert_eq!(
-				opus2::packet::get_nb_channels(&encoded).unwrap(),
-				Channels::Stereo
-			);
-			assert_eq!(encoded.len(), 1275);
+			// Speech mode carries in-band FEC; CELT-only packets (configs 16-31) cannot.
+			assert!(encoded[0] >> 3 < 16, "{}", encoded[0] >> 3);
+			assert!(encoded.len() < 1275);
 			let mut decoder = Decoder::new(48_000, Channels::Mono).unwrap();
 			let mut out = [0.0; 960];
 			assert_eq!(

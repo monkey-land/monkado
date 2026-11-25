@@ -459,6 +459,13 @@ RNNoise/Off choice, echo cancellation enabled, and gain control/sensitivity gati
 The worker processes AEC/WebRTC suppression, then optional RNNoise or DeepFilterNet,
 then digital automatic gain, manual gain, the local meter, and sensitivity gating.
 Calls and microphone preview share this path; playback audio is not denoised.
+The microphone is sent like Discord's own client: 64 kb/s VBR speech Opus coded as mono
+in the SILK/hybrid modes with in-band FEC and a 10% expected-loss hint, so a receiver can
+rebuild a lost packet from the next one. Received voice plays through an adaptive jitter
+buffer that starts at 40 ms, grows one 20 ms tick (up to 160 ms) whenever a packet arrives
+after its slot, shrinks again after ten seconds without late packets by dropping only Opus
+silence, and decodes a missing packet from the following packet's FEC data when that packet
+is already buffered.
 No DSP runs in rendering or native audio callbacks. Settings replace one fixed-size
 worker snapshot and do not add a queue. Native PCM queues remain eight frames each.
 
