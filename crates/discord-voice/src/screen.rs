@@ -352,9 +352,12 @@ fn encode_loop(
 	#[cfg(target_os = "windows")]
 	let raw_pending = Arc::new(AtomicBool::new(false));
 	#[cfg(target_os = "windows")]
+	let raw_recycle = Arc::new(Mutex::new(Vec::with_capacity(2)));
+	#[cfg(target_os = "windows")]
 	let _native = capture::Capture::start(
 		settings,
 		raw_send,
+		raw_recycle.clone(),
 		audio,
 		capture_stop.clone(),
 		ready.clone(),
@@ -425,12 +428,26 @@ fn encode_loop(
 			}
 			preview_stale = true;
 		}
+		let prev_frame = if frame.is_some() {
+			latest_frame.take()
+		} else {
+			None
+		};
 		let encode = retain_screen_frame(
 			&mut latest_frame,
 			frame,
 			ready.load(Ordering::Acquire),
 			keyframe.load(Ordering::Acquire),
 		)?;
+		#[cfg(target_os = "windows")]
+		if let Some(old) = prev_frame
+			&& let Ok(mut pool) = raw_recycle.try_lock()
+			&& pool.len() < 2
+		{
+			pool.push(old.data);
+		}
+		#[cfg(not(target_os = "windows"))]
+		let _ = prev_frame;
 		if !visible {
 			if preview_stale && let Ok(mut slot) = preview.try_lock() {
 				slot.take();
@@ -566,6 +583,7 @@ struct ScreenEncoder {
 	software: Option<Encoder>,
 	/// Reused I420 picture for openh264.
 	i420: Vec<u8>,
+	converter: convert::Converter,
 	hardware: Option<crate::video_encode::hardware::Encoder>,
 	settings: Settings,
 	bitrate: u32,
@@ -609,6 +627,7 @@ impl ScreenEncoder {
 			diagnostics: crate::diagnostics::EncoderRegistration::new(true, hardware.is_some()),
 			software,
 			i420: Vec::new(),
+			converter: convert::Converter::default(),
 			hardware,
 			settings,
 			bitrate,
@@ -666,7 +685,7 @@ impl ScreenEncoder {
 					force_keyframe,
 					i64::try_from(at.as_nanos() / 100).unwrap_or(i64::MAX),
 					|picture| {
-						convert::bgra_to_yuv420(
+						self.converter.bgra_to_yuv420(
 							frame,
 							width,
 							height,
@@ -696,7 +715,7 @@ impl ScreenEncoder {
 			software_force = true;
 		}
 		self.i420.resize(width * height * 3 / 2, 0);
-		convert::bgra_to_yuv420(
+		self.converter.bgra_to_yuv420(
 			frame,
 			width,
 			height,

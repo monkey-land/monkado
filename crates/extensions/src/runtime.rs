@@ -1,4 +1,8 @@
 use crate::{Error, ExtensionKind, Invocation, MAX_IO_BYTES, MAX_MODULE_BYTES, Output, Package};
+use std::{
+	hash::{DefaultHasher, Hash, Hasher},
+	sync::{Arc, Mutex, OnceLock},
+};
 use wasmi::{
 	Config, EnforcedLimits, Engine, ExternType, FuncType, Instance, Linker, Module, Store,
 	StoreLimits, StoreLimitsBuilder, TrapCode, ValType,
@@ -6,6 +10,18 @@ use wasmi::{
 
 const MEMORY_BYTES: usize = 16 * 1024 * 1024;
 const FUEL: u64 = 10_000_000;
+const MODULE_CACHE_CAP: usize = crate::MAX_PLUGINS * 2;
+/// Cached Wasm bytes; compiled code held by each entry's engine scales with them.
+const MODULE_CACHE_BYTES: usize = 16 * 1024 * 1024;
+
+/// A compiled module with the engine that owns its code. Wasmi engines free compiled
+/// functions only when dropped, so each entry keeps its own engine and eviction reclaims both.
+struct CachedModule {
+	hash: u64,
+	wasm: Arc<[u8]>,
+	engine: Engine,
+	module: Module,
+}
 
 fn engine() -> Engine {
 	let mut config = Config::default();
@@ -21,7 +37,7 @@ fn engine() -> Engine {
 	Engine::new(&config)
 }
 
-fn module(engine: &Engine, bytes: &[u8]) -> Result<Module, Error> {
+fn compile_module(engine: &Engine, bytes: &[u8]) -> Result<Module, Error> {
 	if bytes.len() > MAX_MODULE_BYTES {
 		return Err(Error::Limit);
 	}
@@ -38,9 +54,58 @@ fn module(engine: &Engine, bytes: &[u8]) -> Result<Module, Error> {
 	Ok(module)
 }
 
+/// The compiled module for `bytes` with its owning engine, from a bounded LRU cache.
+fn cached_module(bytes: &[u8]) -> Result<(Engine, Module), Error> {
+	if bytes.len() > MAX_MODULE_BYTES {
+		return Err(Error::Limit);
+	}
+	static CACHE: OnceLock<Mutex<Vec<CachedModule>>> = OnceLock::new();
+	let cache = CACHE.get_or_init(|| Mutex::new(Vec::with_capacity(MODULE_CACHE_CAP)));
+	let mut hasher = DefaultHasher::new();
+	bytes.hash(&mut hasher);
+	let hash = hasher.finish();
+	{
+		let mut entries = cache.lock().unwrap_or_else(|e| e.into_inner());
+		if let Some(index) = entries
+			.iter()
+			.position(|entry| entry.hash == hash && entry.wasm.as_ref() == bytes)
+		{
+			let hit = entries.remove(index);
+			let found = (hit.engine.clone(), hit.module.clone());
+			entries.push(hit);
+			return Ok(found);
+		}
+	}
+	// Compile outside the lock so concurrent invocations of distinct plugins do not serialize.
+	let engine = engine();
+	let module = compile_module(&engine, bytes)?;
+	if bytes.len() <= MODULE_CACHE_BYTES {
+		let mut entries = cache.lock().unwrap_or_else(|e| e.into_inner());
+		if !entries
+			.iter()
+			.any(|entry| entry.hash == hash && entry.wasm.as_ref() == bytes)
+		{
+			let mut cached: usize = entries.iter().map(|entry| entry.wasm.len()).sum();
+			while !entries.is_empty()
+				&& (entries.len() >= MODULE_CACHE_CAP || cached + bytes.len() > MODULE_CACHE_BYTES)
+			{
+				cached -= entries.remove(0).wasm.len();
+			}
+			entries.push(CachedModule {
+				hash,
+				wasm: Arc::from(bytes),
+				engine: engine.clone(),
+				module: module.clone(),
+			});
+		}
+	}
+	Ok((engine, module))
+}
+
+/// Validation compiles with a temporary engine so its code is freed on return.
 pub(crate) fn validate_module(bytes: &[u8]) -> Result<(), Error> {
 	let engine = engine();
-	let module = module(&engine, bytes)?;
+	let module = compile_module(&engine, bytes)?;
 	instantiate(&engine, &module).map(|_| ())
 }
 
@@ -107,8 +172,7 @@ pub fn invoke(package: &Package, input: &Invocation) -> Result<Output, Error> {
 	if bytes.len() > MAX_IO_BYTES {
 		return Err(Error::InputLimit);
 	}
-	let engine = engine();
-	let module = module(&engine, &package.wasm)?;
+	let (engine, module) = cached_module(&package.wasm)?;
 	let (mut store, instance) = instantiate(&engine, &module)?;
 	let memory = instance.get_memory(&store, "memory").ok_or(Error::Module)?;
 	let alloc = instance

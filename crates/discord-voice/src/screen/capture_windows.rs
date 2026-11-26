@@ -104,6 +104,7 @@ pub(crate) fn sources() -> Result<Vec<Source>, &'static str> {
 #[derive(Clone)]
 struct Flags {
 	frames: SyncSender<RawFrame>,
+	recycle: readback::Recycle,
 	stop: Arc<AtomicBool>,
 	pending: Arc<AtomicBool>,
 	next_frame: Instant,
@@ -157,6 +158,7 @@ impl GraphicsCaptureApiHandler for Handler {
 			None => readback::Readback::start(
 				frame,
 				self.0.frames.clone(),
+				self.0.recycle.clone(),
 				self.0.pending.clone(),
 				self.0.stop.clone(),
 			)
@@ -194,6 +196,7 @@ impl Capture {
 	pub(crate) fn start(
 		settings: CaptureSettings,
 		frames: SyncSender<RawFrame>,
+		recycle: readback::Recycle,
 		audio: Option<tokio::sync::mpsc::Sender<AudioChunk>>,
 		stop: Arc<AtomicBool>,
 		ready: Arc<AtomicBool>,
@@ -219,7 +222,15 @@ impl Capture {
 					.into_iter()
 					.find(|monitor| monitor_id(monitor) == id)
 					.ok_or("Selected display is no longer available")?;
-				start_item(settings, monitor, frames, stop.clone(), pending, cancel)
+				start_item(
+					settings,
+					monitor,
+					frames,
+					recycle,
+					stop.clone(),
+					pending,
+					cancel,
+				)
 			}
 			SourceId::Window(id) => {
 				let window = Window::enumerate()
@@ -228,7 +239,15 @@ impl Capture {
 					.find(|window| window_id(window) == id)
 					.ok_or("Selected window is no longer available")?;
 				window_process = window.process_id().ok();
-				start_item(settings, window, frames, stop.clone(), pending, cancel)
+				start_item(
+					settings,
+					window,
+					frames,
+					recycle,
+					stop.clone(),
+					pending,
+					cancel,
+				)
 			}
 			#[allow(unreachable_patterns)] // Portal may be absent from platform-scoped models.
 			_ => return Err("The desktop screen picker is available only on Linux".into()),
@@ -304,6 +323,7 @@ fn start_item<T>(
 	settings: CaptureSettings,
 	item: T,
 	frames: SyncSender<RawFrame>,
+	recycle: readback::Recycle,
 	stop: Arc<AtomicBool>,
 	pending: Arc<AtomicBool>,
 	cancel: Arc<AtomicBool>,
@@ -324,6 +344,7 @@ where
 	item.probe()?;
 	let flags = Flags {
 		frames,
+		recycle,
 		stop,
 		pending,
 		next_frame: Instant::now(),

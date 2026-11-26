@@ -14,11 +14,26 @@
 
 use super::{MAX_RAW_BYTES, RawFrame};
 use std::sync::{
-	Arc,
+	Arc, Mutex,
 	atomic::{AtomicBool, Ordering},
-	mpsc::{self, Receiver, SyncSender, TryRecvError},
+	mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError},
 };
 use std::time::{Duration, Instant};
+
+/// Pixel buffers of frames the encoder replaced or that were never delivered, reused for
+/// the next readback instead of allocating a fresh frame-sized buffer.
+pub(crate) type Recycle = Arc<Mutex<Vec<Vec<u8>>>>;
+/// Spare buffers kept: at most one in flight plus one retained by the encoder.
+pub(crate) const RECYCLE_BUFFERS: usize = 2;
+
+/// Returns `data` to `recycle` unless the pool is full or busy.
+pub(crate) fn give_back(recycle: &Recycle, data: Vec<u8>) {
+	if let Ok(mut pool) = recycle.try_lock()
+		&& pool.len() < RECYCLE_BUFFERS
+	{
+		pool.push(data);
+	}
+}
 use windows::Win32::Graphics::{
 	Direct3D11::{
 		D3D11_CPU_ACCESS_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, D3D11_MAP_READ,
@@ -71,6 +86,7 @@ impl Readback {
 	pub(super) fn start(
 		frame: &windows_capture::frame::Frame,
 		frames: SyncSender<RawFrame>,
+		recycle: Recycle,
 		pending: Arc<AtomicBool>,
 		stop: Arc<AtomicBool>,
 	) -> Result<Self, &'static str> {
@@ -88,7 +104,11 @@ impl Readback {
 		let worker = device.clone();
 		std::thread::Builder::new()
 			.name("screen-readback".into())
-			.spawn(move || read_loop(&worker, &queued, &free_send, &frames, &pending, &stop))
+			.spawn(move || {
+				read_loop(
+					&worker, &queued, &free_send, &frames, &recycle, &pending, &stop,
+				)
+			})
 			.map_err(|_| "Screen capture could not be started")?;
 		if crate::diagnostics::enabled() {
 			eprintln!(
@@ -199,16 +219,28 @@ fn read_loop(
 	queued: &Receiver<Slot>,
 	free: &SyncSender<Slot>,
 	frames: &SyncSender<RawFrame>,
+	recycle: &Recycle,
 	pending: &AtomicBool,
 	stop: &AtomicBool,
 ) {
 	let mut metrics = crate::diagnostics::Metrics::new(crate::diagnostics::Scope::ScreenVideo);
 	for slot in queued {
 		let start = metrics.start();
-		let read = read(device, &slot, stop);
+		let buffer = recycle
+			.try_lock()
+			.ok()
+			.and_then(|mut pool| pool.pop())
+			.unwrap_or_default();
+		let read = read(device, &slot, stop, buffer);
 		metrics.finish(crate::diagnostics::Stage::CaptureRead, start);
 		let delivered = match read {
-			Ok(frame) => frames.try_send(frame).is_ok(),
+			Ok(frame) => match frames.try_send(frame) {
+				Ok(()) => true,
+				Err(TrySendError::Full(frame) | TrySendError::Disconnected(frame)) => {
+					give_back(recycle, frame.data);
+					false
+				}
+			},
 			Err(()) => false,
 		};
 		if !delivered {
@@ -223,7 +255,7 @@ fn read_loop(
 
 /// Waits for the slot's copy, polling so the device lock is never held while the GPU works,
 /// then packs its rows. A device fault stops the capture.
-fn read(device: &Device, slot: &Slot, stop: &AtomicBool) -> Result<RawFrame, ()> {
+fn read(device: &Device, slot: &Slot, stop: &AtomicBool, buffer: Vec<u8>) -> Result<RawFrame, ()> {
 	let texture = slot.texture.as_ref().ok_or(())?;
 	let deadline = Instant::now() + COPY_DEADLINE;
 	let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
@@ -254,13 +286,18 @@ fn read(device: &Device, slot: &Slot, stop: &AtomicBool) -> Result<RawFrame, ()>
 			}
 		}
 	}
-	let packed = pack(&mapped, slot.width, slot.height);
+	let packed = pack(&mapped, slot.width, slot.height, buffer);
 	// SAFETY: Balances the successful Map above.
 	unsafe { device.context.Unmap(texture, 0) };
 	packed.ok_or_else(|| stop.store(true, Ordering::Release))
 }
 
-fn pack(mapped: &D3D11_MAPPED_SUBRESOURCE, width: u32, height: u32) -> Option<RawFrame> {
+fn pack(
+	mapped: &D3D11_MAPPED_SUBRESOURCE,
+	width: u32,
+	height: u32,
+	buffer: Vec<u8>,
+) -> Option<RawFrame> {
 	let row_bytes = (width as usize).checked_mul(4)?;
 	let stride = mapped.RowPitch as usize;
 	let source_len = stride.checked_mul(height as usize)?;
@@ -269,14 +306,27 @@ fn pack(mapped: &D3D11_MAPPED_SUBRESOURCE, width: u32, height: u32) -> Option<Ra
 	}
 	// SAFETY: A successful Map exposes RowPitch × height readable bytes until Unmap.
 	let source = unsafe { std::slice::from_raw_parts(mapped.pData.cast::<u8>(), source_len) };
-	Some(pack_rows(source, stride, row_bytes, width, height))
+	Some(pack_rows(source, stride, row_bytes, width, height, buffer))
 }
 
-/// Drops each row's padding so the encoder sees tightly packed BGRA.
-fn pack_rows(source: &[u8], stride: usize, row_bytes: usize, width: u32, height: u32) -> RawFrame {
-	let mut data = Vec::with_capacity(row_bytes * height as usize);
-	for row in source.chunks_exact(stride) {
-		data.extend_from_slice(&row[..row_bytes]);
+/// Drops each row's padding into `data` (reusing its allocation) so the encoder sees tightly
+/// packed BGRA.
+fn pack_rows(
+	source: &[u8],
+	stride: usize,
+	row_bytes: usize,
+	width: u32,
+	height: u32,
+	mut data: Vec<u8>,
+) -> RawFrame {
+	data.clear();
+	data.reserve(row_bytes * height as usize);
+	if stride == row_bytes {
+		data.extend_from_slice(source);
+	} else {
+		for row in source.chunks_exact(stride) {
+			data.extend_from_slice(&row[..row_bytes]);
+		}
 	}
 	RawFrame {
 		width,

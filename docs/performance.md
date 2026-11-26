@@ -1,5 +1,31 @@
 # Performance findings
 
+## Runtime hot-path optimizations — November 25, 2026
+
+Compared `74fc7e9` (`origin/main`) with the runtime hot-path changes using pinned Rust `1.99.1` (`--locked` release builds) on Windows 11 Pro x64 (build `26300`), AMD Ryzen 7 5700G (8 cores / 16 logical threads), `31.87 GiB` RAM.
+
+Standard release packaging (`cargo xtask package`, `--no-default-features`, voice enabled) and ZIP creation (`Compress-Archive` over `dist\*`):
+
+| Metric / artifact | Baseline | After | Delta |
+| --- | ---: | ---: | ---: |
+| Release executable (`dist\monkado.exe`) | 108,781,568 B | 108,779,008 B | -2,560 B (-0.002%) |
+| `dist/` regular-file payload (233 files) | 113,144,826 B | 113,142,266 B | -2,560 B (-0.002%) |
+| ZIP of `dist/` | 59,223,296 B | 59,225,787 B | +2,491 B (+0.004%) |
+| Demo executable (`--features demo`) | 110,678,016 B | 110,673,920 B | -4,096 B (-0.004%) |
+
+Targeted microbenchmarks (`extensions` and `replay-bench`) and `--demo` idle process sampling (`sample-process.ps1`: `--demo --page=channel-links --width=1120 --height=900 --interactive`, 5 s warmup + 20 × 1 s samples, two interleaved same-session runs plus two pre-restart baseline runs; CPU reported as `%` of one logical core):
+
+| Workload / metric | Baseline | After | Notes |
+| --- | ---: | ---: | --- |
+| `extensions` `parse_plus_invoke_median_us` (`n=5`, `message-delete-protector`) | 4,014 us | 3,935 us | -2.0% (`wasm_bytes=115,250`) |
+| `extensions` `invoke_median_us` (`n=100`, fresh `Store`/`Linker`/`StoreLimits`/fuel each call) | 1,672 us | 722 us | -56.8% (`Engine` + 16-slot module LRU) |
+| `replay-bench` median (`1` warmup + `5` runs, `100,000` events, `401,492..401,977` B, `500` records) | 102.0796 ms | 102.7010 ms | Same-session parity (pre-restart `95.0698 ms`) |
+| `--demo` idle CPU (1 logical core, range) | 0.155–0.616% | 0.231–0.307% | Same-session baseline `0.308–0.616%` |
+| `--demo` peak / settled `WorkingSet64` | 155.39–194.54 MiB | 192.81–230.67 MiB | `162,934,784..203,988,992` vs `202,174,464..241,872,896` B |
+| `--demo` settled `PrivateMemorySize64` | 213.72–239.30 MiB | 229.60–256.22 MiB | `224,096,256..250,925,056` vs `240,758,784..268,660,736` B |
+
+Not measured live: end-to-end Discord voice/screen-share FPS and encode CPU (`Encryption::seal_packet` in-place AEAD, `Converter` tap/row-buffer reuse, DXGI frame-buffer recycling, `Gpu` output view reuse), active WTS game-detection overhead (`WTSEnumerateProcessesW`), or guild avatar cache churn under long browsing (`Avatars::store_fit` LRU eviction).
+
 ## Voice connection ping
 
 Compared `5a11f95b` with the voice ping change using locked Rust 1.99.1 release builds

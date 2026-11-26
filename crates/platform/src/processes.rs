@@ -42,7 +42,7 @@ fn accept_cmdline(reader: impl std::io::Read, into: &mut Vec<String>) -> std::io
 /// `"image.exe","1234","Console","1","12,345 K"`: the image name and process id, unless
 /// it runs in the non-interactive services session. The session name is localized; its
 /// number is not.
-#[cfg(any(target_os = "windows", test))]
+#[cfg(test)]
 fn interactive_image(line: &str) -> Option<(&str, u32)> {
 	let mut fields = line.strip_prefix('"')?.split("\",\"");
 	let name = fields.next()?;
@@ -52,7 +52,7 @@ fn interactive_image(line: &str) -> Option<(&str, u32)> {
 }
 
 /// The queried path when it is usable, otherwise the listed image name. The process id may
-/// have been reused since `tasklist` ran, so the path must still name the listed image; a
+/// have been reused since enumeration, so the path must still name the listed image; a
 /// path too long to be a saved executable would be dropped by matching and the picker,
 /// where the short image name is not.
 #[cfg(any(target_os = "windows", test))]
@@ -125,11 +125,10 @@ mod native {
 
 #[cfg(target_os = "windows")]
 mod native {
-	use super::{MAX_PATH, MAX_PROCESSES, accept, interactive_image, path_or_image};
-	use std::os::windows::process::CommandExt;
-	use std::process::Command;
-
-	const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+	use super::{MAX_PATH, MAX_PROCESSES, accept, path_or_image};
+	use windows::Win32::System::RemoteDesktop::{
+		WTS_PROCESS_INFOW, WTSEnumerateProcessesW, WTSFreeMemory,
+	};
 
 	/// The full image path, read through a handle that grants nothing but limited queries.
 	/// `None` for a process this user may not query, such as one guarded by anti-cheat.
@@ -164,26 +163,53 @@ mod native {
 		String::from_utf16(buffer.get(..length as usize)?).ok()
 	}
 
-	/// `tasklist` lists image names and ids; the path is then read per process, because a
-	/// bare name such as `gh.exe` or `cl.exe` is shared by unrelated programs and games.
-	/// A process that cannot be queried keeps its bare image name.
+	struct WtsBuffer(*mut WTS_PROCESS_INFOW);
+	impl Drop for WtsBuffer {
+		#[allow(unsafe_code)]
+		fn drop(&mut self) {
+			if !self.0.is_null() {
+				// SAFETY: `self.0` came from `WTSEnumerateProcessesW`.
+				unsafe { WTSFreeMemory(self.0.cast()) };
+			}
+		}
+	}
+
+	/// `WTSEnumerateProcessesW` lists session ids, process ids and image names without
+	/// spawning `tasklist.exe`; the path is then read per process, because a bare name such
+	/// as `gh.exe` or `cl.exe` is shared by unrelated programs and games.
 	/// Session 0 holds only services, never a game the user is playing; Intel's `LMS.exe`
 	/// service there otherwise matches "Last Man Standing".
+	#[allow(unsafe_code)]
 	pub fn running() -> std::io::Result<Vec<String>> {
-		let output = Command::new("tasklist.exe")
-			.args(["/nh", "/fo", "csv"])
-			.creation_flags(CREATE_NO_WINDOW)
-			.output()?;
-		if !output.status.success() {
-			return Err(std::io::Error::other("process list is unavailable"));
-		}
+		let mut buffer = std::ptr::null_mut();
+		let mut count = 0u32;
+		// SAFETY: `buffer` and `count` are valid out-pointers for `WTSEnumerateProcessesW`.
+		unsafe { WTSEnumerateProcessesW(None, 0, 1, &mut buffer, &mut count) }
+			.map_err(|_| std::io::Error::other("process list is unavailable"))?;
+		let _guard = WtsBuffer(buffer);
+		let entries = if buffer.is_null() || count == 0 {
+			&[]
+		} else {
+			// SAFETY: `WTSEnumerateProcessesW` guarantees `count` initialized entries until `_guard` drops.
+			unsafe { std::slice::from_raw_parts(buffer, count as usize) }
+		};
 		let mut paths = Vec::new();
-		for line in String::from_utf8_lossy(&output.stdout).lines() {
+		for entry in entries {
 			if paths.len() >= MAX_PROCESSES {
 				break;
 			}
-			if let Some((name, pid)) = interactive_image(line) {
-				accept(&path_or_image(name, image_path(pid)), &mut paths);
+			if entry.SessionId == 0 || entry.pProcessName.is_null() {
+				continue;
+			}
+			// SAFETY: `pProcessName` is a valid NUL-terminated UTF-16 string inside the WTS buffer.
+			let Ok(name) = (unsafe { entry.pProcessName.to_string() }) else {
+				continue;
+			};
+			if !name.is_empty() {
+				accept(
+					&path_or_image(&name, image_path(entry.ProcessId)),
+					&mut paths,
+				);
 			}
 		}
 		Ok(paths)
