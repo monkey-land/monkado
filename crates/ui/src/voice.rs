@@ -181,6 +181,12 @@ impl MessagingUi {
 		true
 	}
 
+	/// A watched share is shown in its own window. That window is an immediate viewport drawn
+	/// inside the main pass, so a paint-only frame of the main window cannot update it.
+	pub fn stream_window_open(&self) -> bool {
+		self.voice_stream_detached.is_some()
+	}
+
 	/// The primary watched share in its own movable window, kept above other applications.
 	/// Closing it returns the share to the call stage.
 	pub(super) fn show_detached_stream(&mut self, ctx: &egui::Context, state: &mut State) {

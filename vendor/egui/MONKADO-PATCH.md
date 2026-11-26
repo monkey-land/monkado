@@ -43,6 +43,7 @@ requests are squashed from the PR head that was reviewed; all of them are unmerg
 | 0023 | Monkado | `epaint`, `egui_system_font_provider` | Emoji-presentation clusters (🆕, or ♾ with U+FE0F) use a face that draws them in color instead of an earlier text font's plain glyph, and the system font provider asks for the emoji font first. Text presentation is unchanged. Fixes #913. |
 | 0024 | [#8698](https://github.com/emilk/egui/pull/8698) | `epaint`, `egui` | Right-to-left runs get one glyph per char instead of `2n - 1`, so editor cursors stay inside the text (End then Ctrl+ArrowLeft in Arabic text no longer overflows). Merged with 0009's direction override, and ported to harfrust 0.15's in-place `Buffer`, which the PR head predates. |
 | 0025 | Monkado | `epaint` | Laying out a multi-paragraph job one paragraph at a time keeps an empty first section, which carries `Label`'s wrap indentation, so text continuing a line after an inline widget (a heading after a channel chip) is no longer painted over that line. |
+| 0026 | Monkado | `eframe`, `egui-wgpu` | Paint-only frames: the root viewport's last pass is presented again without running the ui, described below. |
 | 0027 | Monkado | `egui-winit` | A pasted lone file path also sends the image copied beside it, described under image paste below. |
 | 0028 | Monkado | `egui` | Exposes an explicit TextEdit undo checkpoint for the message composer. |
 
@@ -60,6 +61,40 @@ stale atlas UVs. Default `LayoutJob` layout is unchanged. The direction override
 harfrust 0.15's in-place `Buffer` (upstream #8874). Remove this patch when upstream exposes
 equivalent direction and cluster-mapping APIs with correct wrapped bidi layout. It does not
 provide bidirectional `TextEdit`, IME or screen-reader parity.
+
+## Monkado patch: paint-only frames
+
+A playing video changes one texture up to 60 times a second while no shape of the ui moves.
+Upstream can only answer with a full pass per frame: logic, ui, layout, tessellation and a
+fresh upload of every mesh. With this patch an app can instead present the last pass again.
+
+- `Frame::paint_only_requester` returns a `PaintOnlyRequester` (cloneable, any thread). Its
+  `request` asks for one frame of the root viewport that only paints; `request_after` asks
+  for one when a picture is due later. Only the earliest pending request is kept, so the app
+  asks again from `App::paint_only` (or from the pass that ran instead).
+- eframe answers such a frame with `App::paint_only` only when nothing has asked for a ui pass
+  since the last one: its own `request_redraw` for a due repaint marks the window, and a
+  `RedrawRequested` nobody asked for (the windowing system's own) runs the ui as before. Input
+  and `Context::request_repaint` therefore always get their full pass.
+- `App::paint_only` changes what the last pass's textures show and returns `true`; eframe
+  then paints the kept `ClippedPrimitive`s and presents. Returning `false` runs a full pass in
+  the same redraw. No input is consumed and the pass counter does not move.
+- The primitives are kept only while `App::keep_paint` returns `true`, only for the root
+  viewport, and not for a pass that freed a texture (it is freed right after that paint). A
+  pass of any other viewport drops them too, since it can free textures or start the shared
+  glyph atlas over. A changed window size, a hidden window, a pending screenshot or
+  unapplied texture deltas also take a full pass. Periodic saving still runs after a
+  paint-only frame.
+- `egui_wgpu::winit::Painter::paint_again` paints a viewport's last primitives without
+  uploading them when `Renderer::buffers_generation` shows that nothing else has uploaded
+  since and the surface has the size the upload was made for. `CallbackTrait::prepare` does not run then, so a paint callback must not depend on
+  per-frame state prepared there (Monkado's corner mask does not).
+
+Monkado uses it for inline attachment video (`apps/desktop/src/video.rs`), watched streams
+(`watch.rs`) and remote cameras (`voice.rs`). Only the `wgpu`
+backend paints this way; `glow` treats the request as a normal repaint, and the web backend
+has no requester. Limits: one frame of meshes stays in memory while a video session exists;
+immediate child viewports are not repainted by a paint-only frame (Monkado opens none).
 
 ## Monkado patch: Windows window-drag repaints
 

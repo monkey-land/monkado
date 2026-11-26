@@ -70,6 +70,14 @@ jobs:
           }
           throw "NSIS não foi instalado (makensis ausente); o instalador não seria gerado."
 
+      - name: Escrever notas da versão
+        run: |
+          # Written before the build and the version push so a failure stops the release early.
+          # The app's update log shows these notes; built from each PR's "Notas da versão".
+          PREVIOUS="$(gh release view -R "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
+          python tools/release-notes.py "$GITHUB_REPOSITORY" "$PREVIOUS" "$(git rev-parse HEAD)" > release-notes.md
+          cat release-notes.md
+
       - name: Compilar e empacotar
         run: cargo xtask package
 
@@ -99,4 +107,4 @@ jobs:
             -R "$GITHUB_REPOSITORY" \
             --target "$(git rev-parse HEAD)" \
             --title "Monkado $VERSION" \
-            --generate-notes
+            --notes-file release-notes.md
