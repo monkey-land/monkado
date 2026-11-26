@@ -93,7 +93,8 @@ compatibility, storage or dependency docs when their claims change.
 For author-visible SDK changes, use `.agents/skills/monkado-sdk-wiki/SKILL.md` and publish its
 reviewed wiki update from the pushed source commit. Keep unmerged capabilities labeled Preview.
 
-Use `.agents/skills/monkado-visual-check/SKILL.md` for visible UI changes (screenshots go to the
+Fill each application PR's "Notas da versão" with `.agents/skills/monkado-release-notes/SKILL.md`;
+the app's update log shows them. Use `.agents/skills/monkado-visual-check/SKILL.md` for visible UI changes (screenshots go to the
 git-ignored `.evidence/` and to the owner) and `.agents/skills/monkado-release/SKILL.md` before
 merging to `main` or releasing. Requests that arrive together ship as one PR unless the owner
 asks otherwise.
