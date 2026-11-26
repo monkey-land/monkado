@@ -93,10 +93,17 @@ jobs:
           git commit -m "chore: versão $VERSION"
           git push origin "HEAD:$GITHUB_REF_NAME"
 
+      - name: Escrever notas da versão
+        run: |
+          # The app's update log shows these notes; built from each PR's "Notas da versão".
+          PREVIOUS="$(gh release view -R "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
+          python tools/release-notes.py "$GITHUB_REPOSITORY" "$PREVIOUS" "$(git rev-parse HEAD)" > release-notes.md
+          cat release-notes.md
+
       - name: Publicar release
         run: |
           gh release create "$TAG" release-assets/* \
             -R "$GITHUB_REPOSITORY" \
             --target "$(git rev-parse HEAD)" \
             --title "Monkado $VERSION" \
-            --generate-notes
+            --notes-file release-notes.md

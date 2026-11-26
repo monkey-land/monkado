@@ -2,6 +2,13 @@
 
 <!-- Explain the concrete problem and resulting behavior. -->
 
+## Notas da versão
+
+<!-- O que muda para quem usa o Monkado, em português, um item por linha. Aparece no
+registro de atualizações do app. Apague os itens se a mudança não é visível (CI, docs). -->
+
+- 
+
 ## Verification
 
 <!-- Commands actually run, outcomes, reproduction steps and untested platforms/live behavior. -->
