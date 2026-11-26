@@ -5996,8 +5996,10 @@ impl eframe::App for Desktop {
 	/// A playing attachment's next picture goes into the texture the last pass drew and
 	/// that pass's shapes are presented again: no layout or tessellation per video frame.
 	fn paint_only(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) -> bool {
-		// The demo's pending automatic pause is decided in the ui pass.
+		// The demo's pending automatic pause is decided in the ui pass. A detached stream window
+		// is drawn inside the main pass, so its pictures need full passes.
 		self.demo_video_autoplay.is_none()
+			&& !self.messaging.stream_window_open()
 			&& self.video.paint_only(self.messaging.video(), ctx)
 			&& self.voice.paint_only(ctx)
 	}
