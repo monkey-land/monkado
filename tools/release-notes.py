@@ -49,9 +49,17 @@ def kind(title):
 
 def main():
     repo, previous, target = sys.argv[1:4]
-    compare = gh("api", f"repos/{repo}/compare/{previous}...{target}")
+    commits = []
+    page = 1
+    while True:
+        compare = gh("api", f"repos/{repo}/compare/{previous}...{target}?per_page=100&page={page}")
+        batch = compare.get("commits", [])
+        commits.extend(batch)
+        if len(batch) < 100 or len(commits) >= compare.get("total_commits", 0):
+            break
+        page += 1
     numbers = []
-    for commit in compare.get("commits", []):
+    for commit in commits:
         subject = commit["commit"]["message"].splitlines()[0]
         found = re.search(r"\(#(\d+)\)\s*$", subject)
         if found and found.group(1) not in numbers:
@@ -79,7 +87,7 @@ def main():
             out.append("")
     if not out:
         out = ["### Outras mudanças\n", "- Ajustes internos.", ""]
-    out.append(f"**Todas as mudanças**: https://github.com/{repo}/compare/{previous}...{target[:12]}")
+    out.append(f"**Todas as mudanças**: https://github.com/{repo}/compare/{previous}...{target}")
     sys.stdout.reconfigure(encoding="utf-8")
     print("\n".join(out))
 
