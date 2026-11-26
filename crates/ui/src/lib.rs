@@ -505,6 +505,9 @@ pub struct MessagingUi {
 	pub attachment_paste_requested: Option<AttachmentPaste>,
 	pub pasted_text: Option<(Id, egui::Id, String)>,
 	paste_key_handled: bool,
+	/// A menu Paste asked the platform for clipboard data in this frame; when no paste event
+	/// follows (a clipboard holding only copied files), the clipboard worker reads it instead.
+	menu_paste_waiting: Option<(egui::Id, u64)>,
 	/// The profile card docked beside a direct message, with its own footer draft.
 	dm_profile: profiles::ProfileSession,
 	/// A text field whose context menu asked to paste.
@@ -1373,6 +1376,20 @@ impl MessagingUi {
 					});
 				}
 			});
+			let frame = ctx.cumulative_frame_nr();
+			if requested {
+				self.menu_paste_waiting = None;
+			} else if let Some((waiting, asked)) = self.menu_paste_waiting
+				&& waiting == target
+				&& frame >= asked + 2
+			{
+				// The platform delivered nothing after the request, so let the worker read
+				// copied files (its file list outranks any stale image).
+				self.menu_paste_waiting = None;
+				requested = true;
+			} else if self.menu_paste_waiting.is_some() {
+				ctx.request_repaint();
+			}
 			if menu && !requested {
 				// The menu click itself carries no clipboard data, so read like the key
 				// shortcut does: the platform delivers `Event::Paste`/`PasteImage` to the
@@ -1383,6 +1400,8 @@ impl MessagingUi {
 				// selection.
 				ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaste);
 				self.paste_key_handled = false;
+				self.menu_paste_waiting = Some((target, frame));
+				ctx.request_repaint();
 			}
 			if requested {
 				if request
