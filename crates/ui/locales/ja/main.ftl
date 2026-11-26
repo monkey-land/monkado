@@ -316,6 +316,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = 合成アタッ�
 attachments-open-original-open-original = オリジナルを開く…
 # Context: pending_card
 attachments-pending-card-remove-attachment = 添付ファイルを削除する
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = フルサイズのプレビューを表示できません
+attachments-pending-viewer-loading = フルサイズの画像を読み込み中…
+attachments-pending-viewer-close = 閉じる (Esc)
 attachments-loading-card-preparing = 準備中…
 # Context: show_status
 attachments-show-status-cancel-download = ダウンロードをキャンセルする
@@ -4150,6 +4154,14 @@ voice-call-bar-join-call = 通話に参加する
 voice-call-bar-reconnect-to-refresh-call = 再接続して通話を更新する
 # Context: call_controls
 voice-call-controls-disconnect = 切断する
+# Context: viewer_names
+voice-viewer-names-watching = 視聴中: { $names }
+# Context: viewer_names
+voice-viewer-names-watching-more = 視聴中: { $names } ほか { $count } 人
+# Context: viewer_names
+voice-viewer-names-count = 視聴者 { $count } 人
+# Context: viewer_names
+voice-viewer-names-unknown-viewer = 不明な視聴者
 # Context: call_controls
 voice-call-controls-dismiss-call = 通話を終了する
 # Context: call_controls
@@ -4932,3 +4944,7 @@ moderation-confirm-timeout = タイムアウト
 # Context: moderation
 moderation-confirm-ban = BAN
 voice-voice-participant-camera-on = カメラオン
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = このプラグインにはまだ表示するものがありません。

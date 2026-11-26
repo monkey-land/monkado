@@ -19,6 +19,10 @@ mod delta;
 mod install;
 
 const RELEASES: &str = "https://api.github.com/repos/monkey-land/monkado/releases";
+/// Web page that redirects to the newest stable tag; not subject to the REST API quota.
+const LATEST_PAGE: &str = "https://github.com/monkey-land/monkado/releases/latest";
+const DOWNLOADS: &str = "https://github.com/monkey-land/monkado/releases/download";
+const RATE_LIMITED: &str = "O limite de atualizações do GitHub foi atingido. Tente mais tarde.";
 const MAX_METADATA: usize = 2 * 1024 * 1024;
 const MAX_DOWNLOAD: u64 = 512 * 1024 * 1024;
 const CHECK_INTERVAL: Duration = Duration::from_secs(60 * 60);
@@ -505,9 +509,7 @@ async fn response(client: &wreq::Client, url: &str) -> Result<wreq::Response, St
 		})?;
 	match response.status().as_u16() {
 		200 => Ok(response),
-		403 | 429 => {
-			Err("O limite de atualizações do GitHub foi atingido. Tente mais tarde.".into())
-		}
+		403 | 429 => Err(RATE_LIMITED.into()),
 		404 => Err("Ainda não há versão publicada neste canal.".into()),
 		_ => Err("O GitHub não conseguiu fornecer a atualização. Tente mais tarde.".into()),
 	}
@@ -744,7 +746,14 @@ async fn check_release(
 	} else {
 		format!("{RELEASES}/latest")
 	};
-	let body = bounded_body(&client, &endpoint, MAX_METADATA, &cancel).await?;
+	let body = match bounded_body(&client, &endpoint, MAX_METADATA, &cancel).await {
+		Err(error) if error == RATE_LIMITED && !nightly => {
+			return latest_without_api(&client)
+				.await
+				.map(|package| (package, Vec::new()));
+		}
+		result => result?,
+	};
 	let releases = if nightly {
 		serde_json::from_slice::<Vec<Release>>(&body)
 	} else {
@@ -755,6 +764,80 @@ async fn check_release(
 		.map_err(|_| "Esta build tem uma versão inválida.".to_owned())?;
 	let log = release_log(&releases, nightly, &current);
 	select_release(releases, nightly, &current).map(|package| (package, log))
+}
+/// Stable check for when the REST API quota of this IP is spent: the newest tag comes from the
+/// `releases/latest` redirect and asset sizes from the download responses. The package is still
+/// verified against `SHA256SUMS.txt` and its size before installing. No release notes.
+async fn latest_without_api(client: &wreq::Client) -> Result<Option<Package>, String> {
+	let fallback_error = || RATE_LIMITED.to_owned();
+	let probe = wreq::Client::builder()
+		.https_only(true)
+		.no_proxy()
+		.user_agent(concat!("Monkado/", env!("CARGO_PKG_VERSION")))
+		.connect_timeout(Duration::from_secs(10))
+		.timeout(Duration::from_secs(30))
+		.redirect(wreq::redirect::Policy::none())
+		.build()
+		.map_err(|_| fallback_error())?;
+	let response = probe
+		.get(LATEST_PAGE)
+		.send()
+		.await
+		.map_err(|_| fallback_error())?;
+	let tag = response
+		.headers()
+		.get(wreq::header::LOCATION)
+		.and_then(|value| value.to_str().ok())
+		.and_then(latest_tag)
+		.ok_or_else(fallback_error)?;
+	let current = semver::Version::parse(env!("CARGO_PKG_VERSION"))
+		.map_err(|_| "Esta build tem uma versão inválida.".to_owned())?;
+	if release_version(&tag).is_none_or(|version| version <= current) {
+		return Ok(None);
+	}
+	let mut names = vec!["SHA256SUMS.txt".to_owned()];
+	if let Some(archive) = asset_name(&tag) {
+		if archive.ends_with(".AppImage") {
+			names.push(format!("{archive}.zsync"));
+		}
+		names.push(archive);
+	}
+	let mut assets = Vec::with_capacity(names.len());
+	for name in names {
+		let url = format!("{DOWNLOADS}/{tag}/{name}");
+		// A missing asset is left out; `select_release` reports the required ones.
+		let Ok(response) = client.head(&url).send().await else {
+			continue;
+		};
+		if let (200, Some(size)) = (response.status().as_u16(), response.content_length()) {
+			assets.push(Asset {
+				name,
+				browser_download_url: url,
+				size,
+			});
+		}
+	}
+	let release = Release {
+		tag_name: tag,
+		draft: false,
+		prerelease: false,
+		assets,
+		published_at: None,
+		body: None,
+	};
+	select_release(vec![release], false, &current)
+}
+/// The tag of a `releases/latest` redirect, only when it points at this repository's tag page.
+fn latest_tag(location: &str) -> Option<String> {
+	let url = url::Url::parse(location).ok()?;
+	if !trusted_url(&url) || url.host_str() != Some("github.com") || url.query().is_some() {
+		return None;
+	}
+	let tag = url
+		.path()
+		.strip_prefix("/monkey-land/monkado/releases/tag/")?;
+	release_version(tag)?;
+	Some(tag.to_owned())
 }
 fn demo_log() -> Vec<ui::updates::LogEntry> {
 	[
@@ -986,4 +1069,28 @@ pub fn debug_check() -> Result<(), String> {
 		return Err(format!("Release notes parsed as {notes:?}."));
 	}
 	install::debug_check()
+}
+
+#[cfg(test)]
+mod tests {
+	#[test]
+	fn latest_redirect_accepts_only_this_repositorys_release_tag() {
+		let tag = super::latest_tag;
+		assert_eq!(
+			tag("https://github.com/monkey-land/monkado/releases/tag/v1.6.0").as_deref(),
+			Some("v1.6.0")
+		);
+		for rejected in [
+			"https://github.com/monkey-land/monkado/releases",
+			"https://github.com/other/monkado/releases/tag/v9.0.0",
+			"https://evil.example/monkey-land/monkado/releases/tag/v9.0.0",
+			"http://github.com/monkey-land/monkado/releases/tag/v9.0.0",
+			"https://github.com/monkey-land/monkado/releases/tag/v9.0.0/../x",
+			"https://github.com/monkey-land/monkado/releases/tag/latest",
+			"https://github.com/monkey-land/monkado/releases/tag/v9.0.0?x=1",
+			"/monkey-land/monkado/releases/tag/v9.0.0",
+		] {
+			assert_eq!(tag(rejected), None, "{rejected}");
+		}
+	}
 }

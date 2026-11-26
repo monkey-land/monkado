@@ -17,10 +17,10 @@ pub(crate) enum Scope {
 	StreamReceive,
 	#[cfg_attr(not(any(target_os = "windows", target_os = "linux")), allow(dead_code))]
 	ScreenAudio,
-	/// Linux screen capture: `receive` counts pictures taken from the pipeline, `encode`
-	/// times the software encoder, `drops` counts pictures left in the pipeline while the
-	/// transport was behind, and `stalls` counts passes where the pipeline had none.
-	#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+	/// Screen capture: `receive` counts pictures taken from the pipeline (Linux), `encode`
+	/// times the encoder, `drops` counts pictures dropped while the transport was behind, and
+	/// `stalls` counts passes where the pipeline had none. On Windows the readback thread
+	/// reports `capture_read`, the wait for each GPU copy, and its own dropped pictures.
 	ScreenVideo,
 }
 

@@ -68,6 +68,9 @@ struct Closing {
 	context: Context,
 	started: Instant,
 	timed_out: bool,
+	/// The stop never reached Discord, as when signaling was down; it is sent again once the
+	/// Gateway is back, since only Discord's stream deletion ends the LIVE state.
+	unsent: bool,
 }
 struct SourceScan {
 	generation: u64,
@@ -92,8 +95,8 @@ pub(super) struct Screen {
 	status: Cow<'static, str>,
 	/// Outcome to state once as a toast on the next poll; the stage keeps no status line.
 	toast: Option<(ui::design::Level, Cow<'static, str>)>,
-	/// Last viewer count Discord reported for the own stream, and a cue waiting for `poll`.
-	viewers: Option<(Context, u16)>,
+	/// Last viewer roster Discord reported for the own stream, and a cue waiting for `poll`.
+	viewers: Option<(Context, screen::Viewers)>,
 	viewer_cue: bool,
 	share_cued: bool,
 	/// Monkado P2P screen and share-audio tracks; when set, sharing publishes there and
@@ -207,6 +210,7 @@ impl Screen {
 				context,
 				started: Instant::now(),
 				timed_out: false,
+				unsent: false,
 			});
 			self.command = Some(Command::Voice(voice::Command::StopStream {
 				channel: context.channel,
@@ -281,15 +285,24 @@ impl Screen {
 					self.toast = Some((ui::design::Level::Info, (*reason).into()));
 				}
 			}
-			screen::Event::Failed(message) => self.fail(*message),
-			screen::Event::Viewers(count) => {
+			screen::Event::Failed(message) => match &mut self.closing {
+				// Only the stop is in flight, so this is that stop being refused.
+				Some(closing) if self.pending.is_none() && self.live.is_none() => {
+					note("stop_unsent", message);
+					closing.unsent = true;
+				}
+				_ => self.fail(*message),
+			},
+			screen::Event::Viewers(viewers) => {
 				// As in Discord: chime when this stream gains a viewer while it had at most 25.
 				let previous = self
 					.viewers
+					.as_ref()
 					.filter(|(context, _)| *context == incoming)
-					.map_or(0, |(_, count)| count);
-				self.viewer_cue |= self.live.is_some() && *count > previous && previous <= 25;
-				self.viewers = Some((incoming, *count));
+					.map_or(0, |(_, viewers)| viewers.count);
+				let count = viewers.count;
+				self.viewer_cue |= self.live.is_some() && count > previous && previous <= 25;
+				self.viewers = Some((incoming, std::mem::take(viewers)));
 			}
 		}
 	}
@@ -464,7 +477,7 @@ impl Screen {
 			.as_ref()
 			.map(|pending| pending.context)
 			.or_else(|| self.live.as_ref().map(|live| live.context))
-			&& !state.can_stream(context.channel)
+			&& !state.has_stream_access(context.channel)
 		{
 			self.fail(
 				"A permissão de compartilhar tela foi removida; encerrando o compartilhamento",
@@ -643,7 +656,23 @@ impl Screen {
 			ui.screen.preview_paused = false;
 		}
 
-		if let Some(closing) = &mut self.closing {
+		if let Some(closing) = &mut self.closing
+			&& closing.unsent
+			&& state.gateway_connected
+			&& self.command.is_none()
+		{
+			closing.unsent = false;
+			closing.started = Instant::now();
+			closing.timed_out = false;
+			self.command = Some(Command::Voice(voice::Command::StopStream {
+				channel: closing.context.channel,
+				request: closing.context.request,
+				stream_request: closing.context.stream_request,
+			}));
+		}
+		if let Some(closing) = &mut self.closing
+			&& !closing.unsent
+		{
 			if !closing.timed_out && closing.started.elapsed() >= SIGNAL_TIMEOUT {
 				closing.timed_out = true;
 				self.status = "O Discord não confirmou o fim do compartilhamento de tela; saia da chamada antes de compartilhar de novo".into();
@@ -657,6 +686,16 @@ impl Screen {
 			|| self.live.is_some()
 			|| self.closing.is_some()
 			|| self.retiring.is_some();
+		// Only the live share lists viewers; it changes rarely, so copy it only then.
+		let live = self.live.as_ref().map(|live| live.context);
+		let roster = self
+			.viewers
+			.as_ref()
+			.filter(|(context, _)| Some(*context) == live)
+			.map(|(_, viewers)| viewers);
+		if ui.screen.viewers.as_ref() != roster {
+			ui.screen.viewers = roster.cloned();
+		}
 		if let Some((level, message)) = self.toast.take() {
 			ui.toasts.push(level, message);
 		}
@@ -825,6 +864,29 @@ mod tests {
 			));
 			assert!(screen.pending.is_some());
 			assert!(screen.live.is_none());
+
+			// A routine Gateway reconnect must not read as a revoked share permission.
+			for event in [Event::Disconnected, Event::Resumed] {
+				state.apply(client_core::Envelope {
+					generation: state.generation,
+					event,
+				});
+				let call = Call {
+					generation: state.generation,
+					channel,
+					request,
+					user: Id(1),
+					peer: (channel == Id(22)).then_some(Id(2)),
+					session: "synthetic-session",
+					identity: Identity::generate(),
+				};
+				assert!(
+					screen
+						.poll(&runtime, &state, &mut ui, &ctx, Some(call))
+						.is_none()
+				);
+				assert!(screen.pending.is_some() && screen.closing.is_none());
+			}
 		}
 	}
 
@@ -853,7 +915,7 @@ mod tests {
 			.unwrap();
 		let ctx = egui::Context::default();
 		let context = Context {
-			generation: 0,
+			generation: State::default().generation,
 			channel: Id(20),
 			request: 7,
 			stream_request: 8,
@@ -924,7 +986,7 @@ mod tests {
 		};
 		let mut ui = ui::MessagingUi::default();
 		let call = Call {
-			generation: 0,
+			generation: state.generation,
 			channel: Id(20),
 			request: 7,
 			user: Id(1),
@@ -941,5 +1003,46 @@ mod tests {
 		));
 		assert!(ui.screen.busy);
 		assert!(ui.screen.status.contains("permissão"));
+
+		// Signaling refused that stop: it must go out again after reconnecting, or Discord keeps
+		// the stream LIVE and the share button stays stuck.
+		let call = || Call {
+			generation: state.generation,
+			channel: Id(20),
+			request: 7,
+			user: Id(1),
+			peer: None,
+			session: "synthetic-session",
+			identity: Identity::generate(),
+		};
+		let mut refused = Event::Voice(voice::Event::Stream {
+			channel: Id(20),
+			request: 7,
+			stream_request: 8,
+			event: screen::Event::Failed(
+				"Voice signaling is disconnected; screen-share action was not sent",
+			),
+		});
+		screen.observe(&state, &mut refused);
+		assert!(!state.gateway_connected);
+		assert!(
+			screen
+				.poll(&runtime, &state, &mut ui, &ctx, Some(call()))
+				.is_none()
+		);
+		assert!(ui.screen.busy);
+		state.gateway_connected = true;
+		assert!(matches!(
+			screen.poll(&runtime, &state, &mut ui, &ctx, Some(call())),
+			Some(Command::Voice(voice::Command::StopStream {
+				stream_request: 8,
+				..
+			}))
+		));
+		assert!(
+			screen
+				.poll(&runtime, &state, &mut ui, &ctx, Some(call()))
+				.is_none()
+		);
 	}
 }

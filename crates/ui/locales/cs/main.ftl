@@ -318,6 +318,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = Nedostupné pro s
 attachments-open-original-open-original = Otevřít originál…
 # Context: pending_card
 attachments-pending-card-remove-attachment = Odstraňte přílohu
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = Náhled v plné velikosti není k dispozici
+attachments-pending-viewer-loading = Načítání obrázku…
+attachments-pending-viewer-close = Zavřít (Esc)
 attachments-loading-card-preparing = Připravuje se…
 # Context: show_status
 attachments-show-status-cancel-download = Zrušit stahování
@@ -4188,6 +4192,25 @@ voice-call-bar-join-call = Připojte se k hovoru
 voice-call-bar-reconnect-to-refresh-call = Pro obnovení hovoru se znovu připojte
 # Context: call_controls
 voice-call-controls-disconnect = Odpojit
+# Context: viewer_names
+voice-viewer-names-watching = Sledují: { $names }
+# Context: viewer_names
+voice-viewer-names-watching-more =
+    { $count ->
+        [one] Sledují: { $names } a { $count } další
+        [few] Sledují: { $names } a { $count } další
+       *[other] Sledují: { $names } a dalších { $count }
+    }
+# Context: viewer_names
+voice-viewer-names-count =
+    { $count ->
+        [one] { $count } divák
+        [few] { $count } diváci
+        [many] { $count } diváka
+       *[other] { $count } diváků
+    }
+# Context: viewer_names
+voice-viewer-names-unknown-viewer = Neznámý divák
 # Context: call_controls
 voice-call-controls-dismiss-call = Zrušit hovor
 # Context: call_controls
@@ -5077,3 +5100,7 @@ moderation-confirm-timeout = Oddechový čas
 # Context: moderation
 moderation-confirm-ban = Zabanovat
 voice-voice-participant-camera-on = Kamera zapnutá
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Tento zásuvný modul zatím nemá co zobrazit.

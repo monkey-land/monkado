@@ -319,6 +319,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = Unavailable for s
 attachments-open-original-open-original = Open original…
 # Context: pending_card
 attachments-pending-card-remove-attachment = Remove attachment
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = Full-size preview unavailable
+attachments-pending-viewer-loading = Loading full-size image…
+attachments-pending-viewer-close = Close (Esc)
 attachments-loading-card-preparing = Preparing…
 # Context: show_status
 attachments-show-status-cancel-download = Cancel download
@@ -4233,6 +4237,18 @@ voice-call-bar-join-call = Join call
 voice-call-bar-reconnect-to-refresh-call = Reconnect to refresh call
 # Context: call_controls
 voice-call-controls-disconnect = Disconnect
+# Context: viewer_names
+voice-viewer-names-watching = Watching: { $names }
+# Context: viewer_names
+voice-viewer-names-watching-more = Watching: { $names } and { $count } more
+# Context: viewer_names
+voice-viewer-names-count =
+    { $count ->
+        [one] { $count } viewer
+       *[other] { $count } viewers
+    }
+# Context: viewer_names
+voice-viewer-names-unknown-viewer = Unknown viewer
 # Context: call_controls
 voice-call-controls-dismiss-call = Dismiss call
 # Context: call_controls
@@ -5182,3 +5198,54 @@ moderation-confirm-timeout = Timeout
 # Context: moderation
 moderation-confirm-ban = Ban
 voice-voice-participant-camera-on = Camera on
+
+# Native sign-in form (email, password, MFA and QR code).
+native-login-email-or-phone = Email or phone number
+native-login-password = Password
+native-login-forgot-password = Forgot your password?
+native-login-log-in = Log In
+native-login-logging-in = Logging in…
+native-login-need-an-account = Need an account?
+native-login-register = Register
+native-login-or = or
+native-login-back-to-saved-accounts = Back to saved accounts
+native-login-credentials-note = Your password and codes go straight to Discord and are never stored.
+native-login-mfa-title = Two-factor authentication
+native-login-mfa-totp-subtitle = Enter the 6-digit code from your authenticator app
+native-login-mfa-sms-subtitle = Enter the code Discord texted to your phone
+native-login-mfa-backup-subtitle = Enter one of your backup codes
+native-login-mfa-totp-label = Authentication code
+native-login-mfa-sms-label = SMS code
+native-login-mfa-backup-label = Backup code
+native-login-mfa-six-digits = 6-digit code
+native-login-mfa-eight-characters = 8-character backup code
+native-login-mfa-use-authenticator = Use your authenticator app
+native-login-mfa-use-sms = Receive a code by SMS
+native-login-mfa-use-backup = Use a backup code
+native-login-mfa-resend-sms = Send the code again
+native-login-sms-sent = Discord sent a code to your phone.
+native-login-back-to-login = Go back to login
+native-login-captcha-title = Wait! Are you human?
+native-login-captcha-subtitle = Please confirm you're not a robot
+native-login-captcha-cancel = Cancel
+native-login-qr-title = Log in with QR Code
+native-login-qr-detail = Scan with the Discord mobile app to log in.
+native-login-qr-expired = This code expired.
+native-login-qr-unavailable = Could not load the QR code.
+native-login-qr-refresh = Refresh
+native-login-qr-check-your-phone = Check your phone!
+native-login-qr-logging-in-as = Logging in as { $name }
+native-login-qr-confirm-on-phone = Confirm on your phone.
+native-login-qr-not-me = Not me, start over
+native-login-settings = Settings
+native-login-more-token = Session token
+native-login-more-web = Web login
+native-login-token-detail = Paste a session token you already have, for example from another Serein install.
+native-login-about-risk = Unofficial clients like Serein can put your Discord account at risk.
+native-login-about-storage = Messages and drafts are cached on this device. Your login is kept in the OS credential store.
+native-login-web-detail = Opens Discord's login page in a temporary window. Needed for security keys and passkeys.
+native-login-web-open = Open Discord's login page
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = This plugin has nothing to show yet.

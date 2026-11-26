@@ -315,6 +315,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = Non disponibile p
 attachments-open-original-open-original = Apri originale...
 # Context: pending_card
 attachments-pending-card-remove-attachment = Rimuovi l'allegato
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = Anteprima a grandezza intera non disponibile
+attachments-pending-viewer-loading = Caricamento immagine a dimensione intera…
+attachments-pending-viewer-close = Chiudi (Esc)
 attachments-loading-card-preparing = Preparazione…
 # Context: show_status
 attachments-show-status-cancel-download = Annulla il download
@@ -4156,6 +4160,22 @@ voice-call-bar-join-call = Partecipa alla chiamata
 voice-call-bar-reconnect-to-refresh-call = Riconnettiti per aggiornare la chiamata
 # Context: call_controls
 voice-call-controls-disconnect = Disconnetti
+# Context: viewer_names
+voice-viewer-names-watching = Stanno guardando: { $names }
+# Context: viewer_names
+voice-viewer-names-watching-more =
+    { $count ->
+        [one] Stanno guardando: { $names } e { $count } altro
+       *[other] Stanno guardando: { $names } e altri { $count }
+    }
+# Context: viewer_names
+voice-viewer-names-count =
+    { $count ->
+        [one] { $count } spettatore
+       *[other] { $count } spettatori
+    }
+# Context: viewer_names
+voice-viewer-names-unknown-viewer = Spettatore sconosciuto
 # Context: call_controls
 voice-call-controls-dismiss-call = Ignora chiamata
 # Context: call_controls
@@ -4949,3 +4969,7 @@ moderation-confirm-timeout = Timeout
 # Context: moderation
 moderation-confirm-ban = Banna
 voice-voice-participant-camera-on = Videocamera attiva
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Questo plugin non ha ancora nulla da mostrare.

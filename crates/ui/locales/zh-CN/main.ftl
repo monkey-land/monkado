@@ -316,6 +316,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = 合成附件无�
 attachments-open-original-open-original = 打开原始文件…
 # Context: pending_card
 attachments-pending-card-remove-attachment = 移除附件
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = 无法显示原尺寸预览
+attachments-pending-viewer-loading = 正在加载全尺寸图片…
+attachments-pending-viewer-close = 关闭（Esc）
 attachments-loading-card-preparing = 准备中…
 
 # Context: show_status
@@ -4188,6 +4192,14 @@ voice-call-bar-join-call = 加入通话
 voice-call-bar-reconnect-to-refresh-call = 重新连接以更新通话
 # Context: call_controls
 voice-call-controls-disconnect = 断开连接
+# Context: viewer_names
+voice-viewer-names-watching = 正在观看：{ $names }
+# Context: viewer_names
+voice-viewer-names-watching-more = 正在观看：{ $names } 及另外 { $count } 人
+# Context: viewer_names
+voice-viewer-names-count = { $count } 位观众
+# Context: viewer_names
+voice-viewer-names-unknown-viewer = 未知观众
 # Context: call_controls
 voice-call-controls-dismiss-call = 关闭通话
 # Context: call_controls
@@ -5046,3 +5058,7 @@ moderation-confirm-timeout = 禁言
 # Context: moderation
 moderation-confirm-ban = 封禁
 voice-voice-participant-camera-on = 摄像头已开启
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = 此插件暂时没有可显示的内容。

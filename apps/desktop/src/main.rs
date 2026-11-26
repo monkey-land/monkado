@@ -26,6 +26,7 @@ mod extension_events;
 mod extension_forum_data;
 mod extension_member_details;
 mod extension_message_content;
+mod extension_start_screen;
 mod extensions;
 mod font_import;
 mod game_activity;
@@ -1024,6 +1025,8 @@ struct Desktop {
 	proxy_auth: proxy_auth::Authentication,
 	api_proxy: tokio::sync::watch::Sender<Option<discord_api::proxy::ApiProxy>>,
 	extensions: extension_bridge::Bridge,
+	/// Plugin start-screen playback; its textures exist only while that screen shows.
+	start_screen: ui::StartScreenView,
 	extension_close_pending: bool,
 	login: Option<platform::LoginView>,
 	captcha: captcha::Captcha,
@@ -1070,6 +1073,8 @@ struct Desktop {
 	window_minimum: Option<winit::dpi::PhysicalSize<u32>>,
 	/// A sampled placement waiting to remain unchanged for the rest interval.
 	geometry_rest: app_settings::GeometryRest,
+	/// The user's own placement while a plugin start screen or interface layout sizes the window.
+	plugin_size: app_settings::PluginWindowSize,
 	#[cfg(feature = "demo")]
 	rendering_demo: Option<rendering_demo::RenderingDemo>,
 	avatars: Option<avatars::AvatarWorker>,
@@ -1104,6 +1109,8 @@ struct Desktop {
 	gsync: std::sync::Arc<std::sync::atomic::AtomicBool>,
 	tray: Option<platform::tray::Tray>,
 	hotkeys: platform::hotkeys::Hotkeys,
+	/// When a released push-to-talk key stops transmitting.
+	ptt_release: Option<std::time::Instant>,
 	/// Linux desktop light/dark preference; winit reports it everywhere else.
 	system_theme: platform::system_theme::SystemTheme,
 	tray_error: Option<&'static str>,
@@ -2045,6 +2052,11 @@ impl Desktop {
 			messaging.voice_stream_view = Some(egui::load::SizedTexture::from_handle(&texture));
 			demo_textures.push(texture);
 			messaging.voice_stream_status = "Watching the stream";
+			// This device is the share's one synthetic viewer.
+			messaging.voice_stream_viewers = Some(client_core::screen::Viewers {
+				count: 1,
+				ids: vec![model::Id(1)],
+			});
 			// `--demo-focus` additionally opens the enlarged stage layout.
 			if std::env::args().any(|arg| arg == "--demo-focus") {
 				messaging.voice_focus = Some(ui::StageFocus::Stream(peer));
@@ -2112,6 +2124,12 @@ impl Desktop {
 			}) {
 			// `--demo-settings` or `--demo-settings=account` etc.
 			messaging.preview_settings(&page);
+		}
+		#[cfg(feature = "demo")]
+		if demo && std::env::args().any(|arg| arg == "--demo-deepfilternet") {
+			// Preview voice controls are read-only, so show this Custom suppressor preselected.
+			messaging.voice_processing.edit().suppression =
+				model::voice_settings::NoiseSuppression::DeepFilterNet;
 		}
 		#[cfg(feature = "demo")]
 		if demo
@@ -2262,9 +2280,11 @@ impl Desktop {
 				);
 			}
 		} else if demo
-			&& std::env::args()
-				.any(|arg| arg == "--demo-attachment" || arg == "--demo-attachment=multi")
-		{
+			&& std::env::args().any(|arg| {
+				arg == "--demo-attachment"
+					|| arg == "--demo-attachment=multi"
+					|| arg == "--demo-attachment=view"
+			}) {
 			// Synthetic gradients stand in for decoded photos; no file is read or uploaded.
 			let gradient = |width: usize, height: usize, hue: f32| {
 				let pixels = (0..width * height)
@@ -2302,6 +2322,10 @@ impl Desktop {
 				messaging.preview_attachment("synthetic-agenda.pdf", 482_311, None);
 				state.status =
 					"Offline fixture · three synthetic attachments staged in the composer";
+			} else if std::env::args().any(|arg| arg == "--demo-attachment=view") {
+				// Opens the staged image full size, as a click on its thumbnail does.
+				messaging.open_attachment_view(&state, 0);
+				state.status = "Offline fixture · synthetic attachment opened full size";
 			} else {
 				state.status = "Offline fixture · synthetic attachment staged in the composer";
 			}
@@ -2525,6 +2549,7 @@ impl Desktop {
 			proxy_auth: proxy_auth::Authentication::default(),
 			api_proxy: tokio::sync::watch::channel(None).0,
 			extensions: extension_bridge::Bridge::default(),
+			start_screen: ui::StartScreenView::default(),
 			extension_close_pending: false,
 			login: None,
 			captcha: captcha::Captcha::default(),
@@ -2575,6 +2600,7 @@ impl Desktop {
 			frame_metrics: FrameMetrics::new(frame_sample),
 			window_minimum: None,
 			geometry_rest: app_settings::GeometryRest::default(),
+			plugin_size: app_settings::PluginWindowSize::default(),
 			#[cfg(feature = "demo")]
 			rendering_demo: (demo && std::env::args().any(|arg| arg == "--demo-rendering"))
 				.then(rendering_demo::RenderingDemo::default),
@@ -2616,6 +2642,7 @@ impl Desktop {
 			app_menu,
 			instance: Default::default(),
 			hotkeys,
+			ptt_release: None,
 			system_theme,
 			tray_error: None,
 			#[cfg(feature = "demo")]
@@ -5785,7 +5812,10 @@ impl Desktop {
 	}
 	fn refresh_monitor(&mut self) -> Option<Duration> {
 		let monitor = self.window.current_monitor()?;
-		app_settings::update_window_minimum(&self.window, &monitor, &mut self.window_minimum);
+		// A plugin window size keeps its own minimum until the user's placement returns.
+		if !self.plugin_size.active() {
+			app_settings::update_window_minimum(&self.window, &monitor, &mut self.window_minimum);
+		}
 		let millihertz = monitor.refresh_rate_millihertz()?;
 		(1_000..=1_000_000)
 			.contains(&millihertz)
@@ -5852,7 +5882,10 @@ impl eframe::App for Desktop {
 	fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
 		// Before the pass begins, so the whole frame resolves System to the same theme.
 		self.sync_system_theme(ctx);
-		if self.maximize_after_show && self.window.is_visible() == Some(true) {
+		if self.maximize_after_show
+			&& self.window.is_visible() == Some(true)
+			&& !self.plugin_size.active()
+		{
 			self.maximize_after_show = false;
 			self.window.set_maximized(true);
 		}
@@ -5864,6 +5897,7 @@ impl eframe::App for Desktop {
 			&& !self.state.demo
 			&& self.app_settings.loaded
 			&& !self.maximize_after_show
+			&& !self.plugin_size.active()
 			&& let Some(viewport) = raw_input.viewports.get(&raw_input.viewport_id)
 			&& viewport.minimized != Some(true)
 			&& viewport.fullscreen != Some(true)
@@ -6266,9 +6300,30 @@ impl eframe::App for Desktop {
 				}
 			}
 		}
-		self.messaging.voice_ptt_active = self.messaging.voice_push_to_talk
-			&& self.state.voice.active.is_some()
-			&& (self.messaging.push_to_talk_down(ctx) || self.hotkeys.push_to_talk_down());
+		let talking = self.messaging.voice_push_to_talk && self.state.voice.active.is_some();
+		let held =
+			talking && (self.messaging.push_to_talk_down(ctx) || self.hotkeys.push_to_talk_down());
+		let now = std::time::Instant::now();
+		if held {
+			self.ptt_release = None;
+		} else if self.messaging.voice_ptt_active && self.ptt_release.is_none() {
+			// The denoiser delays captured audio; keep the microphone open for that delay too.
+			// After an automatic fallback, RNNoise keeps DeepFilterNet's delay in its queue.
+			let extra = self
+				.messaging
+				.voice_processing
+				.effective()
+				.suppression
+				.extra_delay();
+			self.ptt_release = Some(now + model::keybinds::PUSH_TO_TALK_RELEASE + extra);
+		}
+		// Like Discord, transmission lingers briefly after release so a word is not clipped.
+		let lingering = talking && self.ptt_release.is_some_and(|until| until > now);
+		match self.ptt_release {
+			Some(until) if lingering => ctx.request_repaint_after(until - now),
+			_ => self.ptt_release = None,
+		}
+		self.messaging.voice_ptt_active = held || lingering;
 		self.notification_runtime.ptt(
 			self.messaging.voice_push_to_talk,
 			!self.fixture_only
@@ -6431,6 +6486,7 @@ impl eframe::App for Desktop {
 			// Explicit artwork Send finishes asynchronously; retain its prepared thumbnails.
 			self.messaging.attachment_previews = self.uploads.previews();
 			self.messaging.attachment_files = self.uploads.files();
+			self.messaging.attachment_keys = self.uploads.selection_keys();
 			self.messaging.stage_pending_upload(&ctx, &command);
 			if let Command::Send { channel, .. } = &command {
 				self.messaging.draft_changes.push(*channel);
@@ -6481,6 +6537,22 @@ impl eframe::App for Desktop {
 				.map(|(name, size)| (name.to_owned(), size));
 			self.messaging.attachment_previews = self.uploads.previews();
 			self.messaging.attachment_files = self.uploads.files();
+			self.messaging.attachment_keys = self.uploads.selection_keys();
+		}
+		// Validate identity before any decode request after navigation or selection changes.
+		self.messaging.validate_attachment_view(&self.state);
+		// One staged image can be looked at full size; its decode runs off the render thread.
+		if let Some(index) = self.messaging.attachment_view_open {
+			self.uploads
+				.request_view(index, self.runtime.handle(), &ctx);
+			// Pending is `None` too, so a file replaced at this index never shows the old pixels.
+			self.messaging.attachment_view_image = self
+				.uploads
+				.view_image(index)
+				.map(|decoded| (index, decoded));
+		} else {
+			self.uploads.cancel_view();
+			self.messaging.attachment_view_image = None;
 		}
 		self.messaging
 			.external_upload
@@ -6611,6 +6683,8 @@ impl eframe::App for Desktop {
 			ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
 			self.confirming_close = true;
 		}
+		// The window size the interface layout shown this frame asks for.
+		let mut interface_size = None;
 		if self.login.is_some() {
 			let p = ui::design::palette(ui);
 			egui::Panel::top("login-header")
@@ -6700,6 +6774,7 @@ impl eframe::App for Desktop {
 				self.messaging.notification_sound_status = "Não foi possível salvar as configurações de notificação do dispositivo. As alterações valem só até reiniciar.";
 			}
 			let mut commands = self.messaging.show(ui, &mut self.state);
+			interface_size = self.messaging.plugin_interface_size();
 			self.extensions.cancel_stale_message_events(&self.state);
 			self.choose_interaction_files(&ctx);
 			if let Some(command) = self.captcha.sync(
@@ -7183,6 +7258,22 @@ impl eframe::App for Desktop {
 		} else {
 			self.sign_in_screen(ui);
 		}
+		// A start screen's window size while it shows, otherwise the interface layout's.
+		let requested = self
+			.start_screen
+			.window()
+			.map(|window| (window.width, window.height))
+			.or_else(|| interface_size.map(|size| (size.width, size.height)))
+			.map(|(width, height)| {
+				winit::dpi::LogicalSize::new(u32::from(width), u32::from(height))
+			});
+		self.start_screen.retire();
+		self.plugin_size.sync(
+			&self.window,
+			requested,
+			&mut self.window_minimum,
+			self.app_settings.current.window_geometry,
+		);
 		// Outside the signed-in branch so leaving an account still restores the window mode.
 		let video = self.messaging.video().take_fullscreen_request();
 		let voice = self.messaging.take_voice_fullscreen_request();

@@ -1590,6 +1590,41 @@ impl Avatars {
 	) -> egui::Response {
 		self.guild_avatar(ui, guild, selected, demo, size, true)
 	}
+
+	/// A small guild tile for the plugin interface dock: the rail's animated face at a chosen
+	/// size, with the plugin's dock label for the hover name instead of the guild name.
+	pub fn show_guild_dock(
+		&mut self,
+		ui: &mut egui::Ui,
+		guild: &model::Guild,
+		selected: bool,
+		demo: bool,
+		size: f32,
+		label: &str,
+	) -> egui::Response {
+		let response = self.guild_avatar(ui, guild, selected, demo, size, false);
+		crate::design::rail_name(&response, label);
+		response
+	}
+
+	/// An inert dock tile (a plugin without the declared click action): the same face,
+	/// static, with no clicks, focus, hover name or hover highlight.
+	pub fn paint_guild_dock(
+		&mut self,
+		ui: &mut egui::Ui,
+		guild: &model::Guild,
+		selected: bool,
+		demo: bool,
+		size: f32,
+	) -> egui::Response {
+		let (rect, response) =
+			ui.allocate_exact_size(egui::Vec2::splat(size), egui::Sense::hover());
+		if ui.is_rect_visible(rect) {
+			let squircle = size * 0.29;
+			self.paint_guild_face(ui, guild, rect, demo, f32::from(selected), squircle as u8);
+		}
+		response
+	}
 	fn guild_avatar(
 		&mut self,
 		ui: &mut egui::Ui,
@@ -2874,6 +2909,57 @@ mod tests {
 		assert!(images.take_requests().is_empty());
 		assert!(images.textures.is_empty());
 		assert_eq!(images.media.bytes(), (2 + 8) * 4);
+	}
+
+	#[test]
+	fn webp_attachment_is_known_to_animate_only_once_its_frames_arrive() {
+		let ctx = egui::Context::default();
+		let mut images = Avatars::default();
+		images.set_animation(true);
+		let media = model::EmbedMedia {
+			url: Some("https://cdn.discordapp.com/attachments/1/2/clip.webp?hm=signed".into()),
+			width: 64,
+			height: 32,
+			..Default::default()
+		};
+		assert!(!images.media_animates(&media), "nothing decoded yet");
+		ctx.run_ui(Default::default(), |ui| {
+			images.show_media(ui, &media, egui::vec2(64.0, 32.0), false, Surface::Inline);
+		})
+		.drop_without_applying_deltas();
+		let key = images.take_requests().pop().expect("webp frame request");
+		assert!(key.contains(":ia:"), "the webp is asked to animate: {key}");
+		images.accept(
+			&ctx,
+			key.clone(),
+			Some(ColorImage::filled([2, 1], egui::Color32::WHITE)),
+		);
+		let frame = |color| std::sync::Arc::new(ColorImage::filled([2, 1], color));
+		images.accept_animation(
+			key,
+			vec![
+				(Duration::from_secs(1), frame(egui::Color32::RED)),
+				(Duration::from_secs(1), frame(egui::Color32::BLUE)),
+			],
+		);
+		assert!(
+			images.media_animates(&media),
+			"two decoded frames make it a clip"
+		);
+		let gif = crate::embeds::gif_for_media(&media, None, images.media_animates(&media))
+			.expect("an animated webp attachment can be favorited");
+		assert_eq!(gif.preview, media.url.clone().unwrap());
+		let still = model::EmbedMedia {
+			url: Some("https://cdn.discordapp.com/attachments/1/2/photo.webp".into()),
+			width: 64,
+			height: 32,
+			..Default::default()
+		};
+		assert!(
+			!images.media_animates(&still),
+			"a static webp keeps its still"
+		);
+		assert!(crate::embeds::gif_for_media(&still, None, false).is_none());
 	}
 
 	#[test]

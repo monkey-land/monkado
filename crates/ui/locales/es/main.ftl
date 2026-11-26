@@ -315,6 +315,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = No disponible par
 attachments-open-original-open-original = Abrir original…
 # Context: pending_card
 attachments-pending-card-remove-attachment = Quitar archivo adjunto
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = Vista previa a tamaño completo no disponible
+attachments-pending-viewer-loading = Cargando imagen a tamaño completo…
+attachments-pending-viewer-close = Cerrar (Esc)
 attachments-loading-card-preparing = Preparando…
 # Context: show_status
 attachments-show-status-cancel-download = Cancelar descarga
@@ -4156,6 +4160,18 @@ voice-call-bar-join-call = Unirse a la llamada
 voice-call-bar-reconnect-to-refresh-call = Reconectarse para actualizar la llamada
 # Context: call_controls
 voice-call-controls-disconnect = Desconectar
+# Context: viewer_names
+voice-viewer-names-watching = Viendo: { $names }
+# Context: viewer_names
+voice-viewer-names-watching-more = Viendo: { $names } y { $count } más
+# Context: viewer_names
+voice-viewer-names-count =
+    { $count ->
+        [one] { $count } espectador
+       *[other] { $count } espectadores
+    }
+# Context: viewer_names
+voice-viewer-names-unknown-viewer = Espectador desconocido
 # Context: call_controls
 voice-call-controls-dismiss-call = Descartar llamada
 # Context: call_controls
@@ -4952,3 +4968,7 @@ moderation-confirm-timeout = Aislar
 # Context: moderation
 moderation-confirm-ban = Banear
 voice-voice-participant-camera-on = Cámara encendida
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Este complemento todavía no tiene nada que mostrar.

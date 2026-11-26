@@ -24,6 +24,8 @@ use windows_capture::{
 
 #[path = "audio_windows.rs"]
 mod audio;
+#[path = "readback_windows.rs"]
+mod readback;
 
 pub(crate) use audio::applications as audio_applications;
 
@@ -102,21 +104,21 @@ pub(crate) fn sources() -> Result<Vec<Source>, &'static str> {
 #[derive(Clone)]
 struct Flags {
 	frames: SyncSender<RawFrame>,
-	recycle: Arc<std::sync::Mutex<Vec<Vec<u8>>>>,
+	recycle: readback::Recycle,
 	stop: Arc<AtomicBool>,
 	pending: Arc<AtomicBool>,
 	next_frame: Instant,
 	interval: Duration,
 }
 
-struct Handler(Flags);
+struct Handler(Flags, Option<readback::Readback>);
 
 impl GraphicsCaptureApiHandler for Handler {
 	type Flags = Flags;
 	type Error = &'static str;
 
 	fn new(context: Context<Self::Flags>) -> Result<Self, Self::Error> {
-		Ok(Self(context.flags))
+		Ok(Self(context.flags, None))
 	}
 
 	fn on_frame_arrived(
@@ -136,77 +138,44 @@ impl GraphicsCaptureApiHandler for Handler {
 		}
 		self.0.next_frame = (self.0.next_frame + self.0.interval).max(now + self.0.interval / 2);
 		let (width, height) = (frame.width(), frame.height());
-		let Some(row_bytes) = (width as usize).checked_mul(4) else {
-			self.0.stop.store(true, Ordering::Release);
-			control.stop();
-			return Err("Captured frame dimensions are invalid");
-		};
-		let Some(data_len) = row_bytes.checked_mul(height as usize) else {
-			self.0.stop.store(true, Ordering::Release);
-			control.stop();
-			return Err("Captured frame dimensions are invalid");
-		};
+		let data_len = (width as usize)
+			.checked_mul(4)
+			.and_then(|row| row.checked_mul(height as usize));
 		if width == 0
 			|| height == 0
 			|| width > MAX_FRAME_WIDTH
 			|| height > MAX_FRAME_HEIGHT
-			|| data_len > MAX_RAW_BYTES
+			|| data_len.is_none_or(|len| len > MAX_RAW_BYTES)
 		{
 			self.0.stop.store(true, Ordering::Release);
 			control.stop();
 			return Err("Captured frame exceeds the 4K limit");
 		}
-		let mut buffer = frame.buffer().map_err(|_| {
-			self.0.stop.store(true, Ordering::Release);
-			"Captured frame could not be read"
-		})?;
-		let stride = buffer.row_pitch() as usize;
-		let Some(source_len) = stride.checked_mul(height as usize) else {
-			self.0.stop.store(true, Ordering::Release);
-			return Err("Captured frame stride is invalid");
+		// Only queue a GPU copy here: the single-buffer frame pool cannot deliver the next
+		// picture until this callback returns.
+		let queued = match self.1.as_mut() {
+			Some(readback) => readback.queue(frame),
+			None => readback::Readback::start(
+				frame,
+				self.0.frames.clone(),
+				self.0.recycle.clone(),
+				self.0.pending.clone(),
+				self.0.stop.clone(),
+			)
+			.and_then(|readback| self.1.insert(readback).queue(frame)),
 		};
-		if stride < row_bytes || source_len > MAX_RAW_BYTES {
-			self.0.stop.store(true, Ordering::Release);
-			return Err("Captured frame stride exceeds the 4K limit");
-		}
-		let source = buffer.as_raw_buffer();
-		if source.len() < source_len {
-			self.0.stop.store(true, Ordering::Release);
-			return Err("Captured frame buffer is incomplete");
-		}
-		let mut data = self
-			.0
-			.recycle
-			.try_lock()
-			.ok()
-			.and_then(|mut pool| pool.pop())
-			.unwrap_or_default();
-		data.clear();
-		data.reserve(data_len);
-		if stride == row_bytes {
-			data.extend_from_slice(&source[..source_len]);
-		} else {
-			for row in source[..source_len].chunks_exact(stride) {
-				data.extend_from_slice(&row[..row_bytes]);
+		match queued {
+			Ok(true) => Ok(()),
+			Ok(false) => {
+				self.0.pending.store(false, Ordering::Release);
+				Ok(())
+			}
+			Err(error) => {
+				self.0.stop.store(true, Ordering::Release);
+				control.stop();
+				Err(error)
 			}
 		}
-		if let Err(
-			std::sync::mpsc::TrySendError::Full(rejected)
-			| std::sync::mpsc::TrySendError::Disconnected(rejected),
-		) = self.0.frames.try_send(RawFrame {
-			width,
-			height,
-			stride: row_bytes,
-			data,
-		}) {
-			self.0.pending.store(false, Ordering::Release);
-			if let Ok(mut pool) = self.0.recycle.try_lock()
-				&& pool.len() < 2
-			{
-				pool.push(rejected.data);
-			}
-		}
-		Ok(())
 	}
 
 	fn on_closed(&mut self) -> Result<(), Self::Error> {
@@ -227,7 +196,7 @@ impl Capture {
 	pub(crate) fn start(
 		settings: CaptureSettings,
 		frames: SyncSender<RawFrame>,
-		recycle: Arc<std::sync::Mutex<Vec<Vec<u8>>>>,
+		recycle: readback::Recycle,
 		audio: Option<tokio::sync::mpsc::Sender<AudioChunk>>,
 		stop: Arc<AtomicBool>,
 		ready: Arc<AtomicBool>,
@@ -354,7 +323,7 @@ fn start_item<T>(
 	settings: CaptureSettings,
 	item: T,
 	frames: SyncSender<RawFrame>,
-	recycle: Arc<std::sync::Mutex<Vec<Vec<u8>>>>,
+	recycle: readback::Recycle,
 	stop: Arc<AtomicBool>,
 	pending: Arc<AtomicBool>,
 	cancel: Arc<AtomicBool>,

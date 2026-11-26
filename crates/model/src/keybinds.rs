@@ -7,6 +7,9 @@ pub const SHIFT: u8 = 2;
 pub const ALT: u8 = 4;
 pub const CTRL: u8 = 8;
 
+/// Discord's default push-to-talk release delay: audio keeps flowing this long after release.
+pub const PUSH_TO_TALK_RELEASE: std::time::Duration = std::time::Duration::from_millis(20);
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct KeyChord {

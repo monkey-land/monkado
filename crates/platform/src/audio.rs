@@ -16,25 +16,45 @@ pub enum OutputConfigPreference {
 
 /// Select only F32/I16/I32/U16, 1–8 channels and 8–192 kHz. Never opens a stream.
 /// Windows always retains the native shared-mode default, avoiding converted WASAPI
-/// formats that some drivers advertise but reject when opening a stream.
+/// formats that some drivers advertise but reject when opening a stream. On macOS,
+/// keep the active device format so voice playback does not change the Bluetooth clock.
 pub fn output_config(
 	device: &cpal::Device,
 	preference: OutputConfigPreference,
 ) -> Result<SupportedStreamConfig, &'static str> {
 	select_output_config(
 		preference,
-		cfg!(target_os = "windows"),
+		cfg!(target_os = "windows")
+			|| (cfg!(target_os = "macos") && preference == OutputConfigPreference::Voice),
 		|| {
-			device
-				.default_output_config()
-				.map_err(|_| "O formato de áudio padrão está indisponível")
+			device.default_output_config().map_err(|error| {
+				output_error(&error, "O formato de áudio padrão está indisponível")
+			})
 		},
 		|| {
-			device
-				.supported_output_configs()
-				.map_err(|_| "Os formatos do alto-falante estão indisponíveis")
+			device.supported_output_configs().map_err(|error| {
+				output_error(&error, "Os formatos do alto-falante estão indisponíveis")
+			})
 		},
 	)
+}
+
+/// Fixed reasons keep the call card and the bounded log readable; the raw backend error is not
+/// reported because it is unbounded and does not change what the person can do.
+fn output_error(error: &cpal::Error, fallback: &'static str) -> &'static str {
+	match error.kind() {
+		cpal::ErrorKind::HostUnavailable => "O serviço de áudio do sistema está indisponível",
+		cpal::ErrorKind::DeviceNotAvailable | cpal::ErrorKind::StreamInvalidated => {
+			"O dispositivo de saída de áudio está indisponível; confira o alto-falante selecionado"
+		}
+		cpal::ErrorKind::DeviceBusy => {
+			"O dispositivo de saída de áudio está em uso por outro aplicativo"
+		}
+		cpal::ErrorKind::UnsupportedConfig => {
+			"O dispositivo de saída de áudio não tem um formato utilizável"
+		}
+		_ => fallback,
+	}
 }
 
 fn select_output_config<I: Iterator<Item = SupportedStreamConfigRange>>(
@@ -205,7 +225,7 @@ mod tests {
 	}
 
 	#[test]
-	fn windows_native_mix_never_uses_advertised_converted_formats() {
+	fn native_mix_never_requests_an_advertised_rate() {
 		for preference in [Voice, Notification] {
 			let choose = |default| {
 				select_output_config(
@@ -213,18 +233,18 @@ mod tests {
 					true,
 					|| default,
 					|| -> Result<std::iter::Empty<SupportedStreamConfigRange>, &'static str> {
-						panic!("WASAPI enumeration must not run")
+						panic!("native mix enumeration must not run")
 					},
 				)
 			};
-			let native = choose(Ok(default_config(6, 44_100, SampleFormat::F32))).unwrap();
+			let native = choose(Ok(default_config(2, 24_000, SampleFormat::F32))).unwrap();
 			assert_eq!(
 				(
 					native.channels(),
 					native.sample_rate(),
 					native.sample_format()
 				),
-				(6, 44_100, SampleFormat::F32)
+				(2, 24_000, SampleFormat::F32)
 			);
 			assert!(choose(Ok(default_config(2, 48_000, SampleFormat::I24))).is_err());
 			assert_eq!(choose(Err("no native mix")).unwrap_err(), "no native mix");

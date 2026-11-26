@@ -8,7 +8,7 @@ use model::{Channel, Id, Shortcut};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Voice and stage channels keep a separate position list, drawn below other channels.
-fn voice_lane(kind: u8) -> bool {
+pub(super) fn voice_lane(kind: u8) -> bool {
 	matches!(kind, 2 | 13)
 }
 
@@ -2879,11 +2879,9 @@ mod tests {
 		let mut state = test_support::voice_demo_state();
 		state.demo = false;
 		state.gateway_connected = true;
-		// The fixture reuses id 26 for its quiet room, so every row with that id is set.
 		let limit = |state: &mut State, limit| {
-			for channel in state.channels.iter_mut().filter(|c| c.id == Id(26)) {
-				channel.user_limit = limit;
-			}
+			let room = state.channels.iter_mut().find(|c| c.id == Id(37)).unwrap();
+			room.user_limit = limit;
 		};
 		limit(&mut state, None);
 		let mut view = MessagingUi {
@@ -2945,7 +2943,7 @@ mod tests {
 
 		// A single click picks the row and asks to switch calls.
 		let (picked, commands) = click(&mut view, &mut state, "Quiet room");
-		assert_eq!(picked, Some(Id(26)));
+		assert_eq!(picked, Some(Id(37)));
 		assert!(commands.is_empty() && view.voice_switch.is_some());
 		view.voice_switch = None;
 
@@ -2971,7 +2969,7 @@ mod tests {
 			commands.as_slice(),
 			[client_core::Command::Voice(
 				client_core::voice::Command::Join {
-					channel: Id(26),
+					channel: Id(37),
 					ring: false,
 					..
 				}

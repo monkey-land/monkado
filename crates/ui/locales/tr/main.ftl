@@ -316,6 +316,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = Sentetik ataşman
 attachments-open-original-open-original = Orijinali aç…
 # Context: pending_card
 attachments-pending-card-remove-attachment = Eki kaldır
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = Tam boyutlu önizleme kullanılamıyor
+attachments-pending-viewer-loading = Tam boyutlu resim yükleniyor…
+attachments-pending-viewer-close = Kapat (Esc)
 attachments-loading-card-preparing = Hazırlanıyor…
 # Context: show_status
 attachments-show-status-cancel-download = İndirmeyi iptal et
@@ -4150,6 +4154,14 @@ voice-call-bar-join-call = Görüşmeye katıl
 voice-call-bar-reconnect-to-refresh-call = Aramayı yenilemek için yeniden bağlanın
 # Context: call_controls
 voice-call-controls-disconnect = Bağlantıyı kes
+# Context: viewer_names
+voice-viewer-names-watching = İzleyenler: { $names }
+# Context: viewer_names
+voice-viewer-names-watching-more = İzleyenler: { $names } ve { $count } kişi daha
+# Context: viewer_names
+voice-viewer-names-count = { $count } izleyici
+# Context: viewer_names
+voice-viewer-names-unknown-viewer = Bilinmeyen izleyici
 # Context: call_controls
 voice-call-controls-dismiss-call = Aramayı reddet
 # Context: call_controls
@@ -4935,3 +4947,7 @@ moderation-confirm-timeout = Zaman aşımı
 # Context: moderation
 moderation-confirm-ban = Yasakla
 voice-voice-participant-camera-on = Kamera açık
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Bu eklentinin henüz gösterecek bir şeyi yok.

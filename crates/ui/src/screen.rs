@@ -51,8 +51,10 @@ pub struct ScreenUi {
 	pub preview: Option<egui::TextureHandle>,
 	/// The share is running and the local picture is intentionally not updating.
 	pub preview_paused: bool,
-	/// Call participants watching this device's share, when the transport reports them.
-	pub viewers: Vec<Id>,
+	/// Discord's latest viewers of the live share; desktop-owned.
+	pub viewers: Option<client_core::screen::Viewers>,
+	/// Call participants watching this device's Monkado P2P share; desktop-owned.
+	pub p2p_viewers: Option<client_core::screen::Viewers>,
 	/// Still previews of listed sources; the desktop fills them while the picker is open.
 	pub thumbnails: Vec<(SourceId, egui::TextureHandle)>,
 	tab: SourceTab,
@@ -90,7 +92,8 @@ impl Default for ScreenUi {
 			supported: false,
 			preview: None,
 			preview_paused: false,
-			viewers: Vec::new(),
+			viewers: None,
+			p2p_viewers: None,
 			thumbnails: Vec::new(),
 			tab: SourceTab::Screens,
 			switchable: false,
@@ -108,6 +111,10 @@ impl Default for ScreenUi {
 	}
 }
 impl ScreenUi {
+	/// Who watches this device's share: Discord's roster, else the Monkado P2P one.
+	pub fn shown_viewers(&self) -> Option<&client_core::screen::Viewers> {
+		self.viewers.as_ref().or(self.p2p_viewers.as_ref())
+	}
 	pub(crate) fn launch(&mut self, state: &State) {
 		if state.voice.active.is_none() {
 			return;

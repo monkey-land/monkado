@@ -315,6 +315,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = Indisponible pour
 attachments-open-original-open-original = Ouvrir l'original…
 # Context: pending_card
 attachments-pending-card-remove-attachment = Supprimer la pièce jointe
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = Aperçu en taille réelle indisponible
+attachments-pending-viewer-loading = Chargement de l’image en taille réelle…
+attachments-pending-viewer-close = Fermer (Esc)
 attachments-loading-card-preparing = Préparation…
 # Context: show_status
 attachments-show-status-cancel-download = Annuler le téléchargement
@@ -4156,6 +4160,22 @@ voice-call-bar-join-call = Rejoindre l'appel
 voice-call-bar-reconnect-to-refresh-call = Reconnectez-vous pour actualiser l'appel
 # Context: call_controls
 voice-call-controls-disconnect = Déconnecter
+# Context: viewer_names
+voice-viewer-names-watching = Regardent : { $names }
+# Context: viewer_names
+voice-viewer-names-watching-more =
+    { $count ->
+        [one] Regardent : { $names } et { $count } autre
+       *[other] Regardent : { $names } et { $count } autres
+    }
+# Context: viewer_names
+voice-viewer-names-count =
+    { $count ->
+        [one] { $count } spectateur
+       *[other] { $count } spectateurs
+    }
+# Context: viewer_names
+voice-viewer-names-unknown-viewer = Spectateur inconnu
 # Context: call_controls
 voice-call-controls-dismiss-call = Rejeter l'appel
 # Context: call_controls
@@ -4949,3 +4969,7 @@ moderation-confirm-timeout = Exclure
 # Context: moderation
 moderation-confirm-ban = Bannir
 voice-voice-participant-camera-on = Caméra activée
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Ce module n'a encore rien à afficher.

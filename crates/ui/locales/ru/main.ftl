@@ -316,6 +316,10 @@ attachments-media-menu-unavailable-for-synthetic-attachments = Недоступ�
 attachments-open-original-open-original = Открыть оригинал…
 # Context: pending_card
 attachments-pending-card-remove-attachment = Удалить вложение
+# Context: pending_viewer
+attachments-pending-viewer-full-size-unavailable = Полноразмерный просмотр недоступен
+attachments-pending-viewer-loading = Загрузка полноразмерного изображения…
+attachments-pending-viewer-close = Закрыть (Esc)
 attachments-loading-card-preparing = Подготовка…
 # Context: show_status
 attachments-show-status-cancel-download = Отменить загрузку
@@ -4160,6 +4164,20 @@ voice-call-bar-join-call = Присоединиться к звонку
 voice-call-bar-reconnect-to-refresh-call = Повторно подключитесь, чтобы обновить вызов
 # Context: call_controls
 voice-call-controls-disconnect = Отключить
+# Context: viewer_names
+voice-viewer-names-watching = Смотрят: { $names }
+# Context: viewer_names
+voice-viewer-names-watching-more = Смотрят: { $names } и ещё { $count }
+# Context: viewer_names
+voice-viewer-names-count =
+    { $count ->
+        [one] { $count } зритель
+        [few] { $count } зрителя
+        [many] { $count } зрителей
+       *[other] { $count } зрителя
+    }
+# Context: viewer_names
+voice-viewer-names-unknown-viewer = Неизвестный зритель
 # Context: call_controls
 voice-call-controls-dismiss-call = Отклонить вызов
 # Context: call_controls
@@ -4959,3 +4977,7 @@ moderation-confirm-timeout = Тайм-аут
 # Context: moderation
 moderation-confirm-ban = Забанить
 voice-voice-participant-camera-on = Камера включена
+
+## crates/ui/src/interface_ui.rs
+# Context: interface_tree
+interface-ui-empty = Плагину пока нечего показать.
