@@ -121,8 +121,9 @@ fn read(request: ui::AttachmentPaste) -> Result<Read, &'static str> {
 		}
 		Err(arboard::Error::ContentNotAvailable) | Ok(_) => {}
 		Err(_) => {
-			return supplied_content(text, image)
-				.unwrap_or(Err("Não foi possível ler os arquivos copiados; cole de novo"));
+			return supplied_content(text, image).unwrap_or(Err(
+				"Não foi possível ler os arquivos copiados; cole de novo",
+			));
 		}
 	}
 	resolve(text, image, || {
