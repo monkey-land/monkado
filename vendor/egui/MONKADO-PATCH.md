@@ -44,6 +44,8 @@ requests are squashed from the PR head that was reviewed; all of them are unmerg
 | 0024 | [#8698](https://github.com/emilk/egui/pull/8698) | `epaint`, `egui` | Right-to-left runs get one glyph per char instead of `2n - 1`, so editor cursors stay inside the text (End then Ctrl+ArrowLeft in Arabic text no longer overflows). Merged with 0009's direction override, and ported to harfrust 0.15's in-place `Buffer`, which the PR head predates. |
 | 0025 | Monkado | `epaint` | Laying out a multi-paragraph job one paragraph at a time keeps an empty first section, which carries `Label`'s wrap indentation, so text continuing a line after an inline widget (a heading after a channel chip) is no longer painted over that line. |
 | 0026 | Monkado | `eframe`, `egui-wgpu` | Paint-only frames: the root viewport's last pass is presented again without running the ui, described below. |
+| 0027 | Monkado | `egui-winit` | A pasted lone file path also sends the image copied beside it, described under image paste below. |
+| 0028 | Monkado | `egui` | Exposes an explicit TextEdit undo checkpoint for the message composer. |
 
 ## Monkado patch: RTL shaping metadata
 
@@ -122,6 +124,12 @@ On Wayland, `Clipboard::get_image` first reads `image/png` through the patched s
 `vendor/smithay-clipboard/MONKADO-PATCH.md`. Empty clipboard text counts as absent so image paste
 can fall back, and image copies log success only on success. Other platform input behavior is
 inherited from the pinned upstream revision.
+
+Patch 0027 (from Serein): some screenshot tools offer the saved file's path as text beside
+`image/png`. When the pasted text is one absolute path or `file://` URI for the current OS,
+paste also sends `Event::PasteImage` if the clipboard holds an image, so Monkado's composer
+attaches the screenshot instead of the path. Other text never triggers an image read, so rich
+copies that carry a bitmap (spreadsheet cells) still paste as text.
 
 ## Updating
 

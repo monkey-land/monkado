@@ -505,6 +505,9 @@ pub struct MessagingUi {
 	pub attachment_paste_requested: Option<AttachmentPaste>,
 	pub pasted_text: Option<(Id, egui::Id, String)>,
 	paste_key_handled: bool,
+	/// A menu Paste asked the platform for clipboard data in this frame; when no paste event
+	/// follows (a clipboard holding only copied files), the clipboard worker reads it instead.
+	menu_paste_waiting: Option<(egui::Id, u64)>,
 	/// The profile card docked beside a direct message, with its own footer draft.
 	dm_profile: profiles::ProfileSession,
 	/// A text field whose context menu asked to paste.
@@ -677,6 +680,8 @@ pub struct MessagingUi {
 	ime_active: bool,
 	/// A composer picker pick returns focus to the draft next frame, once its click is over.
 	refocus_composer: bool,
+	/// The one draft undo history held by the composer.
+	composer_undo: Option<(u64, Id, egui::Id)>,
 	/// Enter the input method passed on after finishing a composition, replayed next frame.
 	ime_enter: Option<egui::Event>,
 	/// The composer claimed Tab last frame, so egui left it in the input for a suggestion menu.
@@ -1350,7 +1355,7 @@ impl MessagingUi {
 				let has_paste = input.events.iter().any(|event| {
 					matches!(event, egui::Event::Paste(_) | egui::Event::PasteImage(_))
 				});
-				if has_paste || shortcut || menu {
+				if has_paste || shortcut {
 					requested = true;
 					self.paste_key_handled = true;
 					input.events.retain_mut(|event| match event {
@@ -1371,6 +1376,33 @@ impl MessagingUi {
 					});
 				}
 			});
+			let frame = ctx.cumulative_frame_nr();
+			if requested {
+				self.menu_paste_waiting = None;
+			} else if let Some((waiting, asked)) = self.menu_paste_waiting
+				&& waiting == target
+				&& frame >= asked + 2
+			{
+				// The platform delivered nothing after the request, so let the worker read
+				// copied files (its file list outranks any stale image).
+				self.menu_paste_waiting = None;
+				requested = true;
+			} else if self.menu_paste_waiting.is_some() {
+				ctx.request_repaint();
+			}
+			if menu && !requested {
+				// The menu click itself carries no clipboard data, so read like the key
+				// shortcut does: the platform delivers `Event::Paste`/`PasteImage` to the
+				// next frame, and `has_paste` above starts the request from that fresh
+				// view. Requesting immediately instead would read arboard's own backend,
+				// which on Wayland without data-control is the XWayland bridge and can
+				// serve an image this client copied before newer content took the
+				// selection.
+				ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+				self.paste_key_handled = false;
+				self.menu_paste_waiting = Some((target, frame));
+				ctx.request_repaint();
+			}
 			if requested {
 				if request
 					.text
@@ -3505,6 +3537,21 @@ impl MessagingUi {
 				.map(|(name, _)| name.as_str())
 				.collect::<Vec<_>>(),
 		) {
+			// Start the next draft at an empty checkpoint. Undo can recall the
+			// submitted text locally without changing delivery or attachments.
+			if let Some((generation, target, editor)) = self.composer_undo
+				&& generation == state.generation
+				&& target == channel
+				&& let Some(mut editor_state) = egui::TextEdit::load_state(ctx, editor)
+			{
+				editor_state
+					.cursor
+					.set_char_range(Some(egui::text::CCursorRange::one(
+						egui::text::CCursor::new(0),
+					)));
+				editor_state.checkpoint_undo("");
+				editor_state.store(ctx, editor);
+			}
 			// Consume this selection once, before desktop dispatch.
 			self.stage_pending_upload(ctx, &command);
 			self.timeline.follow_latest(state);
@@ -3588,6 +3635,20 @@ impl MessagingUi {
 			});
 		ui.add_space(8.0);
 	}
+	fn clear_inactive_composer_undo(
+		&mut self,
+		ctx: &egui::Context,
+		generation: u64,
+		channel: Option<Id>,
+	) {
+		if let Some((owner, target, editor)) = self.composer_undo
+			&& (owner != generation || channel != Some(target))
+		{
+			egui::text_edit::TextEditState::default().store(ctx, editor);
+			self.composer_undo = None;
+		}
+	}
+
 	fn composer(
 		&mut self,
 		ui: &mut egui::Ui,
@@ -3596,6 +3657,7 @@ impl MessagingUi {
 		ctx: &egui::Context,
 		commands: &mut Vec<Command>,
 	) {
+		self.clear_inactive_composer_undo(ctx, state.generation, Some(channel));
 		let had_edit = self.editing.is_some();
 		self.reconcile_edit(state);
 		let closed_here = self.edit_closed_channel.take() == Some(channel);
@@ -3990,8 +4052,21 @@ impl MessagingUi {
 		if focus_composer || typed || refocus {
 			ctx.memory_mut(|m| m.request_focus(composer_id));
 		}
-		if focus_edit || (focus_composer && !editing_here) {
-			let mut edit_state = egui::text_edit::TextEditState::default();
+		let new_undo_scope =
+			!editing_here && self.composer_undo != Some((state.generation, channel, composer_id));
+		if new_undo_scope
+			&& let Some((_, _, previous)) =
+				self.composer_undo
+					.replace((state.generation, channel, composer_id))
+		{
+			egui::text_edit::TextEditState::default().store(ctx, previous);
+		}
+		if new_undo_scope || focus_edit || (focus_composer && !editing_here) {
+			let mut edit_state = if new_undo_scope || focus_edit {
+				egui::text_edit::TextEditState::default()
+			} else {
+				egui::text_edit::TextEditState::load(ctx, composer_id).unwrap_or_default()
+			};
 			let text = if editing_here {
 				self.editing
 					.as_ref()
@@ -4004,6 +4079,9 @@ impl MessagingUi {
 				.set_char_range(Some(egui::text::CCursorRange::one(
 					egui::text::CCursor::end_of_str(text),
 				)));
+			if new_undo_scope {
+				edit_state.checkpoint_undo(text);
+			}
 			edit_state.store(ctx, composer_id);
 		}
 		let paste_allowed = keyboard_enabled
@@ -4616,6 +4694,13 @@ impl MessagingUi {
                         let edit = output.response;
                         let cleared = draft.is_empty();
                         if edit.changed() || mention_changed {
+                            // Record actual draft changes immediately. An idle timeout would
+                            // combine rapid edits and can lose the final text when Send clears it.
+                            if !self.ime_active
+                                && let Some(editor) = egui::TextEdit::load_state(ctx, composer_id)
+                            {
+                                editor.checkpoint_undo(draft);
+                            }
                             if editing_here && let Some((_, _, modified)) = &mut self.edit_modified {
                                 *modified = true;
                             }
@@ -5183,6 +5268,7 @@ impl MessagingUi {
 	/// Draws one frame of the signed-in client and returns the commands it produced for the
 	/// service layer.
 	pub fn show(&mut self, ui: &mut egui::Ui, state: &mut State) -> Vec<Command> {
+		self.clear_inactive_composer_undo(ui.ctx(), state.generation, state.selected);
 		interface_tweaks::publish(ui.ctx(), &self.interface_tweaks);
 		rtl::scope(
 			ui.ctx(),
@@ -6828,7 +6914,9 @@ mod composer_tests {
 		let ctx = egui::Context::default();
 		let mut state = edit_state();
 		let mut view = MessagingUi::default();
+		let paste_commanded = std::cell::Cell::new(false);
 		let frame = |view: &mut MessagingUi, state: &mut State, events| {
+			paste_commanded.set(false);
 			let output = ctx.run_ui(
 				egui::RawInput {
 					screen_rect: Some(egui::Rect::from_min_size(
@@ -6858,6 +6946,12 @@ mod composer_tests {
 				.shapes
 				.iter()
 				.for_each(|shape| walk(&shape.shape, &mut labels));
+			paste_commanded.set(output.viewport_output.values().any(|viewport| {
+				viewport
+					.commands
+					.iter()
+					.any(|command| matches!(command, egui::ViewportCommand::RequestPaste))
+			}));
 			output.drop_without_applying_deltas();
 			labels
 		};
@@ -6904,13 +6998,26 @@ mod composer_tests {
 			&mut state,
 			click(paste.center(), egui::PointerButton::Primary),
 		);
+		// The menu click carries no clipboard data: the view asks the platform for a
+		// paste instead of reading arboard's own, possibly stale, view of the selection.
 		frame(&mut view, &mut state, vec![]);
+		assert!(
+			paste_commanded.get(),
+			"menu paste requests a platform paste"
+		);
+		assert!(view.attachment_paste_requested.is_none());
+		frame(
+			&mut view,
+			&mut state,
+			vec![egui::Event::Paste("https://example.com/link".into())],
+		);
 		let request = view
 			.attachment_paste_requested
 			.take()
-			.expect("menu paste reads the system clipboard");
+			.expect("the delivered clipboard text starts the paste");
 		assert_eq!(request.target, composer);
-		assert!(request.text.is_none() && request.image.is_none());
+		assert_eq!(request.text.as_deref(), Some("https://example.com/link"));
+		assert!(request.image.is_none());
 		for (editing, cut_all) in [(false, false), (false, true), (true, false)] {
 			state = edit_state();
 			view = MessagingUi::default();
@@ -7037,9 +7144,13 @@ mod composer_tests {
 			.unwrap();
 		assert_eq!(range.sorted_cursors().map(|cursor| cursor.index.0), [0, 5]);
 		menu_click(&mut view, &mut state, "Paste");
-		let request = view.attachment_paste_requested.take().unwrap();
+		assert!(
+			paste_commanded.get(),
+			"menu paste requests a platform paste"
+		);
+		assert!(view.attachment_paste_requested.is_none());
 		view.upload_busy = false;
-		view.pasted_text = Some((channel, request.target, "pasted".into()));
+		view.pasted_text = Some((channel, composer, "pasted".into()));
 		frame(&mut view, &mut state, vec![]);
 		assert_eq!(state.drafts.get(&channel).unwrap(), "pasted");
 	}
@@ -7644,6 +7755,68 @@ mod composer_tests {
 		// These tests are about sending; the typing indicator has its own test.
 		commands.retain(|command| !matches!(command, Command::Typing { .. }));
 		commands
+	}
+
+	#[test]
+	fn composer_undo_keeps_recent_edits_and_recalls_submitted_text() {
+		let ctx = egui::Context::default();
+		let mut state = edit_state();
+		let channel = state.selected.unwrap();
+		state.drafts.remove(&channel);
+		let mut view = MessagingUi {
+			focus_switched_composer: true,
+			..Default::default()
+		};
+		edit_frame(&ctx, &mut view, &mut state, vec![]);
+		let shortcut = |key| egui::Event::Key {
+			key,
+			physical_key: None,
+			pressed: true,
+			repeat: false,
+			modifiers: egui::Modifiers::CTRL | egui::Modifiers::COMMAND,
+		};
+		for text in ["hello", " world"] {
+			edit_frame(
+				&ctx,
+				&mut view,
+				&mut state,
+				vec![egui::Event::Text(text.into())],
+			);
+		}
+		edit_frame(&ctx, &mut view, &mut state, vec![shortcut(egui::Key::Z)]);
+		assert_eq!(
+			state.drafts.get(&channel).map(String::as_str),
+			Some("hello")
+		);
+		edit_frame(&ctx, &mut view, &mut state, vec![shortcut(egui::Key::Y)]);
+		assert_eq!(state.drafts[&channel], "hello world");
+
+		let sent = edit_frame(
+			&ctx,
+			&mut view,
+			&mut state,
+			vec![edit_key(egui::Key::Enter)],
+		);
+		assert!(
+			matches!(sent.as_slice(), [Command::Send { content, .. }] if content == "hello world")
+		);
+		assert!(!state.drafts.contains_key(&channel));
+		edit_frame(
+			&ctx,
+			&mut view,
+			&mut state,
+			vec![egui::Event::Text("new draft".into())],
+		);
+		edit_frame(&ctx, &mut view, &mut state, vec![shortcut(egui::Key::Z)]);
+		assert!(!state.drafts.contains_key(&channel));
+		let undo = edit_frame(&ctx, &mut view, &mut state, vec![shortcut(egui::Key::Z)]);
+		assert!(undo.is_empty());
+		assert_eq!(state.drafts[&channel], "hello world");
+
+		state.generation += 1;
+		state.drafts.insert(channel, "another session".into());
+		edit_frame(&ctx, &mut view, &mut state, vec![shortcut(egui::Key::Z)]);
+		assert_eq!(state.drafts[&channel], "another session");
 	}
 
 	#[test]
